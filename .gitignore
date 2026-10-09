@@ -1,7 +1,8 @@
 # --- Dependencies / environments (never tracked) ---
+# (venv/ and env/ are anchored to the root so racer/env/ and configs/env/ stay tracked)
 .venv/
-venv/
-env/
+/venv/
+/env/
 *.whl
 pip-wheel-metadata/
 
@@ -17,9 +18,15 @@ dist/
 .ipynb_checkpoints/
 
 # --- Training / output artifacts (large, reproducible) ---
-runs/                 # TensorBoard logs
-outputs/frames/       # raw rendered frames
+# (git only treats "#" as a comment at the start of a line, so keep comments on their own lines)
+# TensorBoard logs
+runs/
+# raw rendered frames
+outputs/frames/
 *.tmp
+
+# --- Original asset downloads (large, kept locally for re-cutting; see assets/LICENSES.md) ---
+assets/_source/
 
 # models/ and registry/ ARE tracked (the demo depends on them).
 # If the models folder gets too big, move models/**/checkpoints to Git LFS or ignore them here.

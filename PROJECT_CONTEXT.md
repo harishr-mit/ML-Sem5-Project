@@ -7,7 +7,7 @@
 - **Course:** Machine Learning, Semester 5 (solo project)
 - **Started:** 2026-10-10
 - **Target:** 3–4 weeks, so a feature-complete demo by about 2026-11-07
-- **Budget:** zero. Only free and open-source tools, and only CC0/OFL assets.
+- **Budget:** zero. Only free and open-source tools. Assets are CC0 or OFL, plus one CC BY 4.0 engine sound that **must be credited** (see `assets/LICENSES.md`).
 - **Tooling:** VS Code with the Claude Code extension for implementation and debugging; the Claude desktop app for brainstorming and writing prompts.
 
 ---
@@ -68,6 +68,7 @@ The GPU is not needed for training. PPO with a small MLP is faster on the CPU (s
 | Configs | YAML; a full snapshot saved with every model | Any old model can always be loaded and run correctly |
 | Registry | `runs.csv` and `models.csv`, exported to `registry.xlsx` | Easy to append; Excel looks good on a slide |
 | Visual style | Code-generated effects, CC0 textures and sprites, OFL fonts | Free, legal, and looks good |
+| Audio | Engine clips seeked by RPM + a **cosmetic gearbox**; tyre screech driven by slip (§10.4) | Sounds like a real car accelerating through the gears; the physics and RL are untouched |
 
 ---
 
@@ -98,12 +99,15 @@ ML Sem5 Project/
 ├── CLAUDE.md                 # short; imports this file + coding conventions
 ├── PROJECT_CONTEXT.md        # this file
 ├── README.md
-├── requirements.txt
+├── log.md                    # task list + change log shared by all agents
+├── requirements.txt          # pinned versions (torch comes from the CPU index)
+├── pyproject.toml            # makes racer/ importable: pip install -e .
 ├── configs/
 │   ├── physics/  default.yaml, no_grip_limit.yaml, downforce.yaml
 │   ├── env/      rays5.yaml, rays9.yaml, rays5_curvature.yaml
 │   ├── reward/   progress.yaml, speed_naive.yaml (for the reward-hacking demo)
-│   └── train/    ppo_default.yaml, sac_default.yaml
+│   ├── train/    ppo_default.yaml, sac_default.yaml
+│   └── demo/     render.yaml (texture scales, colours), audio.yaml (volumes, gearbox)
 ├── racer/
 │   ├── physics/  car.py, surfaces.py
 │   ├── track/    track.py, spline.py, generator.py, progress.py, io.py
@@ -111,7 +115,8 @@ ML Sem5 Project/
 │   ├── agents/   loader.py (registry → policy + normaliser + configs), baseline.py
 │   ├── registry/ registry.py, export_xlsx.py
 │   └── render/   world.py, camera.py, effects.py, hud.py, brain_panel.py,
-│                 minimap.py, ui.py (menus/model picker), editor.py
+│                 minimap.py, ui.py (menus/model picker), editor.py,
+│                 audio.py (engine/tyre sound controller), gearbox.py (cosmetic RPM)
 ├── scripts/
 │   ├── train.py  evaluate.py  demo.py  record_video.py  make_plots.py
 │   ├── queue_overnight.py    # runs a list of experiments one after another
@@ -121,7 +126,9 @@ ML Sem5 Project/
 │   ├── heldout/    *.json    # fixed generated tracks, NEVER used in training
 │   └── user/       *.json    # tracks saved from draw-a-track mode
 ├── assets/
-│   ├── sprites/cars/  textures/ground/  fonts/  sounds/   LICENSES.md
+│   ├── LICENSES.md           # manifest, credits, usage notes (READ before using assets)
+│   ├── sprites/cars/  sprites/props/  textures/ground/  fonts/  sounds/  licenses/
+│   └── _source/              # original downloads (git-ignored), for re-cutting
 ├── models/<model_id>/        # self-contained model folders (see §9)
 ├── registry/  runs.csv  models.csv  registry.xlsx
 ├── runs/                     # TensorBoard logs
@@ -382,7 +389,7 @@ models/R012_ppo_rays5_curric@1500k/
 | Feature | Details |
 |---|---|
 | World | Ground texture tiled across the map. Road texture masked by the road polygon. Red and white kerbs, a checkered start/finish line and the barrier. Drawn **once per track** to a large surface, then blitted every frame. |
-| Car | CC0 sprite (Kenney), tinted per model. Brake lights glow when braking. Small drop shadow. |
+| Car | Kenney sprites (`car_{1..4}_{colour}.png`). For more than 5 distinct colours, use `car_N_tint.png` + `car_N_tint_mask.png` (tint the body only; see `assets/LICENSES.md`). Brake lights glow when braking. Small drop shadow. |
 | Rays | Lines from the car, coloured green → yellow → red by distance, with a dot where each ray hits. Shown for the selected car only (20 cars' rays would be clutter); toggle with `R`. |
 | Trail | Fading trail behind each car, coloured by speed (blue = slow, red = fast). Toggle `T`. |
 | Racing line overlay | Best lap path coloured by speed, with the centreline dashed for comparison. Toggle `L`. |
@@ -392,12 +399,39 @@ models/R012_ppo_rays5_curric@1500k/
 | Brain panel | Live bars for the 13 inputs, plus the 2 outputs shown as a steering wheel and pedal bars. Shows what the network senses and decides. |
 | Camera | Follow the selected car (smooth lerp, zoom with speed), overview mode, cycle cars with `Tab` |
 | Minimap | Corner minimap with coloured dots for all cars |
+| Scenery | Kenney props outside the barrier: grandstands, tents, trees, tyre stacks and barriers along the run-off, and a `start_lights` gantry at the start line (countdown before a race). Placed procedurally from the track geometry and never inside the barrier. |
 | Recording | `record_video.py` renders offscreen (no window) to MP4 with imageio-ffmpeg, for highlight videos |
 
 **Performance target:** 60 FPS with 20 cars. Inference is batched per model and runs every third frame (20 Hz), so it costs almost nothing.
 
 ### 10.3 Controls (summary)
-`Tab` cycle car · `R` rays · `T` trails · `L` racing line · `B` brain panel · `M` minimap · `F` follow/overview · `Space` pause · `+/−` speed ×0.25–×4 · `Esc` menu
+`Tab` cycle car · `R` rays · `T` trails · `L` racing line · `B` brain panel · `M` minimap · `F` follow/overview · `S` sound on/off · `Space` pause · `+/−` speed ×0.25–×4 · `Esc` menu
+
+### 10.4 Audio (`racer/render/audio.py`, `configs/demo/audio.yaml`)
+
+All clips and their RPM curves are described in `assets/LICENSES.md` and `assets/sounds/engine_map.json`.
+
+**Whose sound plays:** only the **followed car** (or the human's car) is audible. With 20 cars, everything else stays silent. Audio is mixed with pygame-ce `mixer`, and each clip is decoded once into a numpy array.
+
+**Cosmetic gearbox (`gearbox.py`):** the physics engine has no gears (it is power-limited, §5.2). The gearbox exists **only for sound and the HUD**, and doesn't affect physics or RL.
+- `rpm_ratio` (idle = 1.0) comes from speed and the current gear: 5 gears up to about 70 m/s.
+- It shifts up when `rpm_ratio` reaches **2.85** (the top of `engine_rev_up`), and the ratio steps are chosen so `rpm_ratio` lands at about 2.0 after a shift. It shifts down at about 1.4.
+- At standstill or very low speed in 1st gear, `rpm_ratio = max(1.2, speed-derived)` (clutch slip).
+
+**Engine logic (what the user described):**
+1. **Throttle pressed from standstill:** play `engine_rev_up` from the start, so it rises from idle.
+2. **Throttle pressed again while moving:** play `engine_rev_up` from the offset whose ratio in `engine_map.json` equals the current `rpm_ratio`, i.e. from somewhere in the middle. It rises from there.
+3. **Reaching the top** of `rev_up`: crossfade (about 60 ms) into `engine_high_loop` and hold at redline.
+4. **Gear shift up:** the RPM drops, so re-seek `rev_up` to the new, lower RPM. Repeated through the gears, this gives the classic accelerating-through-the-gears sound.
+5. **Throttle released:** play `engine_rev_down` from the offset matching the current RPM. If the RPM is above 2.34 (the top of rev_down), start it at 0. When it reaches `idle_loop_entry_s`, switch to `engine_idle_loop` (seamless, because both come from the same take).
+6. **Keeping sound and car in sync:** a clip rises or falls at its own recorded speed, which won't always match the car. If the clip's current ratio drifts more than about 100 cents (6 %) from `rpm_ratio`, re-seek with a short crossfade (30–50 ms).
+7. **Volume:** use per-clip gains from config, because the clips keep their natural loudness (idle is about 20 dB below a full rev). Scale volume slightly with throttle.
+
+**Tyres:**
+- `tyre_screech_loop` volume follows the slip intensity: lateral sliding speed, or the friction-circle overload when `sliding`. Fade it in and out over about 80 ms.
+- On the **onset** of a short slide or hard braking, play `tyre_screech_short_1` or `_2` at random.
+
+**Recording:** `record_video.py` stays silent by default. Mixing the audio into the MP4 is a *Could*.
 
 ---
 
@@ -438,8 +472,8 @@ models/R012_ppo_rays5_curric@1500k/
 
 **Priorities (MoSCoW):**
 - **Must:** grip physics env, PPO training, registry (CSV and xlsx), load any model, multi-car arena (10–20), rays, trails, HUD, learning curves, showcase tracks, held-out evaluation
-- **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, highlight video
-- **Could:** brain panel, swarm view, SAC (E7), curvature (E6), downforce (E9), sounds, gamepad
+- **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, highlight video, engine and tyre audio (§10.4)
+- **Could:** brain panel, swarm view, SAC (E7), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
 - **Won't (this time):** car-to-car collisions, multi-agent competitive training, pixel/CNN observations, 3D
 
 ---
@@ -475,46 +509,51 @@ cd "%USERPROFILE%\Desktop\ML Sem5 Project"
 py -3.11 -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
-pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
+pip install -e .
 ```
 
-`requirements.txt`:
+- `pip install -e .` (via `pyproject.toml`) makes the `racer` package importable from `scripts/` without `sys.path` hacks.
+- `.vscode/settings.json` points VS Code at `.venv`.
+
+`requirements.txt`: the packages below, **pinned to exact versions** (the set verified on 2026-10-10 with Python 3.11.9). This keeps saved models loadable (rule in §9). Change a pin only on purpose, and log it.
 ```
-gymnasium
-stable-baselines3          # NOT [extra]: it pulls in classic pygame, which conflicts with pygame-ce
-tensorboard
-tqdm
-rich
-numpy
-numba
-scipy
-pygame-ce
-pyyaml
-pandas
-openpyxl
-matplotlib
-imageio[ffmpeg]
+gymnasium==1.4.0
+stable-baselines3==2.9.0   # NOT [extra]: it pulls in classic pygame, which conflicts with pygame-ce
+tensorboard==2.21.0
+tqdm==4.70.1
+rich==15.0.0
+numpy==2.4.6
+numba==0.68.0
+scipy==1.17.1
+pygame-ce==2.5.8
+pyyaml==6.0.3
+pandas==3.0.6
+openpyxl==3.1.5
+matplotlib==3.11.2
+imageio[ffmpeg]==2.38.1
+# torch==2.14.1+cpu is installed separately from the CPU index (above)
 ```
 
-### 14.2 Assets (CC0 art + OFL fonts; all effects are code-generated)
+### 14.2 Assets (in place; audited 2026-10-10)
 
-| What | Source | Put in | Licence |
-|---|---|---|---|
-| Top-down car sprites (several colours) | **Kenney "Racing Pack"**: kenney.nl/assets/racing-pack | `assets/sprites/cars/` | CC0 |
-| Optional: cones, tyres and barriers from the same pack | Kenney Racing Pack | `assets/sprites/props/` | CC0 |
-| Asphalt texture (seamless, 1K, colour/diffuse map only) | **ambientCG** (ambientcg.com) or **Poly Haven** (polyhaven.com/textures) | `assets/textures/ground/asphalt.jpg` | CC0 |
-| Grass texture (seamless, 1K, colour map) | ambientCG / Poly Haven | `assets/textures/ground/grass.jpg` | CC0 |
-| Optional run-off visuals (gravel, sand); grass physics | ambientCG / Poly Haven | `assets/textures/ground/` | CC0 |
-| HUD font | **Rajdhani** (SemiBold and Bold), Google Fonts | `assets/fonts/` | OFL |
-| Numbers font (lap times, telemetry) | **Share Tech Mono**, Google Fonts | `assets/fonts/` | OFL |
-| Title/menu font (optional) | **Orbitron** (Bold), Google Fonts | `assets/fonts/` | OFL |
-| Optional sounds: engine loop, tyre screech | Kenney audio packs / freesound.org (CC0 filter) | `assets/sounds/` | CC0 |
+The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the manifest:** it lists every file, its source and licence, how it was cut or modified, and how to use it. Read it before writing rendering or audio code.
 
-- **Credits:** list every asset in `assets/LICENSES.md`, even though CC0 doesn't require it.
-- **Textures:** in code, darken and slightly desaturate them, and scale them to world metres, so photographic ground textures and Kenney's clean sprites look consistent.
-- **Generated in code:** kerbs, start line, skid marks, smoke, trails, rays and UI panels.
-- **Fallback:** if an asset is missing, use procedural placeholders (noise-generated asphalt and grass, a polygon car). The game must never crash because an asset is missing.
+| Folder | Contents |
+|---|---|
+| `sprites/cars/` | `car_{1..4}_{black,blue,green,orange,yellow}.png` (Kenney, facing up) + `car_N_tint.png` / `car_N_tint_mask.png` (tintable) |
+| `sprites/props/` | barriers, tyre stacks, cones, trees, grandstands, tents, `start_lights` |
+| `textures/ground/` | `asphalt.jpg` (stains removed, seamless), `grass.jpg`, `gravel.jpg`, `sand.jpg`: 1024², seamless, ambientCG CC0 |
+| `fonts/` | `rajdhani_{regular,medium,semibold,bold}.ttf`, `share_tech_mono.ttf`, `orbitron_{bold,black}.ttf` |
+| `sounds/` | `engine_{rev_up,rev_down,idle_loop,high_loop}.ogg` + `engine_map.json`; `tyre_screech_{loop,short_1,short_2}.ogg` |
+| `licenses/` | Kenney CC0 licence and the OFL texts for each font |
+| `_source/` | original downloads (git-ignored) |
+
+- **Licences:** everything is CC0 or OFL **except the engine sound, which is CC BY 4.0**. The README and the demo's title or credits screen must show the credits line from `assets/LICENSES.md`.
+- **Textures:** in code, darken and slightly desaturate them, and scale them to world metres (suggested tile sizes are in `LICENSES.md`), so photographic ground and Kenney's flat sprites look consistent.
+- **Generated in code:** kerbs, start/finish line, skid marks, smoke, trails, rays and UI panels.
+- **Fallback:** if an asset is missing, use a procedural placeholder (noise ground, polygon car, silence). The game must never crash because an asset is missing.
 
 ---
 
@@ -528,7 +567,7 @@ imageio[ffmpeg]
 - After physics changes, run `scripts/physics_sanity.py`. After env changes, run a 50k-step smoke test of training.
 - When adding an observation feature, create a **new `obs_spec` version**; never change an existing one.
 - Never hand-edit `registry.xlsx`; regenerate it from the CSVs.
-- When a design decision changes, update this file (and §16).
+- When a goal, requirement or design decision changes, update this file first (and §16), then every other document it affects (`README.md`, `log.md`, `assets/LICENSES.md`, configs).
 
 ---
 
@@ -541,6 +580,10 @@ imageio[ffmpeg]
 | 2026-10-10 | Physics: mass, momentum, constant gravity, friction-circle grip `μ·m·g`, per-wheel surfaces with `Surface` (grass) → `Road` → `Kerb` inheritance. |
 | 2026-10-10 | Demo: registry (CSV → xlsx), load any model, 10–20 ghost cars, evolution race, draw-a-track, human vs AI. |
 | 2026-10-10 | Assets: CC0 (Kenney, ambientCG / Poly Haven) and OFL fonts (Rajdhani, Share Tech Mono, Orbitron); all effects code-generated. |
+| 2026-10-10 | Asset audit: renamed and pruned; Kenney pickup truck dropped (4 car shapes); tintable car bases with masks added; asphalt stains removed. Engine sound (freesound #623436, **CC BY 4.0**, credit required) cut into rev_up / rev_down / idle / high loops with an RPM map. Tyre screech (CC0) trimmed into a 2 s loop + 2 one-shots. |
+| 2026-10-10 | Audio design: a cosmetic gearbox (sound and HUD only) drives `rpm_ratio`; clips are seeked by RPM (§10.4). Scenery props added as a *Could*. |
+| 2026-10-10 | Initialisation: Python 3.11.9 `.venv`, torch 2.14.1+cpu, all versions pinned in `requirements.txt`; `racer` installed editable via `pyproject.toml`. |
+| 2026-10-10 | Rule: whenever a goal or requirement changes, update this file first, then every document it affects (`CLAUDE.md` working rules, §15). |
 
 **Open questions:**
 - Should rays also detect the barrier, or only the road edge? Currently: road edge only.

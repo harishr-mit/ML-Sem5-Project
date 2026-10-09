@@ -32,6 +32,7 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 
 ## Working rules
 - Follow PROJECT_CONTEXT.md. If a task conflicts with it, say so before coding, and update the file once the user agrees.
+- **If a goal or requirement changes at any point, reflect it in every document it affects.** Update `PROJECT_CONTEXT.md` first (including the §16 decisions log), then `README.md`, `log.md`, `assets/LICENSES.md`, configs and anything else that states the old goal or requirement.
 - Keep `racer/physics`, `racer/track` and `racer/env` free of pygame. Rendering only wraps simulation objects.
 - Tunable numbers go in `configs/*.yaml`, not in code.
 - Platform is Windows and the project path has spaces: use `pathlib`, and guard SubprocVecEnv scripts with `if __name__ == "__main__":`.

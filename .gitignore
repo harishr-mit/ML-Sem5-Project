@@ -1,0 +1,34 @@
+# --- Dependencies / environments (never tracked) ---
+.venv/
+venv/
+env/
+*.whl
+pip-wheel-metadata/
+
+# --- Python caches / build artifacts ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# --- Training / output artifacts (large, reproducible) ---
+runs/                 # TensorBoard logs
+outputs/frames/       # raw rendered frames
+*.tmp
+
+# models/ and registry/ ARE tracked (the demo depends on them).
+# If the models folder gets too big, move models/**/checkpoints to Git LFS or ignore them here.
+
+# --- Editors / OS ---
+.vscode/*
+!.vscode/settings.json
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store

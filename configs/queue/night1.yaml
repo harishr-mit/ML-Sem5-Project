@@ -1,0 +1,35 @@
+# Overnight queue 1 (PROJECT_CONTEXT §11, log.md T46): ablations E2–E5 + the matching reference.
+# Run it yourself from a normal terminal (no Claude session needed):
+#   .venv\Scripts\python scripts\queue_overnight.py configs\queue\night1.yaml
+#
+# Every run trains from scratch on the same track set and step budget, so the only
+# difference within a pair is the ablated setting. Tags end in _s<seed>; the xlsx
+# Ablations sheet groups runs by tag without the seed. Seeds are interleaved, so a
+# queue that stops early still has complete comparisons for seed 1.
+# 11 runs × 3M steps ≈ 5.5 h of training + ≈ 30 min of evaluation.
+
+runs:
+  # --- seed 1 ---
+  - name: e1_main_s1
+    args: --tag e1_main_s1 --trackset final_mix --steps 3000000 --seed 1 --curriculum "E1 reference (scratch, final_mix)"
+  - name: e2_nogrip_s1
+    args: --tag e2_nogrip_s1 --trackset final_mix --steps 3000000 --seed 1 --physics no_grip_limit --curriculum "E2 grip limit off"
+  - name: e5_single_s1
+    args: --tag e5_single_s1 --trackset tg --steps 3000000 --seed 1 --curriculum "E5 single track (Training Ground)"
+  - name: e4_short_s1
+    args: --tag e4_short_s1 --trackset final_mix --steps 3000000 --seed 1 --env rays5_short --curriculum "E4 60 m forward ray"
+  - name: e4_rays9_s1
+    args: --tag e4_rays9_s1 --trackset final_mix --steps 3000000 --seed 1 --env rays9 --curriculum "E4 9 rays"
+  - name: e3_speed_s1
+    args: --tag e3_speed_s1 --trackset final_mix --steps 3000000 --seed 1 --reward speed_naive --curriculum "E3 naive speed reward (reward hacking demo)"
+  # --- seed 2 ---
+  - name: e1_main_s2
+    args: --tag e1_main_s2 --trackset final_mix --steps 3000000 --seed 2 --curriculum "E1 reference (scratch, final_mix)"
+  - name: e2_nogrip_s2
+    args: --tag e2_nogrip_s2 --trackset final_mix --steps 3000000 --seed 2 --physics no_grip_limit --curriculum "E2 grip limit off"
+  - name: e5_single_s2
+    args: --tag e5_single_s2 --trackset tg --steps 3000000 --seed 2 --curriculum "E5 single track (Training Ground)"
+  - name: e4_short_s2
+    args: --tag e4_short_s2 --trackset final_mix --steps 3000000 --seed 2 --env rays5_short --curriculum "E4 60 m forward ray"
+  - name: e4_rays9_s2
+    args: --tag e4_rays9_s2 --trackset final_mix --steps 3000000 --seed 2 --env rays9 --curriculum "E4 9 rays"

@@ -1,7 +1,8 @@
 """Minimal debug renderer (pygame-ce). It only *draws* simulation objects; it never steps them.
 
-The track surface is rasterised once from the same field the physics uses (D3), so road,
-kerbs, grass, run-off walls and the barrier on screen are exactly what the car feels.
+The track layer (``world.py``) is rasterised once from the same field the physics uses (D3),
+so road, kerbs, grass, run-off walls and the barrier on screen are exactly what the car
+feels. The camera lives in ``camera.py``; both are shared with the Model Arena.
 """
 from __future__ import annotations
 
@@ -15,7 +16,8 @@ import pygame
 
 from racer.config import PROJECT_ROOT
 from racer.physics.surfaces import GRASS_ID, KERB_ID, OUTSIDE_ID, ROAD_ID
-from racer.track import field as F
+from racer.render.camera import Camera
+from racer.render.world import TrackWorld
 
 ASSETS = PROJECT_ROOT / "assets"
 SURFACE_NAMES = {OUTSIDE_ID: "out", GRASS_ID: "grass", ROAD_ID: "road", KERB_ID: "kerb"}
@@ -44,19 +46,17 @@ def speed_colours(n: int = 64) -> list[tuple[int, int, int]]:
 
 
 class DebugView:
+    """Debug window drawing helpers: a :class:`TrackWorld` seen through a :class:`Camera`, plus HUD bits."""
+
     def __init__(self, size: tuple[int, int], cfg: Mapping[str, Any]) -> None:
         self.cfg = cfg
         self.c = {k: _col(v) for k, v in cfg["colours"].items()}
         self.w, self.h = size
-        self.k = float(cfg["world_px_per_m"])
-        self.zoom = float(cfg["zoom_px_per_m"])
-        self.cx = self.cy = 0.0
-        self.overview = False
-        self.zoom_fit = self.zoom
+        self.cam = Camera(size, cfg)
+        self.worldr = TrackWorld(cfg, self.c)
         self.font = load_font(cfg["font"], int(cfg["font_size"]))
         self.font_big = load_font(cfg["font"], int(cfg["font_size"] * 2))
         self.speed_lut = speed_colours()
-        self._scaled_cache: tuple[Any, pygame.Surface] | None = None
         self._sprite_src: pygame.Surface | None = None
         try:
             self._sprite_src = pygame.image.load(str(ASSETS / "sprites" / "cars" / cfg["car_sprite"])).convert_alpha()
@@ -64,134 +64,51 @@ class DebugView:
             self._sprite_src = None
         self._sprite_zoom = None
         self._sprite: pygame.Surface | None = None
-        self.track = None
 
     # ------------------------------------------------------------- world
+    @property
+    def track(self):
+        return self.worldr.track
+
     def set_track(self, track) -> None:
         """Pre-render the whole track to one surface."""
-        self.track = track
-        f = track.field
-        k = self.k
-        x_min, x_max, y_min, y_max = f.extent
-        w, h = int((x_max - x_min) * k), int((y_max - y_min) * k)
-        surf = np.empty((h, w), dtype=np.int32)
-        idx = np.empty((h, w), dtype=np.int32)
-        F.rasterise(f.dist, f.idx, f.geom, track.kerb_mask, x_min, y_min, 1.0 / k, surf, idx)
+        self.worldr.set_track(track)
 
-        c = self.c
-        rgb = np.empty((h, w, 3), dtype=np.uint8)
-        rgb[:] = c["outside"]
-        rgb[surf == GRASS_ID] = c["grass"]
-        rgb[surf == ROAD_ID] = c["road"]
-        kerb = surf == KERB_ID
-        stripe = ((np.maximum(idx, 0) * track.ds) // self.cfg["kerb_stripe_m"]).astype(np.int64) % 2 == 0
-        rgb[kerb & stripe] = c["kerb_red"]
-        rgb[kerb & ~stripe] = c["kerb_white"]
-
-        # Barrier: outside pixels next to the world; walls: territory jumps between neighbours.
-        n, jump = int(f.geom[6]), int(f.geom[7])
-        wall = np.zeros((h, w), dtype=bool)
-        inside = surf != OUTSIDE_ID
-        for axis in (0, 1):
-            a = np.take(idx, range(1, idx.shape[axis]), axis=axis)
-            b = np.take(idx, range(0, idx.shape[axis] - 1), axis=axis)
-            ia = np.take(inside, range(1, idx.shape[axis]), axis=axis)
-            ib = np.take(inside, range(0, idx.shape[axis] - 1), axis=axis)
-            kk = np.abs(a - b)
-            kk = np.minimum(kk, n - kk)
-            edge = ((kk > jump) & (a >= 0) & (b >= 0)) | (ia != ib)
-            if axis == 0:
-                wall[1:, :] |= edge
-                wall[:-1, :] |= edge
-            else:
-                wall[:, 1:] |= edge
-                wall[:, :-1] |= edge
-        rgb[wall & (surf != ROAD_ID) & (surf != KERB_ID)] = c["wall"]
-
-        self.world = pygame.surfarray.make_surface(np.ascontiguousarray(rgb[::-1].transpose(1, 0, 2)))
-        self.x_min, self.y_max = x_min, y_max
-        self._draw_track_marks()
-        self._scaled_cache = None
-
-    def _wpx(self, x: float, y: float) -> tuple[float, float]:
-        return (x - self.x_min) * self.k, (self.y_max - y) * self.k
-
-    def _draw_track_marks(self) -> None:
-        tr = self.track
-        cl = tr.centreline
-        # dashed centreline
-        dash = max(int(self.cfg["centreline_dash_m"] / tr.ds), 1)
-        for i in range(0, cl.n, 2 * dash):
-            j = min(i + dash, cl.n - 1)
-            pygame.draw.line(self.world, self.c["centreline"], self._wpx(*cl.points[i]), self._wpx(*cl.points[j]), 1)
-        # chequered start/finish line at sample 0
-        sq = self.cfg["start_square_m"]
-        p, t, nrm = cl.points[0], cl.tangent[0], cl.normal[0]
-        n_sq = int(tr.spec.width_m / sq)
-        for a in range(n_sq):
-            for b in range(2):
-                o = p + nrm * (tr.half_width - (a + 0.5) * sq) + t * ((b - 0.5) * sq)
-                corners = [o + nrm * dx * sq / 2 + t * dy * sq / 2 for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
-                colour = self.c["start_light"] if (a + b) % 2 == 0 else self.c["start_dark"]
-                pygame.draw.polygon(self.world, colour, [self._wpx(*q) for q in corners])
+    def draw_world(self, screen: pygame.Surface) -> None:
+        self.worldr.draw(screen, self.cam)
 
     # ------------------------------------------------------------ camera
-    def to_screen(self, x: float, y: float) -> tuple[float, float]:
-        return (x - self.cx) * self.zoom + self.w / 2, (self.cy - y) * self.zoom + self.h / 2
+    @property
+    def overview(self) -> bool:
+        return self.cam.overview
 
-    def zoom_by(self, factor: float) -> None:
-        self.overview = False
-        self.zoom = min(max(self.zoom * factor, self.cfg["zoom_min"]), self.cfg["zoom_max"])
+    @overview.setter
+    def overview(self, on: bool) -> None:
+        self.cam.overview = on
 
-    def update_camera(self, x: float, y: float, vx: float, vy: float, sim_speed: float = 1.0) -> None:
-        """Follow the car. ``sim_speed`` = simulated physics steps shown per frame, so the
-        camera follows per *simulated* time and keeps up at ×4 as well as at ×1."""
-        if self.overview:
-            x0, x1, y0, y1 = self.track.field.extent
-            self.cx, self.cy = (x0 + x1) / 2, (y0 + y1) / 2
-            self.zoom_fit = min(self.w / (x1 - x0), self.h / (y1 - y0))
-            return
-        lead = self.cfg["camera_lead_s"]
-        tx, ty = x + vx * lead, y + vy * lead
-        a = 1.0 - (1.0 - self.cfg["camera_lerp"]) ** max(sim_speed, 0.0)
-        self.cx += (tx - self.cx) * a
-        self.cy += (ty - self.cy) * a
-
-    def snap_camera(self, x: float, y: float) -> None:
-        self.cx, self.cy = x, y
+    @property
+    def zoom(self) -> float:
+        return self.cam.zoom
 
     @property
     def view_zoom(self) -> float:
-        return self.zoom_fit if self.overview else self.zoom
+        return self.cam.view_zoom
+
+    def to_screen(self, x: float, y: float) -> tuple[float, float]:
+        return self.cam.to_screen(x, y)
+
+    def zoom_by(self, factor: float) -> None:
+        self.cam.zoom_by(factor)
+
+    def update_camera(self, x: float, y: float, vx: float, vy: float, sim_speed: float = 1.0) -> None:
+        """Follow the car (per simulated time), or fit the whole track in overview."""
+        self.cam.update(x, y, vx, vy, sim_speed, self.track.field.extent if self.track else None)
+
+    def snap_camera(self, x: float, y: float) -> None:
+        self.cam.snap(x, y)
 
     # ------------------------------------------------------------ drawing
-    def draw_world(self, screen: pygame.Surface) -> None:
-        z = self.view_zoom
-        saved = self.zoom
-        self.zoom = z
-        screen.fill(self.c["outside"])
-        vw, vh = self.w / z, self.h / z
-        sx, sy = self._wpx(self.cx - vw / 2, self.cy + vh / 2)
-        src = pygame.Rect(int(math.floor(sx)), int(math.floor(sy)), int(math.ceil(vw * self.k)) + 2, int(math.ceil(vh * self.k)) + 2)
-        clip = src.clip(self.world.get_rect())
-        if clip.w > 0 and clip.h > 0:
-            s = z / self.k
-            dest_size = (max(int(clip.w * s), 1), max(int(clip.h * s), 1))
-            key = (clip.topleft, clip.size, dest_size)
-            if self._scaled_cache is None or self._scaled_cache[0] != key:
-                sub = self.world.subsurface(clip)
-                scaled = pygame.transform.smoothscale(sub, dest_size) if s >= 0.5 else pygame.transform.scale(sub, dest_size)
-                self._scaled_cache = (key, scaled)
-            screen.blit(self._scaled_cache[1], ((clip.x - sx) * s, (clip.y - sy) * s))
-        self.zoom = saved
-
-    def _with_view_zoom(self):
-        z = self.view_zoom
-        saved, self.zoom = self.zoom, z
-        return saved
-
     def draw_trail(self, screen: pygame.Surface, trail: Iterable[tuple[float, float, float] | None]) -> None:
-        saved = self._with_view_zoom()
         vmax = self.cfg["trail_speed_max"]
         n = len(self.speed_lut)
         prev = None
@@ -204,11 +121,9 @@ class DebugView:
                 col = self.speed_lut[min(int(p[2] / vmax * (n - 1)), n - 1)]
                 pygame.draw.line(screen, col, prev, q, 2)
             prev = q
-        self.zoom = saved
 
     def draw_rays(self, screen: pygame.Surface, x: float, y: float, theta: float,
                   angles: np.ndarray, dists: np.ndarray, ranges: np.ndarray) -> None:
-        saved = self._with_view_zoom()
         o = self.to_screen(x, y)
         for a, d, r in zip(angles, dists, ranges):
             frac = float(d / r)
@@ -218,11 +133,9 @@ class DebugView:
             pygame.draw.line(screen, col, o, h, 1)
             if d < r:
                 pygame.draw.circle(screen, col, (int(h[0]), int(h[1])), 4)
-        self.zoom = saved
 
     def draw_car(self, screen: pygame.Surface, car, x: float, y: float, theta: float, braking: bool) -> None:
-        saved = self._with_view_zoom()
-        z = self.zoom
+        z = self.view_zoom
         p = car.p
         if self._sprite_src is not None:
             if self._sprite_zoom != z:
@@ -245,7 +158,6 @@ class DebugView:
                 f = -p.car_length_m / 2
                 bx, by = self.to_screen(x + f * c - l * s, y + f * s + l * c)
                 pygame.draw.circle(screen, (255, 40, 40), (int(bx), int(by)), max(int(0.35 * z), 2))
-        self.zoom = saved
 
     # --------------------------------------------------------------- HUD
     def text(self, screen: pygame.Surface, s: str, pos: tuple[int, int], colour=None, big: bool = False) -> int:

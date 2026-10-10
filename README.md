@@ -6,9 +6,9 @@ A 2D top-down racing game written from scratch, where a car learns to drive a ra
 - **What it outputs:** steering and gas/brake.
 - **Why a racing line appears:** grip-limited physics with momentum and per-wheel surfaces. Corner too fast and the car slides, so it has to learn to brake, hit the apex and use the full track width.
 
-The demo (pygame-ce) will load any trained model from a registry and race 10–20 of them as ghost cars. It will also have an evolution race, a draw-a-track mode and human vs AI.
+The demo (pygame-ce) loads any trained model from a registry and races up to 20 of them as ghost cars (Model Arena). Week 3 adds the evolution race, draw-a-track mode and human vs AI.
 
-> **Status:** Week 1 (milestone M1) done. Physics, tracks, sensors, the Gymnasium env, a debug driving window and PPO training are in place. The first model (`R001`) laps Training Ground faster than the hand-coded baseline (42.7 s vs 46.6 s).
+> **Status:** Week 2 (milestone M2). Track sets with generated tracks, a curriculum (`--parent` fine-tuning), the evaluation protocol, the model registry (CSV → xlsx), an overnight experiment queue and the Model Arena are in place. Week 1's model `R001` laps Training Ground faster than the hand-coded baseline (42.7 s vs 46.6 s).
 > Full design, plan and timeline: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). Progress and change log: [log.md](log.md).
 
 ## Setup (Windows)
@@ -52,9 +52,35 @@ Run these from the project folder.
 
 - **Time:** about 10 minutes per million steps on the CPU, using 6 parallel environments.
 - **Output:** a checkpoint every 100k steps, saved as `models\R###_<tag>@<steps>k\`. The run number goes up by itself (`R001`, `R002`, …).
-- **Quick check:** at the end, the script drives the final model from 3 starts and prints its lap times. The final checkpoint isn't always the best one, so compare checkpoints before picking one.
+- **Tracks:** `--tracks` names tracks directly; `--trackset` uses a preset from `configs\trackset\` (fixed tracks, whole folders, and freshly generated tracks). Held-out tracks are never trained on.
+- **Fine-tuning:** `--parent <model_id>` starts from a saved model (curriculum, e.g. `--trackset final_mix --parent R002_curric_wide@2700k --train ppo_finetune`). Its sensors and network must match.
+- **Evaluation:** afterwards every checkpoint is evaluated (3 showcase tracks × 3 starts + 10 held-out tracks), written to the registry, and the best one is marked. The final checkpoint isn't always the best. Results also go to `outputs\eval\<model_id>\`.
+- **Commit first:** real runs refuse to start with uncommitted code or config changes, so each model records the exact code it came from (`--allow-dirty` overrides).
 - **Live curves:** in a second terminal, run `.venv\Scripts\python -m tensorboard.main --logdir runs` and open http://localhost:6006.
-- **Smoke test:** add `--scratch` to write to `outputs\scratch\` (git-ignored) instead of `models\`.
+- **Smoke test:** add `--scratch` to write to `outputs\scratch\` (git-ignored, with its own registry) instead of `models\`.
+
+### Race models (Model Arena)
+
+```bat
+.venv\Scripts\python scripts\demo.py
+.venv\Scripts\python scripts\demo.py --track technical --best --baseline
+.venv\Scripts\python scripts\demo.py --track fast_flow --run R002 --every 3
+```
+
+- **Picker:** pick a track on the left and up to 20 models on the right (click rows; click a column header to sort; type to filter; `Tab` best checkpoints only; `Shift+B` adds the PID baseline; `Shift+P` fair physics; `+/−` laps), then `Enter`.
+- **Race:** ghost cars start from a grid after a countdown. A crashed car restarts where it crashed after 1 s, and its crashes are counted.
+- **Keys:** `Tab` (or click a leaderboard row) follows the next car · `F` overview · `R` rays · `T` all trails · `L` labels · `Space` pause · `+/−` sim speed · mouse wheel zoom · `Esc` back to the picker.
+- **Physics:** each car uses the physics it was trained with; `--fair` (or `Shift+P`) puts every car on the default physics.
+
+### Run experiments overnight
+
+```bat
+.venv\Scripts\python scripts\queue_overnight.py configs\queue\night1.yaml --dry-run
+.venv\Scripts\python scripts\queue_overnight.py configs\queue\night1.yaml
+```
+
+- Start it yourself from a normal terminal; it needs no Claude session. It runs the queue's training runs one after another, logs each to `outputs\queue_logs\`, keeps going if one fails, and resumes where it left off if you start it again.
+- It keeps Windows awake while it runs. Keep the laptop plugged in, with the lid open.
 
 ### Replay a trained model
 
@@ -67,7 +93,13 @@ Run these from the project folder.
 - **Episode ends:** an episode ends exactly as in training (wall, off-road, stuck, wrong way), then restarts from a random point.
 - **Switching drivers:** press `3` for the model, `2` for the baseline, and `1` to drive yourself.
 - **Visual aids:** `R` shows the model's rays, `T` its speed-coloured trail.
-- **Quotes:** keep the quotes around the path, because the `@` in the folder name can confuse some shells.
+- **Model id or folder:** `--model` takes a model id (looked up in the registry) or a folder path. Keep quotes around paths, because the `@` can confuse some shells.
+
+### Registry
+
+- `registry\runs.csv` and `registry\models.csv` are the source of truth: one row per run and per checkpoint, with evaluation metrics.
+- `registry\registry.xlsx` is regenerated from them (Runs, Models, a leaderboard per showcase track, Ablations). Never edit it by hand.
+- Evaluation files are also added to each model folder (`eval.json`, `thumb_<track>.png`) and copied to `outputs\eval\`.
 
 ## Commands
 
@@ -76,13 +108,17 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | What | Command |
 |---|---|
 | Drive / watch (debug window) | `scripts\drive.py [--track technical] [--mode human\|baseline\|model] [--model models\<model_id>] [--sim-speed 4] [--trace out.csv]` |
-| Train PPO | `scripts\train.py --tag ppo_rays5_tg --tracks training_ground [--steps 2000000] [--set ppo.ent_coef=0.01] [--scratch]` |
+| Train PPO | `scripts\train.py --tag … (--tracks … or --trackset final_mix) [--parent <model_id>] [--train ppo_finetune] [--physics …] [--env …] [--reward …] [--steps N] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval]` |
+| Evaluate (protocol v1) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` |
+| Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) |
+| Model Arena | `scripts\demo.py [--track …] [--models … or --run R002 [--every N] or --best] [--baseline] [--laps 3] [--fair]` |
+| Overnight queue | `scripts\queue_overnight.py configs\queue\<queue>.yaml [--dry-run] [--retry-failed]` |
 | TensorBoard | `-m tensorboard.main --logdir runs` |
 | Unit tests | `-m pytest -q` |
 | Physics sanity tests | `scripts\physics_sanity.py` (run after every physics change) |
 | Track previews + validation | `scripts\preview_tracks.py [showcase\|heldout\|<name>]` |
 | Regenerate held-out tracks | `scripts\generate_tracks.py --heldout` (`--stats 200` for the acceptance rate) |
-| Env speed + baseline laps | `scripts\bench_env.py` |
+| Env speed + baseline laps | `scripts\bench_env.py [--trackset final_mix]` |
 
 **Debug window keys:** arrows/WASD drive · `1` human · `2` baseline · `3` model · `R` rays · `T` trail · `F` overview · `+/−` or mouse wheel zoom · `[ ]` sim speed · `Space` pause · `Enter` reset at the start line · `Backspace` random start · `N` next track · `K` ABS on/off · `H` help · `Esc` quit.
 
@@ -93,14 +129,14 @@ In human mode (`1`) the walls are solid and nothing resets the car; baseline and
 | Folder | Contents |
 |---|---|
 | `racer/` | `physics`, `track`, `env` (headless, no pygame); `agents`, `registry`, `render` (pygame-ce, demo only) |
-| `configs/` | YAML presets: `physics/`, `env/`, `reward/`, `train/`, `track/` (geometry and generator), `demo/` (render and audio settings) |
-| `scripts/` | train, drive (debug window), physics sanity, track previews / generation, env benchmark; later evaluate, demo, record video, plots |
+| `configs/` | YAML presets: `physics/`, `env/`, `reward/`, `train/`, `track/` (geometry and generator), `trackset/` (what training samples), `eval/` (evaluation protocol), `queue/` (overnight experiment lists), `demo/` (render, arena and audio settings) |
+| `scripts/` | train, evaluate, registry, demo (Model Arena), queue_overnight, drive (debug window), physics sanity, track previews / generation, env benchmark; later record video, plots |
 | `tests/` | pytest unit tests |
-| `tracks/` | `showcase/`, `heldout/` (never used in training), `user/` (drawn in the editor) |
+| `tracks/` | `showcase/`, `heldout/` (never used in training), `user/` (drawn in the editor). Any other folder works too: a track JSON added at any time is found by name |
 | `models/` | self-contained, immutable model folders; **local only** (git-ignored), back them up by copying the folder |
 | `registry/` | `runs.csv`, `models.csv` → `registry.xlsx` |
 | `assets/` | sprites, textures, fonts, sounds; see [assets/LICENSES.md](assets/LICENSES.md) |
-| `runs/`, `outputs/` | TensorBoard logs; videos, plots, frames, `scratch/` (smoke runs, git-ignored) |
+| `runs/`, `outputs/` | TensorBoard logs; `eval/` (copies of every model's evaluation), videos, plots, frames, `scratch/` (smoke runs) and `queue_logs/` (both git-ignored) |
 
 ## Credits
 

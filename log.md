@@ -77,12 +77,13 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T41: Registry (D11): `racer/registry/registry.py` (§9 schemas, upsert by id, atomic rewrite, scratch runs go to `outputs/scratch/registry/`), `racer/registry/export_xlsx.py` (Runs, Models, one leaderboard per showcase track, Ablations pivot; frozen header, filters, green best lap, hyperlinks to folders and thumbnails), `scripts/registry.py` (`backfill`, `export`, `list`). Backfill R001 (20 checkpoints) and the baseline (`BASE_pid`). **Done when:** R001 is registered and evaluated with `is_best` set, and `registry.xlsx` opens in Excel with every sheet.
 * [x] T42: `train.py` v2: `--trackset`, `--parent <model_id>` (fine-tune: policy + VecNormalize stats, obs_spec must match, parent recorded), registers the run and every checkpoint, evaluates all checkpoints after training and marks `is_best` (`--no-eval` to skip). **Done when:** 50k scratch smoke runs (multi-track, and with `--parent`) go end to end into the scratch registry.
 * [x] T43: Loader v2: lookup by model id through the registry (fallback `models/<id>`), algorithm dispatch from the snapshot (PPO now, SAC later), direct torch inference with batching. **Done when:** batched actions equal SB3 `predict` exactly (test), and 20 models load in a few seconds.
-* [~] T44: Curriculum runs (D8): `R002` stage 2 (parent `R001@1200k`, `gen_wide`, ~3M); `R003` stage 3 (parent = best of R002, `final_mix`, ~3–5M); `R004` from scratch on `final_mix` (~5M) for comparison. **Done when:** results logged; target: best model ≥ 8/9 showcase starts and ≥ 80 % held-out completion.
+* [x] T44: Curriculum runs (D8): `R002` stage 2 (parent `R001@1200k`, `gen_wide`, ~3M); `R003` stage 3 (parent = best of R002, `final_mix`, ~3–5M); `R004` from scratch on `final_mix` (~5M) for comparison. **Done when:** results logged; target: best model ≥ 8/9 showcase starts and ≥ 80 % held-out completion.
 * [x] T45: `scripts/queue_overnight.py` (D18): queue YAML in `configs/queue/`, runs `train.py` one after another, one log per run in `outputs/queue_logs/` (git-ignored), keeps going after a failure, resumes (skips finished entries), keeps Windows awake only while it runs. **Done when:** a 2-entry 20k scratch queue with one deliberately failing entry finishes and reports both.
 * [ ] T46: First overnight queue (owner starts it): E2 no grip limit, E3 speed reward, E4 rays9 / rays5_short, E5 single- vs multi-track; from scratch on the T44 track set, seeds sized to fit ~8 h (from T44's measured steps). **Done when:** all runs are registered and evaluated; failures noted here.
 * [~] T47: Basic Model Arena (D14–D16): pygame-free `racer/env/race.py` (N `RacingEnv`s on one shared track, each with its model's own physics and obs spec; grid, countdown, laps, gaps, respawns); `racer/render/world.py` + `camera.py` split out of `debug_view.py` (`drive.py` keeps working); `scripts/demo.py arena` with a basic model picker, 20 distinct cars (4 shapes × 5 colours), labels, leaderboard, `Tab`/`F`/`R`/`T`/`Space`/`+−`, `--models`, `--fair`. **Done when (M2):** 20 registry models race on each showcase track at a steady 60 FPS, and a headless test runs a 20-car race to the finish.
 * [ ] T48: Docs: PROJECT_CONTEXT (§4 layout, §8 curriculum and track sets, §9 eval artefacts, §11 run IDs, §16), README (commands, registry, arena), `log.md` Current Status.
 * [x] T49: Owner approved D7–D18 with changes (any tracks may be mixed or added; tracks can be added at any time, final showcase = a faculty-drawn track; evals also copied to `outputs/eval/`; respawn rule as proposed; overnight queue must run without a Claude session). Record in PROJECT_CONTEXT (+ §16), CLAUDE.md (model-folder rule), before code.
+* [x] T50: CLAUDE.md rules for periodic check-ins while waiting on a process: keep gaps under 60 min so the prompt cache stays warm; read only the status file and log tail (log.md and CLAUDE.md excepted).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -99,6 +100,27 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-10 — Claude Code (Sonnet 5.5) — T44: R003 (from scratch on final_mix) result
+
+* **Status:** DONE. 5M steps, 50 checkpoints, all evaluated (435 s). Best by D9: **R003_mix_scratch@900k: 100 % showcase, 80 % held-out, 89 % overall.**
+* **Details:** several checkpoints reach 100 % showcase / 80 % held-out (@900k, @1000k, @1100k, @1700k, @1900k), so mixed-track training from scratch generalises within ~1M steps, unlike R002's fine-tune (10 % held-out). Best laps @900k: TG 57.95 s, Technical 89.95 s, Fast Flow 97.40 s, i.e. ≈ 24 % **slower** than the baseline (46.6 / 81.55 / 70.4 s; `lap_ratio` 1.24). Reliable but not yet fast: lap time is the next thing to improve (longer training, lower final LR / entropy, or an off-road / speed reward tweak). The D8 stage-3 chain run from R002 was dropped (R002 is a weak parent); `gen_wide` fine-tuning stays documented as a negative result for the report.
+* **Consequence for the overnight queue:** 3M-step runs from scratch on `final_mix` are enough to reach reliability, so `night1.yaml` (11 × 3M ≈ 5.5 h + evaluation ≈ 30 min) stands as drafted. The owner starts it; no Claude session is needed.
+* **Housekeeping:** no background tasks or servers left running.
+
+### 2026-10-10 — Claude Code — T44: R002 result, R003 (from scratch on final_mix) started
+
+* **Status:** WORKING. T44 stays `[~]`.
+* **R002** (`--parent R001@1200k`, `gen_wide`, `ppo_finetune`, 3M steps, 30 checkpoints, all evaluated): **did not generalise.** Best by the D9 rule is @200k (56 % showcase, 10 % held-out), essentially the parent. Late checkpoints: @3000k 44 % showcase / 10 % held-out, @2900k 56 % / 0 %. Training reward rose (≈ 220 → 1375) but `end/offroad` stayed 50–75 % of training episodes; in evaluation 9–10 of 10 held-out tracks end by the all-wheels-off-road rule (1 s). The agent drives faster but still leaves the road.
+* **Reading:** a low-LR fine-tune from a single-track model is a weak curriculum step. Candidate fixes (not tried yet, owner/next run to decide): a larger off-road penalty, higher fine-tune LR, more steps, or simply training from scratch on mixed tracks.
+* **Started:** `train.py --tag mix_scratch --trackset final_mix --steps 5000000` (it gets id **R003**, since the planned R003 chain stage was not run; D8's "R004 from scratch" is therefore R003). ≈ 50 min plus evaluation. R002's chain stage 3 is on hold until R003's result shows whether the curriculum is worth continuing.
+
+### 2026-10-10 — Claude Code (Opus 5.5) — T50: Check-in rules in CLAUDE.md
+
+* **Task:** Owner asked for rules for sessions that wait on a process (e.g. supervising the overnight queue) and check in periodically.
+* **Status:** DONE (docs only).
+* **Files (edited):** `CLAUDE.md` (new section "Waiting on a process": check-in gaps under 60 min so the cache stays warm; read only the status file and log tail, except `log.md` and `CLAUDE.md`), `log.md`
+* **Notes:** Written while another session was building Week 2 (T45/T47); that session's entries were left untouched. D18 (the queue runs without a Claude session) is unchanged: these rules apply only if the owner chooses to have a session supervise.
 
 ### 2026-10-10 — Claude Code (Opus 5.5) — T45, T47: Overnight queue, Model Arena (in progress)
 

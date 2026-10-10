@@ -25,6 +25,10 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 - **Check `.gitignore` after every install or update,** and extend it if needed.
 - **Don't track or push dependencies,** such as `.venv/`, `__pycache__/` or downloaded wheels, unless that is absolutely necessary.
 
+## Waiting on a process (periodic check-ins)
+- **Never let the prompt cache go cold.** The cache expires after 60 min, so keep every gap between check-ins under 60 min (aim for at most 55) to avoid paying to re-cache the context.
+- **Read only what each check-in needs:** the process's status file and the tail of its current log (e.g. `outputs/queue_logs/<queue>/state.json`). `log.md` and `CLAUDE.md` are the only exceptions. Don't re-read other files or earlier output, and keep command output short.
+
 ## End of a run (before the final summary)
 - **Stop everything you started:** training runs, the demo window, TensorBoard and any other servers. Leave something running only if the user explicitly asked for that.
 - **Clean up:** confirm there are 0 background tasks and 0 open sockets left.

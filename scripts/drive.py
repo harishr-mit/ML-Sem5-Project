@@ -28,8 +28,9 @@ from racer.env.racing_env import RacingEnv, make_env_config
 from racer.env.sensors import cast_rays
 from racer.track.io import TRACKS_DIR
 
-HELP = ("arrows/WASD drive · 1 human · 2 baseline · 3 model · R rays · T trail · F overview · "
-        "+/− zoom · [ ] speed · Space pause · Enter start · Bksp random · N track · Esc quit")
+HELP = ["arrows/WASD drive", "1 human", "2 baseline", "3 model", "R rays", "T trail", "F overview",
+        "+/− or wheel zoom", "[ ] sim speed", "Space pause", "Enter reset at start", "Backspace random start",
+        "N next track", "H hide help", "Esc quit"]
 
 
 def showcase_names() -> list[str]:
@@ -44,6 +45,8 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--screenshot", default=None, help="run headless and save a PNG after --frames frames")
     ap.add_argument("--frames", type=int, default=120)
+    ap.add_argument("--sim-speed", type=float, default=1.0, help="initial sim speed (one of render.yaml sim_speeds)")
+    ap.add_argument("--trace", default=None, help="write one CSV row per env step (debugging determinism)")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if args.screenshot:
@@ -82,12 +85,16 @@ def main() -> int:
     track_i = tracks.index(args.track)
     rng = np.random.default_rng(args.seed)
     speeds = list(rcfg["sim_speeds"])
-    speed_i = speeds.index(1.0)
+    speed_i = speeds.index(args.sim_speed)
+    trace = open(args.trace, "w", encoding="utf-8") if args.trace else None
+    if trace:
+        trace.write("episode,step,x,y,theta,speed,steer,gas\n")
+    episode = [0]
 
     state = {"obs": None, "ep_reward": 0.0, "last_r": 0.0, "info": {}, "action": np.zeros(2, np.float32)}
     poses: deque = deque()
     trail: deque = deque(maxlen=int(rcfg["trail_length"]))
-    show_rays, show_trail, show_help, paused = True, True, False, False
+    show_rays, show_trail, show_help, paused = True, True, True, False   # help shown until H
     end_reason = None          # termination waiting to be shown
     banner_until = 0.0
     acc = 0.0
@@ -95,6 +102,7 @@ def main() -> int:
     def reset(**opts) -> None:
         nonlocal end_reason
         obs, info = env.reset(seed=int(rng.integers(1 << 31)), options={"track": tracks[track_i], **opts})
+        episode[0] += 1
         state.update(obs=obs, ep_reward=0.0, last_r=0.0, info=info, action=np.zeros(2, np.float32))
         poses.clear()
         poses.append((env.car.x, env.car.y, env.car.theta))
@@ -143,7 +151,6 @@ def main() -> int:
                     mode = "baseline"
                 elif k == pygame.K_3 and model is not None:
                     mode = "model"
-                env.free_drive = mode == "human"
                 elif k == pygame.K_r:
                     show_rays = not show_rays
                 elif k == pygame.K_t:
@@ -171,6 +178,8 @@ def main() -> int:
                     trail.clear()
                     reset_start()
 
+        env.free_drive = mode == "human"   # follows mode switches (1 / 2 / 3)
+
         # ---- advance the simulation by whole physics substeps (60 Hz × sim speed)
         if not paused and now >= banner_until:
             if end_reason is not None and len(poses) <= 1:
@@ -190,6 +199,9 @@ def main() -> int:
                     state.update(obs=obs, last_r=r, info=info, action=action)
                     state["ep_reward"] += r
                     poses.extend(env.substep_poses)
+                    if trace:
+                        trace.write(f"{episode[0]},{env.steps},{env.car.x:.6f},{env.car.y:.6f},{env.car.theta:.6f},"
+                                    f"{env.car.speed:.6f},{action[0]:.6f},{action[1]:.6f}\n")
                     if term or trunc:
                         end_reason = info["termination"] or ("lap limit" if info["laps"] >= env.ep.max_laps else "step limit")
                 if len(poses) > 1 or (end_reason is not None and poses):
@@ -203,7 +215,7 @@ def main() -> int:
         # ---- draw
         x, y, th = poses[0] if poses else (env.car.x, env.car.y, env.car.theta)
         car = env.car
-        view.update_camera(x, y, car.vx, car.vy)
+        view.update_camera(x, y, car.vx, car.vy, 0.0 if paused else speeds[speed_i])
         view.draw_world(screen)
         if show_trail:
             view.draw_trail(screen, trail)
@@ -243,7 +255,10 @@ def main() -> int:
         view.bar(screen, "gas", float(max(a[1], 0)), pygame.Rect(24 + bw + 30, size[1] - 70, bw // 2, 18), c["gas_bar"], False)
         view.bar(screen, "brake", float(max(-a[1], 0)), pygame.Rect(24 + bw + 30 + bw // 2 + 30, size[1] - 70, bw // 2, 18), c["brake_bar"], False)
         if show_help:
-            view.draw_lines(screen, [(HELP, c["hud_dim"])], (16, size[1] - 34), size[0] - 16)
+            help_lines = view.wrap(HELP, size[0] - 60)
+            lh = view.font.get_linesize()
+            top = size[1] - 110 - lh * len(help_lines)
+            view.draw_lines(screen, [(s, c["hud_text"]) for s in help_lines], (24, top), size[0] - 32)
         else:
             view.text(screen, "H help", (size[0] - 80, size[1] - 28), c["hud_dim"])
         if end_reason is not None and len(poses) <= 1 and now < banner_until:
@@ -259,6 +274,8 @@ def main() -> int:
             running = False
         clock.tick(rcfg["fps"] if not args.screenshot else 0)
 
+    if trace:
+        trace.close()
     pygame.quit()
     return 0
 

@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-10 (Claude Opus 5.5): **M1 reached** (T06 done, T17–T30). R001 (PPO, Training Ground, 2M steps, 20 min) laps reliably; the best checkpoint `models/R001_ppo_rays5_tg@1200k` completes 6/6 starts, best lap 42.70 s vs the baseline's 46.6 s. 43 tests pass, physics sanity passes. Open: owner's drive-feel check (`scripts\drive.py`, T26); Week 1 code + R001 are **not committed yet**. Next: Week 2 (T07): registry, full evaluate.py with best-checkpoint selection, multi-track curriculum, arena.
+* **Last updated:** 2026-10-10 (Claude Opus 5.5): **M1 reached, Week 1 closed** (T06, T16–T33 done; no task open). Best model `models/R001_ppo_rays5_tg@1200k`: 6/6 starts, best lap 42.70 s vs the baseline's 46.6 s. 46 tests pass, physics sanity passes. Week 1 code + R001's 20 checkpoints were committed by the owner (`42189b3`, models in plain git, ~33 MB); T31–T33 fixes (drive.py crash, free drive, help wrap, camera, `--trace`) are not committed yet. Open for the owner: drive-feel check (T26) and how to store future checkpoints (Git LFS vs selected checkpoints only). Next: Week 2 (T07).
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
 * **Plan:** `PROJECT_CONTEXT.md` is the single source of truth: design, physics, env, training, registry, demo, timeline (§12) and setup (§14). `CLAUDE.md` holds the agent rules.
 * **Architecture:** a headless simulation (`racer/physics`, `racer/track`, `racer/env`, with no pygame) used by the training scripts (`scripts/train.py`, `evaluate.py`) and by the pygame-ce demo (`scripts/demo.py`, `racer/render`).
@@ -62,6 +62,9 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T28: First real PPO run, `R001` on Training Ground (~2–3M steps). **Done when (M1):** the deterministic policy completes laps from 3 different starts without crashing; lap times and the baseline's lap time are logged here.
 * [x] T29: Docs: README commands, PROJECT_CONTEXT (§5.5, §6, §7.1 frozen obs details, §16 decisions), `log.md` Current Status.
 * [x] T30: Owner approved D1–D6 (2026-10-10). Record them in PROJECT_CONTEXT first (§4 layout, §5.1, §5.5, §6, §7.1, §16, open questions), before any code.
+* [x] T31: Fix `drive.py` crashing on every episode end; add free drive for human play (solid walls, no resets), AI modes unchanged
+* [x] T32: README Quickstart: how to play, train and replay a model; status updated to M1 done
+* [x] T33: drive.py: wrap the clipped help text; check whether sim speed changes model behaviour (it doesn't); camera follows per simulated time
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -78,6 +81,31 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-10 — Claude Code (Opus 5.5) — T33: Help text wrap, sim-speed check, camera
+
+* **Task:** Owner: (1) the help line is clipped at the window edge; (2) changing the sim speed seems to make the model behave differently. Explain, and fix if unintended.
+* **Status:** DONE. `pytest`: 46 passed.
+* **Findings (sim speed):** the simulation does **not** depend on sim speed. Sim speed only changes how many recorded physics substeps are *displayed* per frame; `env.step` and `model.act` get exactly the same inputs. Verified with new `--trace` CSVs (one row per env step): R001@1200k at ×0.25 / ×1 / ×4 for 800 steps, and R001@100k across 2 episodes with a termination and reset at ×0.25 vs ×4, are **bit-identical**. What *did* change with speed was the camera: it closed 12 % of the gap to the car per rendered **frame**, so at ×4 (4× more motion per frame) it lagged far behind and the car drifted off-centre, which can look like different driving.
+* **Files (edited):** `racer/render/debug_view.py` (`update_camera(..., sim_speed)` uses `1 − (1 − lerp)^sim_speed`, so the camera follows per simulated time; new `wrap()`), `scripts/drive.py` (help is a list of items wrapped to the window width, shown by default, `H` hides it; new `--sim-speed` and `--trace` options), `README.md` (command row), `log.md`
+* **Notes / Errors:** a heredoc turned `\n` escapes into real newlines inside two string literals (SyntaxError); fixed with exact edits. Trace CSVs were written to the session scratchpad, not the project.
+
+### 2026-10-10 — Claude Code (Opus 5.5) — T32: README Quickstart
+
+* **Task:** Owner asked for a Quickstart in `README.md`: how to train, how to play, how to replay a model.
+* **Status:** DONE (docs only).
+* **Files (edited):** `README.md` (new "Quickstart" section with Play / Train / Replay subsections, between Setup and Commands; status line now says M1 is done, with R001's lap time), `log.md`
+
+### 2026-10-10 — Claude Code (Opus 5.5) — T31: drive.py crash fix + free drive for humans
+
+* **Task:** Owner: `drive.py` crashes after a second, for both human and model driving. Asked for humans to be able to hit walls without the session ending, while the model keeps the training behaviour.
+* **Status:** DONE. `pytest`: 46 passed (+3: walls are solid in free drive and nothing terminates; free drive is off by default; human-mode window runs 600 frames headless). A weak checkpoint (R001@100k) in model mode now runs through several terminations and resets without crashing.
+* **Root cause:** `drive.py` sliced a `deque` (`poses[1:]`) in the termination-banner check → `TypeError` on **every** episode end (wall, off-road, wrong way, or "stuck" after 3 s of standing still). The headless test had only run the baseline, which never terminates, so it missed this.
+* **Files (edited):** `racer/env/racing_env.py`, `scripts/drive.py`, `tests/test_env.py`, `tests/test_render.py`, `log.md`
+* **Details:**
+  - New `RacingEnv.free_drive` flag (default `False`; training never sets it). When on: a substep that would hit the barrier is undone and the car stops against the wall; no termination and no truncation; the would-be reason (`wall`, `offroad`, `stuck`, `wrong_way`) goes into `info["warning"]`.
+  - `drive.py` sets `free_drive` from the mode every frame: human (`1`) = free drive; baseline (`2`) and model (`3`) = training rules, i.e. banner then random reset. The HUD shows the active rule and any warning.
+* **Notes / Errors:** first edit put a statement inside the `elif` chain of key handling (SyntaxError); moved to once per frame.
 
 ### 2026-10-10 — Claude Code (Opus 5.5) — T28, T29: R001 (M1 reached), docs
 

@@ -143,7 +143,9 @@ class DebugView:
         self.overview = False
         self.zoom = min(max(self.zoom * factor, self.cfg["zoom_min"]), self.cfg["zoom_max"])
 
-    def update_camera(self, x: float, y: float, vx: float, vy: float) -> None:
+    def update_camera(self, x: float, y: float, vx: float, vy: float, sim_speed: float = 1.0) -> None:
+        """Follow the car. ``sim_speed`` = simulated physics steps shown per frame, so the
+        camera follows per *simulated* time and keeps up at ×4 as well as at ×1."""
         if self.overview:
             x0, x1, y0, y1 = self.track.field.extent
             self.cx, self.cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -151,7 +153,7 @@ class DebugView:
             return
         lead = self.cfg["camera_lead_s"]
         tx, ty = x + vx * lead, y + vy * lead
-        a = self.cfg["camera_lerp"]
+        a = 1.0 - (1.0 - self.cfg["camera_lerp"]) ** max(sim_speed, 0.0)
         self.cx += (tx - self.cx) * a
         self.cy += (ty - self.cy) * a
 
@@ -265,6 +267,21 @@ class DebugView:
         for s, col in lines:
             self.text(screen, s, (topleft[0], y), col)
             y += lh
+
+    def wrap(self, items: Sequence[str], max_width: int, sep: str = " · ") -> list[str]:
+        """Greedily join ``items`` into lines no wider than ``max_width`` pixels."""
+        lines: list[str] = []
+        cur = ""
+        for item in items:
+            cand = item if not cur else cur + sep + item
+            if cur and self.font.size(cand)[0] > max_width:
+                lines.append(cur)
+                cur = item
+            else:
+                cur = cand
+        if cur:
+            lines.append(cur)
+        return lines
 
     def bar(self, screen: pygame.Surface, label: str, value: float, rect: pygame.Rect, colour, centred: bool) -> None:
         """Horizontal bar; ``centred`` bars grow left/right from the middle (value in [−1, 1])."""

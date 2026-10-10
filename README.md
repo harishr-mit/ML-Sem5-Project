@@ -8,7 +8,7 @@ A 2D top-down racing game written from scratch, where a car learns to drive a ra
 
 The demo (pygame-ce) will load any trained model from a registry and race 10–20 of them as ghost cars. It will also have an evolution race, a draw-a-track mode and human vs AI.
 
-> **Status:** Week 1 (milestone M1) in progress: physics, tracks, sensors, the Gymnasium env, a debug driving window and PPO training are in place.
+> **Status:** Week 1 (milestone M1) done. Physics, tracks, sensors, the Gymnasium env, a debug driving window and PPO training are in place. The first model (`R001`) laps Training Ground faster than the hand-coded baseline (42.7 s vs 46.6 s).
 > Full design, plan and timeline: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). Progress and change log: [log.md](log.md).
 
 ## Setup (Windows)
@@ -28,13 +28,54 @@ py -3.11 -m venv .venv
 - `pip install -e .` makes the `racer` package importable from `scripts/`.
 - Versions in `requirements.txt` are pinned so saved models stay loadable.
 
+## Quickstart
+
+Run these from the project folder.
+
+### Play the game
+
+```bat
+.venv\Scripts\python scripts\drive.py
+.venv\Scripts\python scripts\drive.py --track technical
+```
+
+- **Driving:** arrow keys or WASD. Up accelerates, down brakes (there is no reverse).
+- **Walls:** in human mode they are solid, and nothing resets your car.
+- **Starting over:** `Enter` puts you back on the start line, `N` switches to the next track.
+- **Watching the baseline:** press `2` to hand the car to the hand-coded baseline driver, then `1` to take it back.
+
+### Train a model
+
+```bat
+.venv\Scripts\python scripts\train.py --tag ppo_rays5_tg --tracks training_ground --steps 2000000
+```
+
+- **Time:** about 10 minutes per million steps on the CPU, using 6 parallel environments.
+- **Output:** a checkpoint every 100k steps, saved as `models\R###_<tag>@<steps>k\`. The run number goes up by itself (`R001`, `R002`, …).
+- **Quick check:** at the end, the script drives the final model from 3 starts and prints its lap times. The final checkpoint isn't always the best one, so compare checkpoints before picking one.
+- **Live curves:** in a second terminal, run `.venv\Scripts\python -m tensorboard.main --logdir runs` and open http://localhost:6006.
+- **Smoke test:** add `--scratch` to write to `outputs\scratch\` (git-ignored) instead of `models\`.
+
+### Replay a trained model
+
+```bat
+.venv\Scripts\python scripts\drive.py --model "models\R001_ppo_rays5_tg@1200k"
+.venv\Scripts\python scripts\drive.py --model "models\R001_ppo_rays5_tg@1200k" --track fast_flow
+```
+
+- **The car's config:** the model drives with the physics, sensors and rules saved in its own folder.
+- **Episode ends:** an episode ends exactly as in training (wall, off-road, stuck, wrong way), then restarts from a random point.
+- **Switching drivers:** press `3` for the model, `2` for the baseline, and `1` to drive yourself.
+- **Visual aids:** `R` shows the model's rays, `T` its speed-coloured trail.
+- **Quotes:** keep the quotes around the path, because the `@` in the folder name can confuse some shells.
+
 ## Commands
 
 Run everything with the project interpreter, `.venv\Scripts\python`.
 
 | What | Command |
 |---|---|
-| Drive / watch (debug window) | `scripts\drive.py [--track technical] [--mode human\|baseline\|model] [--model models\<model_id>]` |
+| Drive / watch (debug window) | `scripts\drive.py [--track technical] [--mode human\|baseline\|model] [--model models\<model_id>] [--sim-speed 4] [--trace out.csv]` |
 | Train PPO | `scripts\train.py --tag ppo_rays5_tg --tracks training_ground [--steps 2000000] [--set ppo.ent_coef=0.01] [--scratch]` |
 | TensorBoard | `-m tensorboard.main --logdir runs` |
 | Unit tests | `-m pytest -q` |
@@ -44,6 +85,8 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Env speed + baseline laps | `scripts\bench_env.py` |
 
 **Debug window keys:** arrows/WASD drive · `1` human · `2` baseline · `3` model · `R` rays · `T` trail · `F` overview · `+/−` or mouse wheel zoom · `[ ]` sim speed · `Space` pause · `Enter` reset at the start line · `Backspace` random start · `N` next track · `H` help · `Esc` quit.
+
+In human mode (`1`) the walls are solid and nothing resets the car; baseline and model modes end episodes exactly as in training.
 
 ## Layout
 

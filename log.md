@@ -79,8 +79,10 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T43: Loader v2: lookup by model id through the registry (fallback `models/<id>`), algorithm dispatch from the snapshot (PPO now, SAC later), direct torch inference with batching. **Done when:** batched actions equal SB3 `predict` exactly (test), and 20 models load in a few seconds.
 * [x] T44: Curriculum runs (D8): `R002` stage 2 (parent `R001@1200k`, `gen_wide`, ~3M); `R003` stage 3 (parent = best of R002, `final_mix`, ~3–5M); `R004` from scratch on `final_mix` (~5M) for comparison. **Done when:** results logged; target: best model ≥ 8/9 showcase starts and ≥ 80 % held-out completion.
 * [x] T45: `scripts/queue_overnight.py` (D18): queue YAML in `configs/queue/`, runs `train.py` one after another, one log per run in `outputs/queue_logs/` (git-ignored), keeps going after a failure, resumes (skips finished entries), keeps Windows awake only while it runs. **Done when:** a 2-entry 20k scratch queue with one deliberately failing entry finishes and reports both.
-* [ ] T46: First overnight queue (owner starts it): E2 no grip limit, E3 speed reward, E4 rays9 / rays5_short, E5 single- vs multi-track; from scratch on the T44 track set, seeds sized to fit ~8 h (from T44's measured steps). **Done when:** all runs are registered and evaluated; failures noted here.
+* [~] T46: First overnight queue (owner starts it; `configs/queue/night1.yaml`, started manually after 2026-10-10): E2 no grip limit, E3 speed reward, E4 rays9 / rays5_short, E5 single- vs multi-track; from scratch on the T44 track set, seeds sized to fit ~8 h (from T44's measured steps). **Done when:** all runs are registered and evaluated; failures noted here.
 * [~] T47: Basic Model Arena (D14–D16): pygame-free `racer/env/race.py` (N `RacingEnv`s on one shared track, each with its model's own physics and obs spec; grid, countdown, laps, gaps, respawns); `racer/render/world.py` + `camera.py` split out of `debug_view.py` (`drive.py` keeps working); `scripts/demo.py arena` with a basic model picker, 20 distinct cars (4 shapes × 5 colours), labels, leaderboard, `Tab`/`F`/`R`/`T`/`Space`/`+−`, `--models`, `--fair`. **Done when (M2):** 20 registry models race on each showcase track at a steady 60 FPS, and a headless test runs a 20-car race to the finish.
+* [ ] T50: **NEXT (owner priority): faster models.** R003@900k is reliable (100 % showcase, 80 % held-out) but ≈ 24 % slower than the baseline. Try from-scratch runs on `final_mix` aimed at lap time (longer training, lower final LR / entropy, off-road / speed reward tweak); compare with the E1 reference runs from the overnight queue. **Done when:** a model beats the baseline lap time on the showcase tracks with held-out completion ≥ 80 %.
+* [ ] T51: **NEXT (owner priority): arena frame rate.** Re-measure 20 cars at ×1 on an idle CPU (the 66 fps was measured while training used all cores); fix if below a steady 60 fps (batched inference every 3rd frame, text caches, off-screen culling). Last check for M2.
 * [ ] T48: Docs: PROJECT_CONTEXT (§4 layout, §8 curriculum and track sets, §9 eval artefacts, §11 run IDs, §16), README (commands, registry, arena), `log.md` Current Status.
 * [x] T49: Owner approved D7–D18 with changes (any tracks may be mixed or added; tracks can be added at any time, final showcase = a faculty-drawn track; evals also copied to `outputs/eval/`; respawn rule as proposed; overnight queue must run without a Claude session). Record in PROJECT_CONTEXT (+ §16), CLAUDE.md (model-folder rule), before code.
 * [x] T50: CLAUDE.md rules for periodic check-ins while waiting on a process: keep gaps under 60 min so the prompt cache stays warm; read only the status file and log tail (log.md and CLAUDE.md excepted).
@@ -100,6 +102,13 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-10 — Claude Code (Sonnet 5.5) — Next steps recorded, overnight queue handed over
+
+* **Task:** Owner's usage limit is nearly used up: faster models (T50) and arena frame rate (T51) are the immediate next tasks; the owner runs the overnight queue by hand and we meet afterwards.
+* **Status:** DONE (docs only). The owner starts: `.venv\Scripts\python scripts\queue_overnight.py configs\queue
+ight1.yaml` (11 runs × 3M steps, ≈ 6 h; `--dry-run` previews; re-running resumes). Needs a clean tree for code/config paths, laptop plugged in, lid open.
+* **Files (edited):** `log.md` (T50, T51, T46 now `[~]`, Current Status)
 
 ### 2026-10-10 — Claude Code (Sonnet 5.5) — T44: R003 (from scratch on final_mix) result
 

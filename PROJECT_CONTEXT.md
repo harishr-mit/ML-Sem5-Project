@@ -135,7 +135,7 @@ ML Sem5 Project/
 │   ├── LICENSES.md           # manifest, credits, usage notes (READ before using assets)
 │   ├── sprites/cars/  sprites/props/  textures/ground/  fonts/  sounds/  licenses/
 │   └── _source/              # original downloads (git-ignored), for re-cutting
-├── models/<model_id>/        # self-contained model folders (see §9)
+├── models/<model_id>/        # self-contained model folders (see §9); local only, git-ignored
 ├── registry/  runs.csv  models.csv  registry.xlsx
 ├── runs/                     # TensorBoard logs
 └── outputs/   videos/  plots/  frames/  scratch/ (smoke runs, git-ignored)
@@ -601,6 +601,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-10 | Rule: whenever a goal or requirement changes, update this file first, then every document it affects (`CLAUDE.md` working rules, §15). |
 | 2026-10-10 | Week 1 decisions (owner-approved, `log.md` T16 D1–D6): **D1** kerbs inside the road edge, on-track (§5.1); **D2** `obs_spec` v1 details frozen (§7.1); **D3** track field + barrier = field territory, walls between close sections (§6); **D4** braking test: threshold ≈ 42 m, full lock ≈ 49 m, physics unchanged (§5.5); **D5** `configs/track/default.yaml`; **D6** `pytest` + `tests/` (§4). A minimal config loader and `train.py` are pulled forward from Week 2. |
 | 2026-10-10 | **M1 reached:** R001 (PPO, Training Ground, 2M steps, ≈ 20 min). Best checkpoint `R001_ppo_rays5_tg@1200k`: 6/6 deterministic starts, best lap 42.70 s vs 46.6 s for the hand-coded baseline. Reliability oscillates between checkpoints (agent drives at the limit with wheels on the grass), so models are chosen by evaluation, not by recency (§8). |
+| 2026-10-10 | **Models stay local** (owner): `models/` is git-ignored and removed from tracking (≈ 33 MB per 2M-step run). Back up by copying the folder (current backup: `C:\Users\Jack\ML_Sem5_models_backup\`). The registry CSVs stay in git. |
 
 **Open questions:**
 - Should rays also detect the barrier, or only the road edge? Currently: road edge only.

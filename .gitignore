@@ -30,8 +30,11 @@ outputs/scratch/
 # --- Original asset downloads (large, kept locally for re-cutting; see assets/LICENSES.md) ---
 assets/_source/
 
-# models/ and registry/ ARE tracked (the demo depends on them).
-# If the models folder gets too big, move models/**/checkpoints to Git LFS or ignore them here.
+# Trained models stay LOCAL (owner decision 2026-10-10): too big for git.
+# Back them up by copying the folder (current backup: C:\Users\Jack\ML_Sem5_models_backup\).
+/models/*
+!/models/.gitkeep
+# registry/ IS tracked (small CSVs).
 
 # --- Editors / OS ---
 .vscode/*

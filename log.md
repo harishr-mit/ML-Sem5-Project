@@ -65,6 +65,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T31: Fix `drive.py` crashing on every episode end; add free drive for human play (solid walls, no resets), AI modes unchanged
 * [x] T32: README Quickstart: how to play, train and replay a model; status updated to M1 done
 * [x] T33: drive.py: wrap the clipped help text; check whether sim speed changes model behaviour (it doesn't); camera follows per simulated time
+* [x] T34: Owner: keep models local only. Back up `models/` to `C:\Users\Jack\`, untrack `models/` in a new commit (gitignore, docs), push
+* [ ] T35: Owner finds braking weak (keyboard driving). Diagnose; human-only aids need no retrain; physics changes only if retraining is < 15 min and the owner locks the values by driving first
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -81,6 +83,17 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-10 — Claude Code (Opus 5.5) — T34: Models local only, backup, untracked
+
+* **Task:** Owner: keep trained models local. Back them up under `C:\Users\Jack\`, remove them from GitHub with a new commit.
+* **Status:** DONE. Backup verified identical with `diff -rq` (20 folders, 33 MB). `git check-ignore` matches `models/R001_*/model.zip`; the 20 model folders are still on disk.
+* **Backup:** `C:\Users\Jack\ML_Sem5_models_backup\` (outside the project, so it is not touched by git).
+* **Files (edited):** `.gitignore` (`/models/*` ignored, `!/models/.gitkeep`), `PROJECT_CONTEXT.md` (§4 layout note, §16 row), `README.md` (layout row), `log.md`
+* **Git:** `git rm -r --cached models` (60 files of R001 untracked; `models/.gitkeep` re-added), committed and pushed to `origin/main`.
+* **Notes / Errors:**
+  - The models are gone from the latest commit, but still exist in the history of `42189b3` and `99e8947` on GitHub. Removing them from history would need a rewrite and force push (as in T15); not done, not requested.
+  - A heredoc Python edit failed on `\U` in a Windows path; the `git rm --cached` that followed still ran (intended anyway). Edits redone with the Edit tool.
 
 ### 2026-10-10 — Claude Code (Opus 5.5) — T33: Help text wrap, sim-speed check, camera
 

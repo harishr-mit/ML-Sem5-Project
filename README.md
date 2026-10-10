@@ -97,7 +97,7 @@ In human mode (`1`) the walls are solid and nothing resets the car; baseline and
 | `scripts/` | train, drive (debug window), physics sanity, track previews / generation, env benchmark; later evaluate, demo, record video, plots |
 | `tests/` | pytest unit tests |
 | `tracks/` | `showcase/`, `heldout/` (never used in training), `user/` (drawn in the editor) |
-| `models/` | self-contained, immutable model folders |
+| `models/` | self-contained, immutable model folders; **local only** (git-ignored), back them up by copying the folder |
 | `registry/` | `runs.csv`, `models.csv` → `registry.xlsx` |
 | `assets/` | sprites, textures, fonts, sounds; see [assets/LICENSES.md](assets/LICENSES.md) |
 | `runs/`, `outputs/` | TensorBoard logs; videos, plots, frames, `scratch/` (smoke runs, git-ignored) |

@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-10 (Claude Opus 5.5): Week 1 closed (T06, T16–T35 done). Models are local only (T34, backup in `C:\Users\Jack\ML_Sem5_models_backup\`). Keyboard braking now has an ABS assist (T35, no retrain). Best model `models/R001_ppo_rays5_tg@1200k` (42.70 s vs baseline 46.6 s). 48 tests pass. Open: owner drives to confirm the ABS feel. Week 2 (T07) is planned as T37–T48 (T36); decisions D7–D18 wait for the owner's OK, no Week 2 code yet.
+* **Last updated:** 2026-10-10 (Claude Sonnet 5.5): Week 2 mostly done (T36–T45, T47 built; 94 tests pass). Registry has R001, R002 (negative result), R003 (best @900k: 100 % showcase, 80 % held-out, but ≈ 24 % slower than the baseline) and the baseline. Owner is running the overnight queue `configs/queue/night1.yaml` by hand (T46). **Next: T50 faster models, T51 arena fps on an idle CPU**, then T48 docs. Meet after the overnight run.
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
 * **Plan:** `PROJECT_CONTEXT.md` is the single source of truth: design, physics, env, training, registry, demo, timeline (§12) and setup (§14). `CLAUDE.md` holds the agent rules.
 * **Architecture:** a headless simulation (`racer/physics`, `racer/track`, `racer/env`, with no pygame) used by the training scripts (`scripts/train.py`, `evaluate.py`) and by the pygame-ce demo (`scripts/demo.py`, `racer/render`).

@@ -72,13 +72,20 @@ def save_track_spec(spec: TrackSpec, path: Path | str) -> Path:
     return path
 
 
+def track_folders() -> list[Path]:
+    """Every folder of tracks/: showcase, heldout and user first, then any others (open library, §6)."""
+    first = [TRACKS_DIR / s for s in ("showcase", "heldout", "user")]
+    rest = sorted(d for d in TRACKS_DIR.iterdir() if d.is_dir() and d not in first) if TRACKS_DIR.is_dir() else []
+    return [d for d in first if d.is_dir()] + rest
+
+
 def resolve_track_path(name_or_path: str) -> Path:
-    """Accept a path, or a bare name looked up in tracks/{showcase,heldout,user}/."""
+    """Accept a path, or a bare name looked up in every folder of tracks/ (first match wins)."""
     p = Path(name_or_path)
     if p.suffix == ".json" and p.is_file():
         return p
-    for sub in ("showcase", "heldout", "user"):
-        candidate = TRACKS_DIR / sub / f"{p.stem}.json"
+    for folder in track_folders():
+        candidate = folder / f"{p.stem}.json"
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(f"track not found: {name_or_path}")

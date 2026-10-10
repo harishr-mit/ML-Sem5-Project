@@ -1,0 +1,6 @@
+# Experiment E3 (PROJECT_CONTEXT §7.3, §11): a naive "go fast" reward, ONLY to show reward
+# hacking. Speed is rewarded in any direction, so circling or weaving pays as well as racing.
+# r = speed·|v|·dt − crash (on termination)
+type: speed
+speed: 1.0              # per metre travelled (|v|·dt), in any direction
+crash: 20.0             # subtracted on any termination, as in "progress"

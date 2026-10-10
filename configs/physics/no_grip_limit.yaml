@@ -1,0 +1,9 @@
+# Experiment E2 (PROJECT_CONTEXT §11): the grip limit is effectively off on the road.
+# Road and kerb μ = 100: the friction circle never binds (even full lock at 30 m/s needs
+# only μ ≈ 12), so the car can corner and brake flat out. Grass keeps its default grip,
+# so leaving the road still costs.
+# Config-only (D13): no new physics keys, so old snapshots stay valid.
+extends: default
+surfaces:
+  road: {mu_static: 100.0, mu_kinetic: 100.0, rolling_res: 0.015}
+  kerb: {mu_static: 100.0, mu_kinetic: 100.0, rolling_res: 0.025}

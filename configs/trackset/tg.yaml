@@ -1,0 +1,3 @@
+# Track set "tg": Training Ground only (curriculum stage 1, as R001; PROJECT_CONTEXT §8).
+fixed:
+  - {track: training_ground, weight: 1.0}

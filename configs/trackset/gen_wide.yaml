@@ -1,0 +1,14 @@
+# Track set "gen_wide": curriculum stage 2 (PROJECT_CONTEXT §8, D7).
+# Mostly wide, smooth generated tracks; a little Training Ground so stage 1 isn't forgotten.
+fixed:
+  - {track: training_ground, weight: 1.0}
+
+generated:
+  weight: 4.0                 # total weight of the generated pool (vs 1.0 per fixed track)
+  seeds: [0, 1000000]         # training stream 0 (held-out tracks use stream 1)
+  pool_size: 4                # generated tracks kept per env worker
+  refresh_episodes: 20        # swap the oldest pool track for a new one every N resets
+  track_overrides:
+    generator:
+      width_m: [14.0, 18.0]   # wider than the 12 m default
+      angle_jitter: 0.25      # smoother layouts

@@ -46,6 +46,7 @@ class Track:
         self.spec = spec
         self.cfg = cfg
         self.name = spec.name
+        self.key = spec.name          # file stem when loaded from tracks/ (set by load); used as an id
         self.half_width = spec.width_m / 2.0
         self.runoff = spec.runoff_m
         self.kerb_m = spec.kerb_m
@@ -74,7 +75,10 @@ class Track:
     # ------------------------------------------------------------ construction
     @classmethod
     def load(cls, name_or_path: str | Path, track_cfg: Mapping[str, Any] | None = None) -> "Track":
-        return cls(load_track_spec(resolve_track_path(str(name_or_path))), track_cfg)
+        path = resolve_track_path(str(name_or_path))
+        track = cls(load_track_spec(path), track_cfg)
+        track.key = path.stem
+        return track
 
     # -------------------------------------------------------------- geometry
     @property

@@ -1,0 +1,4 @@
+# Experiment E9 (PROJECT_CONTEXT §5.2, §11): downforce adds normal force ∝ v²,
+# so fast corners have more grip than slow ones.
+extends: default
+k_down: 1.5                   # N·s²/m²; at 50 m/s adds 3750 N (~38 % of the car's weight)

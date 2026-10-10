@@ -24,6 +24,7 @@ from racer.env.reward import build_reward
 from racer.physics.car import Car, PhysicsParams
 from racer.physics.surfaces import ROAD_ID, SurfaceSet
 from racer.track import field as F
+from racer.env.trackset import TrackSampler, get_track, resolve_trackset
 from racer.track.progress import ProgressTracker
 from racer.track.track import Track
 
@@ -44,33 +45,32 @@ class EpisodeParams:
     max_steps: int
 
 
-def make_env_config(tracks: Sequence[str], physics: str = "default", env: str = "rays5",
+def make_env_config(tracks: Sequence[str] | None = None, physics: str = "default", env: str = "rays5",
                     reward: str = "progress", track: str = "default",
-                    overrides: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
-    """Assemble the full env config from presets. ``overrides`` maps section → strict overrides."""
+                    overrides: Mapping[str, Mapping[str, Any]] | None = None,
+                    trackset: str | None = None) -> dict[str, Any]:
+    """Assemble the full env config from presets. ``overrides`` maps section → strict overrides.
+
+    Give either ``tracks`` (a list of track names) or ``trackset`` (a preset in
+    configs/trackset/, stored expanded so the snapshot never changes meaning).
+    """
     overrides = overrides or {}
     unknown = set(overrides) - {"physics", "env", "reward", "track"}
     if unknown:
         raise ValueError(f"unknown override sections {sorted(unknown)}")
+    if (tracks is None) == (trackset is None):
+        raise ValueError("give exactly one of tracks / trackset")
+    presets = {"physics": physics, "env": env, "reward": reward, "track": track}
+    if trackset is not None:
+        presets["trackset"] = trackset
     return {
-        "presets": {"physics": physics, "env": env, "reward": reward, "track": track},
-        "tracks": list(tracks),
+        "presets": presets,
+        "tracks": resolve_trackset(trackset) if trackset is not None else list(tracks),
         "physics": load_preset("physics", physics, overrides.get("physics")),
         "env": load_preset("env", env, overrides.get("env")),
         "reward": load_preset("reward", reward, overrides.get("reward")),
         "track": load_preset("track", track, overrides.get("track")),
     }
-
-
-# Process-wide cache: building a field takes ~50 ms and a few MB, and tracks are immutable.
-_TRACK_CACHE: dict[tuple[str, int], Track] = {}
-
-
-def get_track(name: str, track_cfg: Mapping[str, Any]) -> Track:
-    key = (name, id(track_cfg))
-    if key not in _TRACK_CACHE:
-        _TRACK_CACHE[key] = Track.load(name, track_cfg)
-    return _TRACK_CACHE[key]
 
 
 class RacingEnv(gym.Env):
@@ -94,9 +94,8 @@ class RacingEnv(gym.Env):
         self.dt_agent = 1.0 / self.ep.agent_hz
         self.observer = build_observer(env_cfg["obs_spec"], env_cfg["raycast"])
         self.reward_fn = build_reward(config["reward"])
-        self.track_names = list(config["tracks"])
-        if not self.track_names:
-            raise ValueError("config['tracks'] is empty")
+        self.sampler = TrackSampler(config["tracks"], config["track"])
+        self.track_names = self.sampler.names
 
         low, high = self.observer.bounds()
         self.observation_space = gym.spaces.Box(low, high, dtype=np.float32)
@@ -120,10 +119,13 @@ class RacingEnv(gym.Env):
         self._progress_hist: deque[float] = deque(maxlen=n_window + 1)
 
     # ------------------------------------------------------------------ helpers
-    def set_track(self, name: str) -> None:
-        if self.track is None or self.track.name != get_track(name, self.config["track"]).name:
-            self.track = get_track(name, self.config["track"])
-            self.tracker = ProgressTracker(self.track)
+    def set_track(self, track: str | Track) -> None:
+        """Switch to a track (a name from tracks/, or a Track object, e.g. generated or drawn)."""
+        if isinstance(track, str):
+            track = get_track(track, self.config["track"])
+        if track is not self.track:
+            self.track = track
+            self.tracker = ProgressTracker(track)
 
     def _probe(self) -> bool:
         f = self.track.field
@@ -144,8 +146,7 @@ class RacingEnv(gym.Env):
         super().reset(seed=seed)
         options = options or {}
         rng = self.np_random
-        name = options.get("track") or self.track_names[int(rng.integers(len(self.track_names)))]
-        self.set_track(name)
+        self.set_track(options.get("track") or self.sampler.sample(rng))
         tr = self.track
         ep = self.ep
         s0 = options.get("start_s", rng.uniform(0.0, tr.length))

@@ -1,0 +1,18 @@
+# Track set "final_mix": curriculum stage 3 (PROJECT_CONTEXT §8, D7/D8).
+# Every showcase track, every user track (the library is open: tracks added later are
+# picked up by future runs), and generated tracks with mixed widths and tighter corners.
+# Held-out tracks are never allowed here.
+fixed:
+  - {folder: showcase, weight: 1.0}   # weight per track (3 tracks → 3.0)
+  - {folder: user, weight: 1.0}
+
+generated:
+  weight: 7.0                 # ~70 % generated, ~30 % showcase (with no user tracks)
+  seeds: [0, 1000000]
+  pool_size: 4
+  refresh_episodes: 20
+  track_overrides:
+    generator:
+      width_m: [10.0, 16.0]
+      radius_jitter: [0.45, 1.0]   # deeper in/out wiggles → tighter corners
+      angle_jitter: 0.4

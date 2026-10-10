@@ -88,7 +88,7 @@ def test_evaluation_covers_each_track():
     ctrl = BaselineController(load_preset("train", "baseline"))
     s = evaluate(make_env_config(["training_ground"]), lambda obs, env: ctrl.act(env),
                  ["training_ground", "technical"], n_starts=1)
-    assert [e["track"] for e in s["episodes"]] == ["Training Ground", "Technical"]
+    assert [e["track"] for e in s["episodes"]] == ["training_ground", "technical"]   # track keys (file stems)
 
 
 def test_free_drive_walls_are_solid():

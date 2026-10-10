@@ -1,0 +1,25 @@
+# Evaluation protocol v1 (PROJECT_CONTEXT §8, D9). FROZEN once results exist: never
+# change what v1 means. A new protocol gets a new file and version (results then go to
+# eval_v2.json etc.; nothing is overwritten, D10).
+version: 1
+
+# Deterministic policy; each start is a standing start on the centreline. Starts are
+# evenly spaced along the track: s = k · length / starts.
+groups:
+  showcase:
+    tracks: [training_ground, technical, fast_flow]
+    starts: 3
+  heldout:
+    tracks: [heldout_00, heldout_01, heldout_02, heldout_03, heldout_04,
+             heldout_05, heldout_06, heldout_07, heldout_08, heldout_09]
+    starts: 1
+start: {lateral: 0.0, heading_offset_deg: 0.0, speed: 0.0}
+
+# Best checkpoint of a run: highest completion over all episodes, ties broken by the mean
+# showcase lap time relative to the baseline (lower is better).
+baseline_id: BASE_pid           # registry id of the hand-coded baseline (E8 reference)
+
+# Trajectory thumbnails (first start of each showcase track, coloured by speed).
+thumbnail:
+  px: 320                       # square image size
+  speed_max: 70.0               # m/s mapped to the hottest colour

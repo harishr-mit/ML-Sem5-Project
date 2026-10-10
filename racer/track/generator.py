@@ -39,7 +39,10 @@ def random_spec(rng: np.random.Generator, gen: Mapping[str, Any], name: str) -> 
         pts[:, 0] = -pts[:, 0]
     pts = np.roll(pts, -int(rng.integers(n)), axis=0)   # random start/finish point
     direction = "ccw" if rng.random() < 0.5 else "cw"
-    return TrackSpec(name, pts.round(3).tolist(), gen["width_m"], gen["runoff_m"], gen["kerb_m"], direction)
+    width = gen["width_m"]
+    if isinstance(width, (list, tuple)):   # a range (track sets); drawn last so scalar widths keep the old RNG sequence
+        width = round(float(rng.uniform(*width)), 2)
+    return TrackSpec(name, pts.round(3).tolist(), float(width), gen["runoff_m"], gen["kerb_m"], direction)
 
 
 def generate(seed: int, stream: int = TRAIN_STREAM, name: str | None = None,

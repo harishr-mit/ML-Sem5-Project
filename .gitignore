@@ -25,6 +25,8 @@ runs/
 outputs/frames/
 # smoke-test runs (train.py --scratch)
 outputs/scratch/
+# overnight queue logs and state (scripts/queue_overnight.py)
+outputs/queue_logs/
 *.tmp
 
 # --- Original asset downloads (large, kept locally for re-cutting; see assets/LICENSES.md) ---
@@ -34,7 +36,9 @@ assets/_source/
 # Back them up by copying the folder (current backup: C:\Users\Jack\ML_Sem5_models_backup\).
 /models/*
 !/models/.gitkeep
-# registry/ IS tracked (small CSVs).
+# registry/ IS tracked (small CSVs); registry.xlsx is regenerated from them (D11).
+registry/registry.xlsx
+registry/*.csv.tmp
 
 # --- Editors / OS ---
 .vscode/*

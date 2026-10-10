@@ -1,0 +1,6 @@
+# PPO preset for curriculum stages that fine-tune a parent model (train.py --parent, D8).
+# Lower learning rate so the parent's driving isn't destroyed by the new tracks.
+extends: ppo_default
+total_steps: 3000000
+ppo:
+  learning_rate: 0.0001

@@ -1,8 +1,10 @@
 """Benchmark env throughput and run the baseline driver on tracks.
 
     .venv\\Scripts\\python scripts\\bench_env.py [--steps 20000] [--tracks showcase heldout]
+                                               [--trackset final_mix]
 
-Reports single-core env steps/s with random actions (target ≥ 3k, §7.1) and the
+Reports single-core env steps/s with random actions (target ≥ 3k, §7.1; with
+--trackset this includes track switching and generation, which short random episodes stress) and the
 baseline's lap times / completion per track (a sanity check of env + tracks).
 """
 from __future__ import annotations
@@ -19,8 +21,8 @@ from racer.env.racing_env import RacingEnv, make_env_config
 from racer.track.io import TRACKS_DIR
 
 
-def bench_random(steps: int) -> float:
-    env = RacingEnv(make_env_config(["training_ground"]))
+def bench_random(steps: int, trackset: str | None = None) -> float:
+    env = RacingEnv(make_env_config(trackset=trackset) if trackset else make_env_config(["training_ground"]))
     rng = np.random.default_rng(0)
     env.reset(seed=0)
     env.step(np.zeros(2))   # JIT warm-up
@@ -52,11 +54,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--tracks", nargs="*", default=["showcase", "heldout"])
+    ap.add_argument("--trackset", default=None, help="benchmark random actions on this track set")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    sps = bench_random(args.steps)
-    print(f"random actions: {sps:,.0f} env steps/s on one core ({'OK' if sps >= 3000 else 'BELOW'} target 3k)")
+    sps = bench_random(args.steps, args.trackset)
+    print(f"random actions{' on ' + args.trackset if args.trackset else ''}: {sps:,.0f} env steps/s on one core ({'OK' if sps >= 3000 else 'BELOW'} target 3k)")
     ok = True
     for group in args.tracks:
         for path in sorted((TRACKS_DIR / group).glob("*.json")):

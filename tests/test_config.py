@@ -1,16 +1,11 @@
 """Config presets load, and typos are rejected."""
 import pytest
 
-from racer.config import ConfigError, deep_merge, load_preset
+from racer.config import CONFIG_DIR, ConfigError, deep_merge, load_preset
 from racer.physics.car import PhysicsParams
 
-PRESETS = [
-    ("physics", "default"),
-    ("env", "rays5"),
-    ("reward", "progress"),
-    ("train", "ppo_default"),
-    ("track", "default"),
-]
+# Every preset in configs/<kind>/ must load (extends chains, strict overrides).
+PRESETS = sorted((p.parent.name, p.stem) for p in CONFIG_DIR.glob("*/*.yaml"))
 
 
 @pytest.mark.parametrize("kind,name", PRESETS)

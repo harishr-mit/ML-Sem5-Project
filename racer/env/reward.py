@@ -28,7 +28,23 @@ class ProgressReward:
         return r
 
 
-REWARDS = {"progress": ProgressReward}
+@dataclass(frozen=True)
+class SpeedReward:
+    """Naive r = speed·|v|·dt − crash (E3, reward hacking demo only): direction doesn't matter."""
+
+    type: str
+    speed: float
+    crash: float
+
+    def __call__(self, ds: float, dt: float, dsteer: float, offroad_frac: float,
+                 new_laps: int, terminated: bool, speed: float) -> float:
+        r = self.speed * speed * dt
+        if terminated:
+            r -= self.crash
+        return r
+
+
+REWARDS = {"progress": ProgressReward, "speed": SpeedReward}
 
 
 def build_reward(cfg: Mapping[str, Any]):

@@ -40,11 +40,16 @@ SCRATCH_DIR = PROJECT_ROOT / "outputs" / "scratch"
 RUNS_DIR = PROJECT_ROOT / "runs"
 
 
+# Paths whose uncommitted changes make a snapshot "-dirty" (code and configs; not the
+# registry, eval copies or docs, which every run updates).
+CODE_PATHS = ["racer", "scripts", "configs", "tracks", "pyproject.toml", "requirements.txt"]
+
+
 def git_commit() -> str:
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, capture_output=True, text=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=PROJECT_ROOT,
-                               capture_output=True, text=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", *CODE_PATHS],
+                               cwd=PROJECT_ROOT, capture_output=True, text=True).stdout.strip()
         return sha + ("-dirty" if dirty else "")
     except OSError:
         return "unknown"

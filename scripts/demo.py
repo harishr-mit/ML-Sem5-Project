@@ -34,6 +34,25 @@ def list_tracks() -> list[tuple[str, str]]:
     return [(d.name, p.stem) for d in track_folders() for p in sorted(d.glob("*.json"))]
 
 
+def blocked_models(rows: list[dict]) -> dict[str, str]:
+    """Model id → why this engine can't run it (D23). One snapshot is checked per run."""
+    from racer.agents.compat import check
+    from racer.config import PROJECT_ROOT, load_yaml
+
+    reasons: dict[str, str | None] = {}
+    out: dict[str, str] = {}
+    for r in rows:
+        if not r.get("path"):
+            continue
+        run = r["run_id"]
+        if run not in reasons:
+            cfg = PROJECT_ROOT / r["path"] / "config.yaml"
+            reasons[run] = ("; ".join(check(load_yaml(cfg))) or None) if cfg.is_file() else "model folder missing"
+        if reasons[run]:
+            out[r["model_id"]] = reasons[run]
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--track", default="training_ground")
@@ -93,7 +112,8 @@ def main() -> int:
         selection = preset
         if selection is None:
             picker = ModelPicker(reg_rows, list_tracks(), size, font, colours, acfg["palette"],
-                                 max_cars=int(acfg["max_cars"]), laps=laps, track=args.track)
+                                 max_cars=int(acfg["max_cars"]), laps=laps, track=args.track,
+                                 blocked=blocked_models(reg_rows))
             while picker.done is None and not picker.quit:
                 for ev in pygame.event.get():
                     picker.handle(ev)
@@ -132,16 +152,25 @@ def run_race(screen, clock, sel, models, acfg, dcfg, colours, fonts, args) -> st
     screen.blit(loading, (20, 20))
     pygame.display.flip()
 
+    from racer.agents.compat import IncompatibleModel
+
     entries = []
     for mid in sel.models:
         if mid not in models:
-            models[mid] = LoadedModel(mid)
+            try:
+                models[mid] = LoadedModel(mid)
+            except (IncompatibleModel, FileNotFoundError) as e:
+                print(f"skipping {mid}: {e}", flush=True)     # a model the engine can't run never crashes the race
+                continue
         m = models[mid]
         entries.append(Entry(m.model_id, m.env_config, lambda obs, envs, m=m: m.act_batch(obs), key=m))
     if sel.baseline:
         ctrl = BaselineController(load_preset("train", "baseline"))
         entries.append(Entry("PID baseline", make_env_config([sel.track]),
                              lambda obs, envs: np.stack([ctrl.act(e) for e in envs]), key="baseline"))
+    if not entries:
+        print("no model in the selection can run on this engine", flush=True)
+        return "back"
     rules = dict(acfg["race"], laps=sel.laps)
     fair = load_preset("physics", acfg["fair_physics"]) if sel.fair else None
     race = Race(sel.track, entries, rules, physics_override=fair)

@@ -108,8 +108,8 @@ ML Sem5 Project/
 │   ├── reward/   progress.yaml, speed_naive.yaml (for the reward-hacking demo)
 │   ├── train/    ppo_default.yaml, sac_default.yaml, baseline.yaml (hand-coded driver)
 │   ├── track/    default.yaml (kerb threshold, field cell size, generator ranges, clearances)
-│   ├── trackset/ tg.yaml, gen_wide.yaml, final_mix.yaml … (which tracks training samples, §8)
-│   ├── eval/     v1.yaml (evaluation protocol, §8)
+│   ├── trackset/ tg.yaml, gen_wide.yaml, final_mix.yaml, maps7.yaml … (which tracks training samples, §8)
+│   ├── eval/     v1.yaml, v2.yaml (evaluation protocols, §8)
 │   ├── queue/    *.yaml (experiment lists for queue_overnight.py)
 │   └── demo/     render.yaml (texture scales, colours; `debug:` window), audio.yaml (volumes, gearbox)
 ├── racer/config.py           # YAML preset loader (strict keys, deep-merged overrides)
@@ -117,9 +117,11 @@ ML Sem5 Project/
 │   ├── physics/  car.py, surfaces.py
 │   ├── track/    track.py, spline.py, field.py, generator.py, progress.py, io.py
 │   ├── env/      racing_env.py, sensors.py, reward.py, obs_spec.py, trackset.py,
-│   │             race.py (multi-car race for the demo, pygame-free)
+│   │             race.py (multi-car race for the demo, pygame-free),
+│   │             features.py (obs v2 feature registry), actions.py (action layouts)
 │   ├── agents/   loader.py (registry → policy + normaliser + configs), baseline.py,
-│   │             evaluation.py (eval protocol, metrics, thumbnails, eval files)
+│   │             evaluation.py (eval protocol, metrics, thumbnails, eval files),
+│   │             algorithms.py (PPO/SAC registry), compat.py (manifest + engine check)
 │   ├── registry/ registry.py, export_xlsx.py, record.py (evaluate + record)
 │   └── render/   debug_view.py (Week 1 debug window), world.py, camera.py, cars.py (tinted sprites),
 │                 effects.py, hud.py, brain_panel.py,
@@ -130,12 +132,16 @@ ML Sem5 Project/
 │   ├── queue_overnight.py    # runs a list of experiments one after another
 │   ├── physics_sanity.py     # skidpad / braking / coast-down tests
 │   ├── drive.py              # debug window: keyboard / baseline / model driving
-│   ├── preview_tracks.py  generate_tracks.py  bench_env.py
+│   ├── preview_tracks.py  generate_tracks.py  make_maps.py  bench_env.py
+│   ├── sandbox.py            # AI Sandbox (Streamlit, §10.5; planned)
 ├── tests/                    # pytest unit tests (spline, field, progress, physics, env)
 ├── tracks/
-│   ├── showcase/   *.json    # 3 hand-designed demo tracks
+│   ├── showcase/   *.json    # 3 hand-designed demo tracks (training maps)
+│   ├── train/      *.json    # more hand-designed training maps (D19)
+│   ├── test/       *.json    # hand-designed test maps, NEVER used in training (D19)
 │   ├── heldout/    *.json    # fixed generated tracks, NEVER used in training
 │   └── user/       *.json    # tracks saved from draw-a-track mode
+├── docs/          SANDBOX_PLAN.md (AI Sandbox implementation plan, D24)
 ├── assets/
 │   ├── LICENSES.md           # manifest, credits, usage notes (READ before using assets)
 │   ├── sprites/cars/  sprites/props/  textures/ground/  fonts/  sounds/  licenses/
@@ -194,6 +200,8 @@ class Kerb(Road):         # thin band at road edges on corners
 | drag `CdA` | 0.70 m² (`0.5·ρ·CdA` with ρ = 1.225) | top speed ≈ 65–70 m/s (about 240 km/h) |
 | lateral damping `c_lat` | 0.9 | fraction of sideslip removed per step when grip allows |
 | downforce `k_down` | 0 (on in the `downforce` preset: about 1.5 N·s²/m²) | adds normal force ∝ v² |
+
+**Car variants and physics versions (D23).** A different car (mass, power, grip, steering) is just a new physics preset; each model keeps its own copy in its snapshot. A change to the physics *equations* (e.g. real gears, a tyre model) gets a new physics `version` with its own car class; a preset without `version` is version 1, so old models keep driving exactly as they were trained.
 
 ### 5.3 Forces: how mass, gravity and grip interact
 
@@ -268,7 +276,8 @@ This produces momentum (velocity persists), understeer when entering a corner to
   - "Training Ground": wide and simple
   - "Technical": hairpins and a chicane
   - "Fast Flow": high-speed sweepers where braking matters
-- **Held-out set:** about 10 generated tracks with fixed seeds, saved in `tracks/heldout/`. **Never** used in training, only to test generalisation.
+- **Map library (D19, owner):** at least 9 hand-designed maps. **7 training maps:** the 3 showcase tracks + 4 in `tracks/train/`. **2 test maps** in `tracks/test/`, never used in training (the loader refuses a track set that names one, as for `heldout/`). More maps can be added to either folder at any time; `scripts/make_maps.py` builds the hand-designed maps from rounded-polygon outlines, so they are reproducible.
+- **Held-out set:** about 10 generated tracks with fixed seeds, saved in `tracks/heldout/`. **Never** used in training, only to test generalisation. Together with the 2 test maps, this is the "unseen" set.
 - **Open track library (owner):** tracks can be added at any time in the project. Any valid track JSON dropped into a `tracks/<folder>/` is picked up by name everywhere (training track sets, evaluation, demo). Training may mix any non-held-out tracks, and new hand-made or generated tracks may be added for variety. Adding a track never changes an existing model (each model's snapshot lists what it trained on).
 - **Final showcase (owner):** faculty members draw a track, it is converted into a track JSON (Draw-a-Track, §10.1), and the trained models drive it live. This is the strongest generalisation demo, so held-out performance is the metric that matters most.
 - **Editor (draw-a-track):**
@@ -303,8 +312,28 @@ That's **13 dimensions** in total.
 - **Ablation specs:** `rays9`, `rays5_short` (60 m forward), and `rays5_curvature` (adds the track curvature 25, 50 and 100 m ahead, i.e. map knowledge, to compare).
 - **Implementation:** ray casting uses a precomputed **signed-distance grid** of the road (0.5 m cells) with sphere tracing, or vectorised ray–segment intersection with numba. Target **at least 3k env steps per second per core**.
 
+**`obs_spec` v2: features as building blocks (D21).** v1 stays frozen for the models that use it. v2 is an ordered list of named features, each with its own parameters:
+```yaml
+obs_spec:
+  version: 2
+  name: rays7_narrow
+  features:
+    - {feature: rays, rays: [{angle_deg: -60, range_m: 60}, {angle_deg: -20, range_m: 120}, …]}
+    - {feature: heading_sincos}
+    - {feature: v_long, scale: 70.0}
+    - {feature: prev_action}
+```
+- Features live in a registry (`racer/env/features.py`). Each one declares its size, bounds, labels for the brain panel, and a one-line description (shown in the AI Sandbox). The observation is the concatenation in list order.
+- **Adding or removing an input = editing the list.** A new kind of input = a new registered feature name. A feature's meaning never changes once a model uses it; a changed behaviour gets a new name.
+- Features available at first: `rays`, `heading_sincos`, `v_long`, `v_lat`, `yaw_rate`, `onroad_frac`, `prev_action` (same maths as v1), plus `steer_angle` (current wheel angle) and `curvature_ahead` (track curvature at given distances ahead: map knowledge, E6).
+
 ### 7.2 Action
 `Box([-1,-1], [1,1])` → `[steer, gas]`. A negative gas value means brake. There is no reverse gear.
+
+**Action layouts (D22).** The layout is part of each model's snapshot (`action_spec: {layout: …}`); an old snapshot without it means `steer_gas`.
+- `steer_gas` (default, all models so far): `[steer, gas]` as above.
+- `steer_throttle_brake`: 3 outputs in [−1, 1]; throttle and brake are mapped to [0, 1] and the car receives `gas = throttle − brake`.
+- New layouts are added to a registry (`racer/env/actions.py`); `prev_action` and the reward's steering term read the layout, so they work for any layout.
 
 ### 7.3 Reward (`configs/reward/progress.yaml`)
 ```
@@ -361,6 +390,8 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
     - held-out completion rate (generalisation)
   - Saves a trajectory PNG thumbnail for each showcase track.
   - The protocol is versioned in `configs/eval/v1.yaml` (standing starts on the centreline, evenly spaced). The hand-coded baseline is registered as pseudo-model `BASE_pid` (E8 reference).
+  - **Protocol v2 (D20)** (`configs/eval/v2.yaml`) uses the map library: 7 training maps × 2 starts, 2 test maps × 3 starts, and the 10 generated held-out tracks × 1 start (30 episodes, about 50 s per model). New metrics: `test_completion` (test maps), `unseen_completion` (test maps + generated held-out; the generalisation number that matters for the faculty-drawn track), and best laps on every map. v1 stays frozen and keeps its numbers. New runs evaluate with v2; older models can be re-evaluated with v2 at any time (`evaluate.py --protocol v2`), which adds `eval_v2.json` next to `eval.json`.
+- **Track set `maps7` (D20):** the 7 training maps (weight 1 each) + a generated pool with mixed widths (weight 7). It deliberately leaves out `tracks/user/`, so tracks drawn in the demo stay unseen.
 - **Logging:** TensorBoard (`runs/`) for episode reward, length, lap time and losses, plus `race/*` (lap time, laps, progress) and `end/*` (termination reasons).
 
 ---
@@ -381,13 +412,15 @@ models/R012_ppo_rays5_curric@1500k/
 - **What "immutable" means (D10, owner):** `model.zip`, `vecnormalize.pkl` and `config.yaml` are never changed after saving. `evaluate.py` **adds** `eval.json` and `thumb_<track>.png` once per protocol version (a later protocol writes `eval_v2.json`; nothing is overwritten), and copies them to `outputs/eval/<model_id>/`. Models stay local (git-ignored); the copies in `outputs/eval/` and the registry CSVs are tracked.
 - **Model ID:** `R{run:03d}_{short_tag}@{steps}k` (e.g. `R012_ppo_rays5_curric@1500k`). Ablation runs carry the experiment in the tag (D17, e.g. `R010_e2_nogrip_s1@3000k`).
 - **Observation specs are versioned** (`obs_spec: {version: 1, rays: [...], extras: [...]}`). Never change what an existing version means; add a new version instead. The loader builds each car's sensor from that car's own spec.
+- **Upgradable engine (D23).** Everything that defines a model is versioned and looked up in a registry: obs spec version and features (§7.1), action layout (§7.2), physics version (§5.2) and algorithm (`racer/agents/algorithms.py`: PPO, SAC). New snapshots carry a **manifest** (`obs_dim`, `action_dim`, `n_params`, `net_arch`, the versions above, input labels); for older snapshots the loader derives it. Before loading, the engine checks the manifest against what it supports: a model that needs something the engine doesn't have yet (e.g. an unknown feature) is listed with the reason and greyed out in the picker, instead of crashing the demo. To support it, register the missing piece; existing models are never touched.
+- **Comparing models:** the registry row of a model holds the metrics of the newest protocol it was evaluated with (`eval_protocol` column); compare models only within one protocol. `runs.csv` also records `obs_dim`, `action_layout` and `n_params`, so input count and network size can be compared directly.
 
 **`registry/runs.csv`:** one row per training run
-`run_id, created_at, tag, algorithm, parent_model, obs_spec, physics_preset, reward_preset, track_set, curriculum, total_steps, wall_clock_min, seed, hparams_json, notes`
+`run_id, created_at, tag, algorithm, parent_model, obs_spec, physics_preset, reward_preset, track_set, curriculum, total_steps, wall_clock_min, seed, hparams_json, notes, obs_dim, action_layout, n_params`
 
 **`registry/models.csv`:** one row per saved checkpoint
-`model_id, run_id, steps, path, is_best, completion_rate, crash_rate, heldout_completion, best_lap_<showcase1..3>, mean_speed, offroad_pct, mean_lat_g, overall_completion, lap_ratio, score, eval_protocol, eval_date, tags, notes`
-(`completion_rate` = showcase episodes, `heldout_completion` = held-out episodes, `overall_completion` = all; `lap_ratio` = best showcase lap ÷ the baseline's, averaged over the tracks the model lapped; `mean_speed` in m/s.)
+`model_id, run_id, steps, path, is_best, completion_rate, crash_rate, heldout_completion, best_lap_<showcase1..3>, mean_speed, offroad_pct, mean_lat_g, overall_completion, lap_ratio, score, eval_protocol, eval_date, tags, notes, test_completion, unseen_completion, best_lap_<6 library maps>`
+(`completion_rate` = showcase episodes in v1, training-map episodes in v2; `heldout_completion` = generated held-out episodes; `test_completion` = test-map episodes (v2); `unseen_completion` = test + held-out (v2); `overall_completion` = all; `lap_ratio` = best lap ÷ the baseline's, averaged over the lap tracks the model lapped; `mean_speed` in m/s. Columns are only ever appended.)
 
 **`registry/registry.xlsx`:** generated by `export_xlsx.py` (openpyxl)
 - **Sheets:** `Runs`, `Models`, a leaderboard sheet for each showcase track, and `Ablations` (pivot-style summary).
@@ -465,6 +498,15 @@ All clips and their RPM curves are described in `assets/LICENSES.md` and `assets
 
 **Recording:** `record_video.py` stays silent by default. Mixing the audio into the MP4 is a *Could*.
 
+### 10.5 AI Sandbox (D24, owner; plan in `docs/SANDBOX_PLAN.md`)
+
+A **standalone** local web app (Streamlit, `scripts/sandbox.py`), separate from the game. Its main purpose is to **understand a model**:
+- **Model explorer:** pick any registered model and see what it was trained with: its inputs (ray diagram, feature list), network size, physics, reward terms, track set and hyperparameters. Each parameter has a short "what it affects" note, and each run its notes on why it was made.
+- **Compare:** 2–4 models side by side: config differences highlighted, evaluation metrics, learning curves and thumbnails.
+- **Configure and queue:** build a new run from presets (add or remove inputs, network size, steps, track set, …), see the resulting input count and parameter count, and add it to a queue file. The queue still runs through `queue_overnight.py`.
+- **Launch:** pick models from the trained list and press *Launch* to open a game window (`demo.py`) racing them. Several game windows can run at once, each a separate process.
+The sandbox only reads the registry and model folders and writes queue files; it never edits a model.
+
 ---
 
 ## 11. Experiments and analysis (for the report and slides)
@@ -497,13 +539,13 @@ All clips and their RPM curves are described in `assets/LICENSES.md` and `assets
 |---|---|---|
 | **1** (Oct 10–16) | Physics, surfaces, spline tracks, generator, progress, sensors, Gymnasium env, physics sanity tests, minimal debug renderer, first PPO run | **M1:** the car completes laps on a showcase track |
 | **2** (Oct 17–23) | Config system, train/evaluate scripts, checkpoints, **registry and xlsx export**, loader, curriculum and multi-track training, **basic Model Arena with 20 cars** | **M2:** load any 20 models from the registry and race them |
-| **3** (Oct 24–30) | Textures, effects, HUD, brain panel, minimap, camera, Evolution Race, Draw-a-Track, Human vs AI, video recorder | **M3:** full live demo |
+| **3** (Oct 24–30) | **First: AI Sandbox (§10.5, owner priority, right after M2, T50 and T51).** Then textures, effects, HUD, brain panel, minimap, camera, Evolution Race, Draw-a-Track, Human vs AI, video recorder | **M3:** full live demo |
 | **4** (Oct 31–Nov 7) | Ablations (overnight queue from week 2 onwards), plots, telemetry/analysis view, highlight video, slides, README, rehearsal, buffer | **M4:** ready to present |
 
 **Keep the CPU busy every night from week 2:** queue the experiment runs.
 
 **Priorities (MoSCoW):**
-- **Must:** grip physics env, PPO training, registry (CSV and xlsx), load any model, multi-car arena (10–20), rays, trails, HUD, learning curves, showcase tracks, held-out evaluation
+- **Must:** grip physics env, PPO training, registry (CSV and xlsx), load any model, multi-car arena (10–20), rays, trails, HUD, learning curves, showcase tracks, held-out evaluation, map library with a test split (D19), AI Sandbox (D24)
 - **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, highlight video, engine and tyre audio (§10.4)
 - **Could:** brain panel, swarm view, SAC (E7), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
 - **Won't (this time):** car-to-car collisions, multi-agent competitive training, pixel/CNN observations, 3D
@@ -624,8 +666,10 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 
 | 2026-10-10 | Week 2 decisions (owner-approved, `log.md` T36 D7–D18): **D7** track sets in `configs/trackset/` with per-worker rotating generated pools; **D8** curriculum as a `--parent` chain R001 → R002 → R003, plus R004 from scratch; any non-held-out tracks may be mixed into training; **D9** eval protocol v1 + `is_best` rule + `BASE_pid`; **D10** evaluation adds `eval.json`/thumbnails to model folders (the three model files never change) and copies them to `outputs/eval/`; **D11** registry upsert, scratch registry, xlsx git-ignored; **D12** no real runs on a dirty tree; **D13** ablations config-only, no new required keys in existing schemas without a snapshot migration; **D14** arena: grid, countdown, N laps, respawn + crash count; **D15** `racer/env/race.py` + `render/world.py`/`camera.py`; **D16** basic in-window model picker; **D17** ablation tags; **D18** overnight queue runs without a Claude session. |
 | 2026-10-10 | **Tracks (owner):** the track library stays open; tracks can be added at any time and mixed into training. The final showcase is a track drawn by faculty, converted into a track and driven live (§6). |
+| 2026-10-11 | Owner decisions (`log.md` T52–T59): **D19** map library of 9+ hand-designed maps: 7 for training (3 showcase + 4 in `tracks/train/`), 2 for testing in `tracks/test/` (never trained on), the 10 generated held-out tracks kept (§6); **D20** track set `maps7` and evaluation protocol v2 with `test_completion` / `unseen_completion`, v1 frozen (§8); **D21** `obs_spec` v2 built from named features, so inputs can be added or removed (§7.1); **D22** versioned action layouts, `steer_gas` default (§7.2); **D23** upgradable engine: physics version, algorithm registry, model manifest (inputs, outputs, parameter count) and a compatibility check, so every model either runs or says what it needs (§5.2, §9); **D24** AI Sandbox: a standalone Streamlit app to understand, compare, configure, queue and launch models, built first in Week 3 (§10.5). Work done on branch `feat/maps-modular-sandbox` while the `night1` queue finished on `main`. |
 
 **Open questions:**
+- `final_mix` trains on every track in `tracks/user/`, so a track drawn and saved in the demo becomes training data for later `final_mix` runs. `maps7` leaves `user/` out. Should `final_mix` stay as it is (its meaning is frozen in old snapshots either way), and should faculty-drawn tracks be saved to `tracks/test/` instead? Currently: unchanged; use `maps7` for new runs.
 - Faculty track: drawn in the Draw-a-Track editor, or on paper and converted from a photo? Currently: the editor (Week 3); photo import is a possible extension.
 - Should rays also detect the barrier, or only the road edge? Currently: road edge only.
 - Should the demo default to each model's own physics or a common one? Currently: each model's own, with a toggle.

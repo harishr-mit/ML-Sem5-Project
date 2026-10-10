@@ -14,7 +14,8 @@ from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from racer.registry.registry import MODEL_COLUMNS, RUN_COLUMNS, SHOWCASE, Registry, ablation_group, typed
+from racer.registry.registry import (LIBRARY_MAPS, MODEL_COLUMNS, RUN_COLUMNS, SHOWCASE, Registry, ablation_group,
+                                     typed)
 
 HEADER_FILL = PatternFill("solid", fgColor="1F2A37")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -53,6 +54,13 @@ def _link(cell, target: str, text: str | None = None) -> None:
     cell.font = LINK_FONT
 
 
+def _thumb_prefix(m: dict) -> str:
+    """Thumbnail file prefix of the protocol a registry row was evaluated with."""
+    from racer.agents.evaluation import eval_filenames, protocol_version
+
+    return eval_filenames(max(protocol_version(m.get("eval_protocol")), 1))[1]
+
+
 def export(reg: Registry, out: Path | None = None) -> Path:
     out = Path(out) if out else reg.root / "registry.xlsx"
     runs = [{k: typed(v) for k, v in r.items()} for r in reg.runs()]
@@ -70,10 +78,12 @@ def export(reg: Registry, out: Path | None = None) -> Path:
         if m.get("path"):
             _link(ws.cell(i, path_col), f"../{m['path']}")
         if m.get("eval_date"):
-            _link(ws.cell(i, len(cols)), f"../outputs/eval/{m['model_id']}/thumb_{SHOWCASE[0]}.png")
+            _link(ws.cell(i, len(cols)), f"../outputs/eval/{m['model_id']}/{_thumb_prefix(m)}{SHOWCASE[0]}.png")
         if m.get("is_best"):
             ws.cell(i, 1).font = BEST_FONT
-    for t in SHOWCASE:     # green = the fastest lap on each showcase track
+    # Showcase leaderboards always; library maps (protocol v2) once some model has a lap there.
+    lap_maps = [*SHOWCASE, *(t for t in LIBRARY_MAPS if any(m.get(f"best_lap_{t}") for m in models))]
+    for t in lap_maps:     # green = the fastest lap on each map
         letter = get_column_letter(MODEL_COLUMNS.index(f"best_lap_{t}") + 1)
         if rows:
             rng = f"{letter}2:{letter}{len(rows) + 1}"
@@ -81,17 +91,18 @@ def export(reg: Registry, out: Path | None = None) -> Path:
                 formula=[f"AND({letter}2<>\"\",{letter}2=MIN(${letter}$2:${letter}${len(rows) + 1}))"], fill=GOOD_FILL))
 
     base = next((m for m in models if m["run_id"] == "BASE"), None)
-    for t in SHOWCASE:
+    for t in lap_maps:
         lb = sorted((m for m in models if m.get(f"best_lap_{t}")), key=lambda m: m[f"best_lap_{t}"])
         ref = base.get(f"best_lap_{t}") if base else None
         lcols = ["rank", "model_id", "best_lap", "vs_baseline_s", "completion_rate", "heldout_completion",
-                 "mean_speed", "is_best"]
+                 "unseen_completion", "mean_speed", "is_best", "eval_protocol"]
         lrows = [[k, m["model_id"], m[f"best_lap_{t}"], (m[f"best_lap_{t}"] - ref) if ref else None,
-                  m.get("completion_rate"), m.get("heldout_completion"), m.get("mean_speed"), m.get("is_best")]
+                  m.get("completion_rate"), m.get("heldout_completion"), m.get("unseen_completion"),
+                  m.get("mean_speed"), m.get("is_best"), m.get("eval_protocol")]
                  for k, m in enumerate(lb, 1)]
         ws = _sheet(wb, f"LB_{t}"[:31], lcols, lrows)
         for i, m in enumerate(lb, 2):
-            _link(ws.cell(i, 2), f"../outputs/eval/{m['model_id']}/thumb_{t}.png", m["model_id"])
+            _link(ws.cell(i, 2), f"../outputs/eval/{m['model_id']}/{_thumb_prefix(m)}{t}.png", m["model_id"])
 
     # Ablations: each run contributes its best checkpoint; group by tag minus seed suffix.
     best = {m["run_id"]: m for m in models if m.get("is_best")}
@@ -99,7 +110,8 @@ def export(reg: Registry, out: Path | None = None) -> Path:
     for r in runs:
         if r["run_id"] in best:
             groups.setdefault(ablation_group(str(r.get("tag") or r["run_id"])), []).append((r, best[r["run_id"]]))
-    metrics = ["overall_completion", "heldout_completion", "completion_rate", "lap_ratio", "mean_speed", "offroad_pct"]
+    metrics = ["overall_completion", "unseen_completion", "heldout_completion", "test_completion", "completion_rate",
+               "lap_ratio", "mean_speed", "offroad_pct"]
     acols = ["group", "n_runs", "runs", "physics", "reward", "obs_spec", "track_set"]
     for k in metrics:
         acols += [f"{k}_mean", f"{k}_std"]

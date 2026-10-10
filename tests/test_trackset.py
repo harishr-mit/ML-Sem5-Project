@@ -69,6 +69,23 @@ def test_heldout_tracks_are_refused(monkeypatch):
         TS.resolve_trackset("bad")
 
 
+def test_test_maps_are_refused(monkeypatch):
+    monkeypatch.setattr(TS, "load_preset", lambda kind, name: {"fixed": [{"track": "alpine", "weight": 1.0}]})
+    with pytest.raises(ConfigError, match="test track"):
+        TS.resolve_trackset("bad")
+
+
+def test_map_library_split():
+    """D19: 7 training maps in maps7, 2 test maps, every hand-designed map valid."""
+    fixed = [f["track"] for f in make_env_config(trackset="maps7")["tracks"]["fixed"]]
+    assert len(fixed) == 7 and not any(TS.is_heldout(n) for n in fixed)
+    test_maps = TS.folder_tracks("test")
+    assert len(test_maps) == 2 and all(TS.is_heldout(n) for n in test_maps)
+    from racer.track.track import Track
+    for name in fixed + test_maps:
+        assert Track.load(name, load_preset("track", "default")).validate() == [], name
+
+
 def test_track_cache_is_bounded():
     base = load_preset("track", "default")
     for i in range(TS._CACHE_MAX + 5):

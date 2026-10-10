@@ -27,6 +27,9 @@ from racer.track.io import TRACKS_DIR, resolve_track_path
 from racer.track.track import Track
 
 HELDOUT_DIR = TRACKS_DIR / "heldout"
+# Folders whose tracks are never used in training: generated held-out tracks and the
+# hand-designed test maps (D19).
+PROTECTED_DIRS = (HELDOUT_DIR, TRACKS_DIR / "test")
 FIXED_KEYS = {"track", "folder", "weight"}
 GENERATED_KEYS = {"weight", "seeds", "pool_size", "refresh_episodes", "track_overrides"}
 
@@ -62,10 +65,12 @@ def folder_tracks(folder: str) -> list[str]:
 
 
 def is_heldout(name: str) -> bool:
+    """True for tracks that must never be trained on (``heldout/`` and ``test/``)."""
     try:
-        return resolve_track_path(name).parent.resolve() == HELDOUT_DIR.resolve()
+        parent = resolve_track_path(name).parent.resolve()
     except FileNotFoundError:
         return False
+    return any(parent == d.resolve() for d in PROTECTED_DIRS)
 
 
 def resolve_trackset(name: str) -> dict[str, Any]:
@@ -83,7 +88,7 @@ def resolve_trackset(name: str) -> dict[str, Any]:
         for n in names:
             resolve_track_path(n)   # must exist
             if is_heldout(n):
-                raise ConfigError(f"trackset {name}: {n!r} is a held-out track (never used in training)")
+                raise ConfigError(f"trackset {name}: {n!r} is a held-out / test track (never used in training)")
             fixed.append({"track": n, "weight": float(item.get("weight", 1.0))})
     gen = cfg.get("generated")
     if gen is not None:

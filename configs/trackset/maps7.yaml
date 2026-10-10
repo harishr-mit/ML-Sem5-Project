@@ -1,0 +1,18 @@
+# Track set "maps7" (PROJECT_CONTEXT §6, §8, D19/D20): the 7 hand-designed training maps
+# (3 showcase + tracks/train/) and a generated pool with mixed widths and tighter corners.
+# The test maps (tracks/test/) and held-out tracks are never allowed here. tracks/user/ is
+# left out on purpose, so tracks drawn in the demo stay unseen.
+fixed:
+  - {folder: showcase, weight: 1.0}   # weight per track
+  - {folder: train, weight: 1.0}
+
+generated:
+  weight: 7.0                 # ~50 % generated, ~50 % hand-designed maps
+  seeds: [0, 1000000]
+  pool_size: 4
+  refresh_episodes: 20
+  track_overrides:
+    generator:
+      width_m: [10.0, 16.0]
+      radius_jitter: [0.45, 1.0]   # deeper in/out wiggles → tighter corners
+      angle_jitter: 0.4

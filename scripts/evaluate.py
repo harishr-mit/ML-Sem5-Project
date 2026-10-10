@@ -3,11 +3,12 @@
     .venv\\Scripts\\python scripts\\evaluate.py --model R001_ppo_rays5_tg@1200k [more ids or folders]
     .venv\\Scripts\\python scripts\\evaluate.py --run R001            every checkpoint of a run (+ marks is_best)
     .venv\\Scripts\\python scripts\\evaluate.py --baseline            the hand-coded baseline (BASE_pid)
-                                            [--protocol v1] [--workers 6] [--no-export]
+                                            [--protocol v2] [--workers 6] [--no-export]
 
-Results are added to each model folder once (eval.json, thumb_<track>.png; never
-overwritten), copied to outputs/eval/<model_id>/, and written to the registry; then
-registry.xlsx is regenerated. Models in outputs/scratch/ use the scratch registry.
+Results are added to each model folder once per protocol (v1: eval.json, thumb_<track>.png;
+v2: eval_v2.json, thumb_v2_<track>.png; never overwritten), copied to
+outputs/eval/<model_id>/, and written to the registry (a row keeps the newest protocol's
+metrics); then registry.xlsx is regenerated. Models in outputs/scratch/ use the scratch registry.
 """
 from __future__ import annotations
 
@@ -15,12 +16,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from racer.agents.evaluation import evaluate_baseline, load_protocol
+from racer.agents.evaluation import DEFAULT_PROTOCOL, evaluate_baseline, load_protocol
 from racer.agents.loader import SCRATCH_DIR, resolve_model
 from racer.config import load_yaml
 from racer.registry.export_xlsx import export
 from racer.registry.record import evaluate_and_record
-from racer.registry.registry import Registry, metrics_row
+from racer.registry.registry import Registry, metrics_row, newer_or_same_protocol
 
 
 def main() -> int:
@@ -30,7 +31,7 @@ def main() -> int:
     g.add_argument("--run", help="every checkpoint of this run id (models/ or, with --scratch, outputs/scratch/)")
     g.add_argument("--baseline", action="store_true")
     ap.add_argument("--scratch", action="store_true", help="--run looks in outputs/scratch/")
-    ap.add_argument("--protocol", default="v1")
+    ap.add_argument("--protocol", default=DEFAULT_PROTOCOL, help=f"evaluation protocol (default {DEFAULT_PROTOCOL})")
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--no-export", action="store_true", help="don't regenerate registry.xlsx")
     args = ap.parse_args()
@@ -43,7 +44,8 @@ def main() -> int:
         reg.upsert_run({"run_id": "BASE", "tag": "baseline", "algorithm": "pid", "obs_spec": "map (privileged)",
                         "physics_preset": "default", "notes": "hand-coded centreline + curvature speed plan (E8)"})
         reg.upsert_model({"model_id": protocol["baseline_id"], "run_id": "BASE", "steps": 0, "tags": "baseline"})
-        reg.upsert_model(metrics_row(doc))
+        if newer_or_same_protocol(reg.model(protocol["baseline_id"]), doc):
+            reg.upsert_model(metrics_row(doc))
         reg.set_best("BASE")
         if not args.no_export:
             export(reg)

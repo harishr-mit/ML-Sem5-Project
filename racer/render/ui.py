@@ -48,6 +48,7 @@ class ModelPicker:
     laps: int = 3
     track: str = "training_ground"
     selected: list[str] = field(default_factory=list)
+    blocked: Mapping[str, str] = field(default_factory=dict)   # model id → why the engine can't run it (D23)
     filter: str = ""
     sort_key: str = "model_id"
     sort_desc: bool = False
@@ -75,6 +76,8 @@ class ModelPicker:
         return filled + [r for r in rows if r.get(key) is None]       # empty cells always last
 
     def toggle(self, model_id: str) -> None:
+        if model_id in self.blocked:
+            return
         if model_id in self.selected:
             self.selected.remove(model_id)
         elif len(self.selected) + int(self.baseline) < self.max_cars:
@@ -184,6 +187,11 @@ class ModelPicker:
                 pygame.draw.rect(screen, self.palette[k % len(self.palette)], (x0 + 2, y + 2, 12, lh - 8))
             self._hit.append((rect, "row", mid))
             cx = x0 + 22
+            if mid in self.blocked:     # the engine can't run it: show why instead of the metrics
+                screen.blit(t.get(mid, c["hud_dim"]), (cx, y))
+                screen.blit(t.get("can't run: " + self.blocked[mid], c["hud_dim"]), (cx + COLUMNS[0][2], y))
+                y += lh
+                continue
             for _, key, cw, f in COLUMNS:
                 v = r.get(key)
                 if key == "is_best":

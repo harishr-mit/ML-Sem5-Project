@@ -1,17 +1,21 @@
-"""Train PPO on the racing env (PROJECT_CONTEXT §8).
+"""Train a model on the racing env (PROJECT_CONTEXT §8; PPO by default, any registered algorithm).
 
     .venv\\Scripts\\python scripts\\train.py --tag ppo_rays5_tg --tracks training_ground
     .venv\\Scripts\\python scripts\\train.py --tag curric_wide --trackset gen_wide --parent R001_ppo_rays5_tg@1200k
                                            --train ppo_finetune
-        [--steps N] [--train ppo_default] [--physics default] [--env rays5] [--reward progress]
-        [--seed 0] [--n-envs 6] [--curriculum TEXT] [--notes TEXT] [--set ppo.ent_coef=0.01]
-        [--scratch] [--allow-dirty] [--no-eval] [--eval-workers 6]
+    .venv\\Scripts\\python scripts\\train.py --tag narrow --trackset maps7 --env rays7_narrow
+        [--steps N] [--train ppo_default|sac_default] [--physics default] [--env rays5] [--reward progress]
+        [--action-layout steer_throttle_brake] [--seed 0] [--n-envs 6] [--curriculum TEXT] [--notes TEXT]
+        [--set ppo.ent_coef=0.01] [--scratch] [--allow-dirty] [--no-eval] [--eval-workers 6] [--protocol v2]
+
+The snapshot also stores a manifest (inputs, outputs, network size; D23), so models can be
+compared and the engine can check it supports a model before loading it.
 
 Every checkpoint (every ``checkpoint_every`` steps) and the final model are written as
 self-contained folders (§9): models/R{run:03d}_{tag}@{steps}k/ with model.zip,
 vecnormalize.pkl and config.yaml (full snapshot: env config, train config, seed, git hash,
 parent). The run and every checkpoint go into the registry as they are saved; after
-training every checkpoint is evaluated (protocol v1), the best is marked ``is_best`` and
+training every checkpoint is evaluated (protocol v2, ``--protocol``), the best is marked ``is_best`` and
 registry.xlsx is regenerated.
 
 --parent fine-tunes a saved model (curriculum, D8): its weights and VecNormalize statistics
@@ -102,6 +106,8 @@ def main() -> int:
     ap.add_argument("--physics", default="default")
     ap.add_argument("--env", default="rays5")
     ap.add_argument("--reward", default="progress")
+    ap.add_argument("--action-layout", default=None,
+                    help="override the env preset's action layout, e.g. steer_throttle_brake (needs obs_spec v2)")
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--n-envs", type=int, default=None)
     ap.add_argument("--scratch", action="store_true", help="write to outputs/scratch/ (git-ignored)")
@@ -111,6 +117,7 @@ def main() -> int:
                     help="allow a real (R) run with uncommitted changes (snapshots then record '-dirty')")
     ap.add_argument("--no-eval", action="store_true", help="skip evaluating the checkpoints after training")
     ap.add_argument("--eval-workers", type=int, default=None, help="processes for evaluation (default: n_envs)")
+    ap.add_argument("--protocol", default="v2", help="evaluation protocol after training (default v2, D20)")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                     help="strict override of the train preset, e.g. --set ppo.ent_coef=0.01 (repeatable)")
     args = ap.parse_args()
@@ -120,11 +127,13 @@ def main() -> int:
 
     import numpy as np
     import torch
-    from stable_baselines3 import PPO
     from stable_baselines3.common.callbacks import BaseCallback
     from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
+    from racer.agents.algorithms import algorithm_class, get_algorithm
+    from racer.agents.compat import build_manifest
     from racer.agents.loader import resolve_model
+    from racer.env.actions import action_spec_of
     from racer.env.racing_env import make_env_config
     from racer.registry.record import evaluate_and_record, registry_for
     from racer.registry.registry import register_folder, run_row
@@ -140,8 +149,10 @@ def main() -> int:
     if not args.scratch and not args.allow_dirty and git_commit().endswith("-dirty"):
         ap.error("uncommitted changes: commit first so the snapshot's git_commit points at real code "
                  "(or pass --allow-dirty / --scratch)")
-    if train_cfg["algorithm"] != "ppo":
-        ap.error(f"train preset {args.train!r} is not PPO")
+    try:
+        algo = get_algorithm(train_cfg["algorithm"])
+    except ValueError as e:
+        ap.error(f"train preset {args.train!r}: {e}")
     if args.trackset:
         env_config = make_env_config(trackset=args.trackset, physics=args.physics, env=args.env, reward=args.reward)
         track_label = args.trackset
@@ -149,16 +160,24 @@ def main() -> int:
         tracks = args.tracks or ["training_ground"]
         env_config = make_env_config(tracks, physics=args.physics, env=args.env, reward=args.reward)
         track_label = "+".join(tracks)
+    if args.action_layout:
+        env_config["env"]["action_spec"] = {"layout": args.action_layout}
+    try:
+        manifest = build_manifest(env_config, train_cfg)     # also validates obs spec + action layout
+    except ValueError as e:
+        ap.error(str(e))
 
     parent_dir, parent_id = None, None
     if args.parent:
         parent_dir = resolve_model(args.parent)
         parent_snap = load_yaml(parent_dir / "config.yaml")
         parent_id = parent_snap.get("model_id", parent_dir.name)
-        if parent_snap.get("algorithm", "ppo") != "ppo":
-            ap.error(f"parent {parent_id} is not a PPO model")
+        if parent_snap.get("algorithm", "ppo") != algo.name:
+            ap.error(f"parent {parent_id} is not a {algo.name.upper()} model")
         if parent_snap["env_config"]["env"]["obs_spec"] != env_config["env"]["obs_spec"]:
             ap.error(f"parent {parent_id} was trained with a different obs_spec")
+        if action_spec_of(parent_snap["env_config"]["env"]) != action_spec_of(env_config["env"]):
+            ap.error(f"parent {parent_id} was trained with a different action layout")
         if parent_snap["train"]["policy"] != train_cfg["policy"]:
             ap.error(f"parent {parent_id} has a different policy network ({parent_snap['train']['policy']})")
 
@@ -171,7 +190,7 @@ def main() -> int:
     reg = registry_for(args.scratch)
 
     base_snapshot = {
-        "run_id": run_id, "tag": args.tag, "algorithm": "ppo", "seed": seed,
+        "run_id": run_id, "tag": args.tag, "algorithm": algo.name, "seed": seed,
         "created_at": dt.datetime.now().isoformat(timespec="seconds"), "git_commit": git_commit(),
         "obs_spec_version": env_config["env"]["obs_spec"]["version"], "notes": args.notes,
         "parent_model": parent_id, "curriculum": args.curriculum,
@@ -179,7 +198,7 @@ def main() -> int:
         "versions": {"python": platform.python_version(), "torch": str(torch.__version__),
                      "stable_baselines3": __import__("stable_baselines3").__version__,
                      "gymnasium": __import__("gymnasium").__version__, "numpy": np.__version__},
-        "train": train_cfg, "env_config": env_config,
+        "train": train_cfg, "env_config": env_config, "manifest": manifest,
     }
     reg.upsert_run(run_row(base_snapshot))
 
@@ -238,25 +257,16 @@ def main() -> int:
         venv = VecNormalize(raw, norm_obs=vn["norm_obs"], norm_reward=vn["norm_reward"],
                             clip_obs=vn["clip_obs"], gamma=vn["gamma"])
     venv.seed(seed)
-    p = train_cfg["ppo"]
-    lr0 = float(p["learning_rate"])
-    lr = (lambda frac: lr0 * frac) if p["lr_schedule"] == "linear" else lr0
-    pol = train_cfg["policy"]
-    act_fn = {"tanh": torch.nn.Tanh, "relu": torch.nn.ReLU}[pol["activation"]]
-    model = PPO(
-        "MlpPolicy", venv, learning_rate=lr, n_steps=p["n_steps"], batch_size=p["batch_size"],
-        n_epochs=p["n_epochs"], gamma=p["gamma"], gae_lambda=p["gae_lambda"], clip_range=p["clip_range"],
-        ent_coef=p["ent_coef"], vf_coef=p["vf_coef"], max_grad_norm=p["max_grad_norm"],
-        policy_kwargs={"net_arch": {"pi": list(pol["net_arch"]), "vf": list(pol["net_arch"])}, "activation_fn": act_fn},
-        tensorboard_log=str(tb_dir), seed=seed, device="cpu", verbose=0,
-    )
+    model = algo.build(train_cfg, venv, tb_dir, seed)
     if parent_dir is not None:
-        parent_model = PPO.load(parent_dir / "model.zip", device="cpu")
+        parent_model = algorithm_class(algo.name).load(parent_dir / "model.zip", device="cpu")
         model.policy.load_state_dict(parent_model.policy.state_dict())
         del parent_model
     total = int(train_cfg["total_steps"])
     origin = f", fine-tuning {parent_id}" if parent_id else ""
-    print(f"[{run_name}] PPO on {track_label} for {total:,} steps, {n_envs} envs, seed {seed}{origin}", flush=True)
+    print(f"[{run_name}] {algo.sb3_class} on {track_label} for {total:,} steps, {n_envs} envs, seed {seed}{origin}; "
+          f"{manifest['obs_dim']} inputs, {manifest['action_dim']} outputs ({manifest['action_layout']}), "
+          f"{manifest['n_params']:,} policy parameters", flush=True)
     cb = RacingCallback(int(train_cfg["checkpoint_every"]))
     t0 = time.perf_counter()
     try:
@@ -267,18 +277,19 @@ def main() -> int:
               f"({model.num_timesteps / max(minutes * 60, 1e-9):,.0f} steps/s)", flush=True)
         reg.upsert_run({"run_id": run_id, "total_steps": model.num_timesteps, "wall_clock_min": round(minutes, 1)})
     # The last checkpoint doubles as the final model if it is less than one rollout old.
-    if not cb.saved or model.num_timesteps - cb.saved_steps >= p["n_steps"] * n_envs:
+    if not cb.saved or model.num_timesteps - cb.saved_steps >= algo.update_steps(train_cfg):
         cb.saved.append(save_folder(model, venv, model.num_timesteps))
     venv.close()
     print(f"[{run_name}] final model: {cb.saved[-1].relative_to(PROJECT_ROOT)}", flush=True)
 
     if not args.no_eval:
-        print(f"[{run_name}] evaluating {len(cb.saved)} checkpoints (protocol v1)", flush=True)
-        evaluate_and_record(cb.saved, "v1", args.eval_workers or n_envs)
+        print(f"[{run_name}] evaluating {len(cb.saved)} checkpoints (protocol {args.protocol})", flush=True)
+        evaluate_and_record(cb.saved, args.protocol, args.eval_workers or n_envs)
         best = next((r for r in reg.models() if r["run_id"] == run_id and r.get("is_best") == "true"), None)
         if best:
-            print(f"[{run_name}] best: {best['model_id']}  showcase {best['completion_rate']}  "
-                  f"held-out {best['heldout_completion']}  overall {best['overall_completion']}", flush=True)
+            print(f"[{run_name}] best: {best['model_id']}  seen {best['completion_rate']}  "
+                  f"held-out {best['heldout_completion']}  unseen {best.get('unseen_completion') or '-'}  "
+                  f"overall {best['overall_completion']}", flush=True)
     return 0
 
 

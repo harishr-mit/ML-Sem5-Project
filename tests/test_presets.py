@@ -16,8 +16,10 @@ def names(kind: str) -> list[str]:
 def test_env_reward_combinations_pass_check_env(env_name, reward):
     env = RacingEnv(make_env_config(["training_ground"], env=env_name, reward=reward))
     check_env(env, skip_render_check=True)
-    n_rays = len(env.config["env"]["obs_spec"]["rays"])
-    assert env.observation_space.shape == (n_rays + 8,)
+    spec = env.config["env"]["obs_spec"]
+    if spec["version"] == 1:
+        assert env.observation_space.shape == (len(spec["rays"]) + 8,)
+    assert env.observation_space.shape == (len(env.observer.labels),)
 
 
 @pytest.mark.parametrize("physics", names("physics"))

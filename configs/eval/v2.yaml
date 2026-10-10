@@ -1,0 +1,42 @@
+# Evaluation protocol v2 (PROJECT_CONTEXT §8, D20): the map library. FROZEN once results
+# exist: never change what v2 means. A new protocol gets a new file and version.
+#
+# v1 (configs/eval/v1.yaml) stays frozen and keeps its numbers; v2 results are written to
+# eval_v2.json / thumb_v2_<track>.png next to them (D10).
+version: 2
+
+# Deterministic policy; each start is a standing start on the centreline. Starts are
+# evenly spaced along the track: s = k · length / starts.
+groups:
+  train:      # the 7 training maps (seen in training with track set maps7)
+    tracks: [training_ground, technical, fast_flow, hairpin_valley, esses, oval_infield, city_blocks]
+    starts: 2
+  test:       # hand-designed test maps, never trained on
+    tracks: [alpine, coastline]
+    starts: 3
+  heldout:    # generated held-out tracks, never trained on
+    tracks: [heldout_00, heldout_01, heldout_02, heldout_03, heldout_04,
+             heldout_05, heldout_06, heldout_07, heldout_08, heldout_09]
+    starts: 1
+start: {lateral: 0.0, heading_offset_deg: 0.0, speed: 0.0}
+
+# Completion metrics: metric name → groups whose episodes it averages.
+# overall_completion (all episodes) and crash rate, speed, off-road, lateral g are always computed.
+metrics:
+  completion_rate: [train]
+  test_completion: [test]
+  heldout_completion: [heldout]
+  unseen_completion: [test, heldout]   # the generalisation number that matters most (§6)
+
+# Groups with per-track lap tables (best_lap_<track>, mean_lap_<track>, lap_ratio vs the
+# baseline) and with trajectory thumbnails (first start of each track).
+lap_groups: [train, test]
+thumbnail_groups: [train, test]
+
+# Best checkpoint of a run: highest completion over all episodes, ties broken by the mean
+# lap time relative to the baseline over the lap tracks (lower is better).
+baseline_id: BASE_pid           # registry id of the hand-coded baseline (E8 reference)
+
+thumbnail:
+  px: 320                       # square image size
+  speed_max: 70.0               # m/s mapped to the hottest colour

@@ -42,8 +42,10 @@ class RaceRules:
 class Entry:
     """One car: a label, a policy and its env config.
 
-    ``act_batch(obs[n, d], envs) -> actions[n, 2]`` gets the cars' observations and envs (the
-    hand-coded baseline reads the env; trained models only use the observations).
+    ``act_batch(obs[n, d], envs) -> actions[n, a]`` gets the cars' observations and envs (the
+    hand-coded baseline reads the env; trained models only use the observations). ``a`` is
+    the size of the car's action layout (``env.action_layout``, D22); each car has its own
+    observation spec and layout, so models with different inputs and outputs race together.
     """
 
     label: str
@@ -128,7 +130,7 @@ class Race:
         car.offset = dist
         car.poses.clear()
         car.pose = (car.env.car.x, car.env.car.y, car.env.car.theta)
-        car.action = np.zeros(2, dtype=np.float32)
+        car.action = car.env.action_layout.neutral()
 
     # ------------------------------------------------------------ stepping
     @property

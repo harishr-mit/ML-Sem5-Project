@@ -19,10 +19,11 @@ import gymnasium as gym
 import numpy as np
 
 from racer.config import from_dict, load_preset
+from racer.env.actions import action_spec_of, build_action_layout
 from racer.env.obs_spec import build_observer
 from racer.env.reward import build_reward
-from racer.physics.car import Car, PhysicsParams
 from racer.physics.surfaces import ROAD_ID, SurfaceSet
+from racer.physics.versions import build_physics
 from racer.track import field as F
 from racer.env.trackset import TrackSampler, get_track, resolve_trackset
 from racer.track.progress import ProgressTracker
@@ -81,10 +82,10 @@ class RacingEnv(gym.Env):
     def __init__(self, config: Mapping[str, Any]) -> None:
         super().__init__()
         self.config = config
-        self.params = PhysicsParams.from_config(config["physics"])
+        self.params, car_cls = build_physics(config["physics"])
         self.surfaces = SurfaceSet(self.params.surfaces)
         env_cfg = config["env"]
-        unknown = set(env_cfg) - {"obs_spec", "raycast", "episode"}
+        unknown = set(env_cfg) - {"obs_spec", "raycast", "episode", "action_spec"}
         if unknown:
             raise ValueError(f"env config: unknown keys {sorted(unknown)}")
         self.ep = from_dict(EpisodeParams, env_cfg["episode"], where="env.episode")
@@ -92,16 +93,18 @@ class RacingEnv(gym.Env):
             raise ValueError("physics_hz must be a multiple of agent_hz")
         self.substeps = self.params.physics_hz // self.ep.agent_hz
         self.dt_agent = 1.0 / self.ep.agent_hz
-        self.observer = build_observer(env_cfg["obs_spec"], env_cfg["raycast"])
+        self.action_layout = build_action_layout(action_spec_of(env_cfg))
+        self.observer = build_observer(env_cfg["obs_spec"], env_cfg["raycast"], self.action_layout)
         self.reward_fn = build_reward(config["reward"])
         self.sampler = TrackSampler(config["tracks"], config["track"])
         self.track_names = self.sampler.names
 
         low, high = self.observer.bounds()
         self.observation_space = gym.spaces.Box(low, high, dtype=np.float32)
-        self.action_space = gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
+        self.action_space = gym.spaces.Box(-1.0, 1.0, shape=(self.action_layout.dim,), dtype=np.float32)
+        self.controls = (0.0, 0.0)     # (steer, gas) the car received on the last step
 
-        self.car = Car(self.params, self.surfaces)
+        self.car = car_cls(self.params, self.surfaces)
         self._wheel_off = np.array(self.car.wheel_offsets, dtype=np.float64)
         self._corner_off = np.array(self.car.corner_offsets, dtype=np.float64)
         self._wheels = np.zeros(4, dtype=np.int64)
@@ -138,7 +141,7 @@ class RacingEnv(gym.Env):
 
     def _observe(self) -> np.ndarray:
         return self.observer.observe(self.track, self.car, self.tracker.heading_error(self.car.theta),
-                                     self._onroad_frac(), self.prev_action, self._obs).copy()
+                                     self._onroad_frac(), self.prev_action, self._obs, self.tracker).copy()
 
     # --------------------------------------------------------------------- API
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
@@ -158,7 +161,9 @@ class RacingEnv(gym.Env):
         self.tracker.reset(x, y)
         self._probe()
 
-        self.prev_action = np.zeros(2, dtype=np.float32)
+        self.prev_action = self.action_layout.neutral()
+        self.prev_steer = 0.0
+        self.controls = (0.0, 0.0)
         self.steps = 0
         self.time = 0.0
         self.laps = 0
@@ -174,7 +179,8 @@ class RacingEnv(gym.Env):
 
     def step(self, action):
         a = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
-        steer, gas = float(a[0]), float(a[1])
+        steer, gas = self.action_layout.to_controls(a)
+        self.controls = (steer, gas)
         car, ep, dt = self.car, self.ep, self.params.dt
 
         crashed = False
@@ -250,9 +256,10 @@ class RacingEnv(gym.Env):
         terminated = reason is not None
         truncated = not free and not terminated and (self.laps >= ep.max_laps or self.steps >= ep.max_steps)
 
-        reward = self.reward_fn(ds, self.dt_agent, steer - float(self.prev_action[0]), offroad_frac,
+        reward = self.reward_fn(ds, self.dt_agent, steer - self.prev_steer, offroad_frac,
                                 new_laps, terminated, car.speed)
-        self.prev_action[0], self.prev_action[1] = steer, gas
+        self.prev_action[:] = a
+        self.prev_steer = float(np.float32(steer))   # float32 like the stored action (keeps v1 rewards bit-identical)
         info = {
             "track": self.track.name, "s": self.tracker.s, "progress": total, "laps": self.laps,
             "speed": car.speed, "offroad_frac": offroad_frac, "sliding": car.sliding,

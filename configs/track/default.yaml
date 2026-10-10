@@ -1,0 +1,39 @@
+# Track geometry, field, validation and generator settings (PROJECT_CONTEXT §6).
+# Per-track width / runoff / kerb width live in each track JSON.
+
+spline:
+  alpha: 0.5                  # Catmull-Rom parameterisation (0.5 = centripetal: no cusps or loops)
+  dense_per_segment: 64       # samples per control-point segment before arc-length resampling
+  resample_m: 1.0             # target spacing of the resampled centreline
+  curvature_smooth_m: 5.0     # moving-average window for the smoothed curvature
+
+kerb:
+  curvature_min: 0.02         # 1/m; kerbs where smoothed |curvature| exceeds this (radius < 50 m)
+  extend_m: 6.0               # kerbs start / end this far before / after the curved section
+  min_length_m: 10.0          # drop shorter kerb runs
+
+field:
+  cell_m: 0.5                 # grid resolution
+  margin_m: 4.0               # grid extends this far beyond the barrier
+  territory_jump_m: 40.0      # nearest sample this far (in arc length) from the tracked one = barrier
+
+validation:
+  min_corner_radius_m: 15.0
+  min_length_m: 800.0
+  max_length_m: 4000.0
+  clearance_m: 6.0            # minimum grass gap between roads of different sections
+  adjacency_arc_m: 30.0       # samples closer than this along the track are the same section
+
+generator:
+  n_points: [8, 16]           # control points (inclusive range)
+  radius_m: [140.0, 300.0]    # base radius of the circle
+  radius_jitter: [0.55, 1.0]  # each point's radius = base × uniform(range)
+  angle_jitter: 0.35          # fraction of the angular spacing
+  width_m: 12.0
+  runoff_m: 15.0
+  kerb_m: 1.2
+  max_attempts: 500
+
+heldout:
+  count: 10
+  stream: 1                   # seed stream for held-out tracks; training uses stream 0

@@ -18,3 +18,4 @@ pandas==3.0.6
 openpyxl==3.1.5
 matplotlib==3.11.2
 imageio[ffmpeg]==2.38.1
+pytest==9.1.1              # unit tests in tests/ (dev only)

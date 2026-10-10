@@ -1,0 +1,11 @@
+# Hand-coded baseline controller (E8; racer/agents/baseline.py). Not trained.
+# It uses the centreline (map knowledge the RL agent doesn't have): pure-pursuit steering
+# plus a curvature-based speed plan with a safety margin on grip.
+algorithm: baseline
+lookahead_min_m: 8.0        # pure-pursuit lookahead at low speed...
+lookahead_time_s: 0.5       # ...plus this many seconds of travel
+lat_acc_target: 7.0         # m/s²; corner speed = sqrt(a / |curvature|) (μg ≈ 10.8 on road)
+brake_decel: 6.0            # m/s²; planned braking into slower sections
+plan_horizon_m: 250.0       # look this far ahead for slow sections
+v_max: 60.0                 # m/s cap
+speed_gain: 0.4             # gas = gain × (target speed − speed), clipped to [−1, 1]

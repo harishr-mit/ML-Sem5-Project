@@ -1,0 +1,30 @@
+# PPO training preset (PROJECT_CONTEXT §8).
+algorithm: ppo
+seed: 0
+total_steps: 2000000
+n_envs: 6                   # SubprocVecEnv workers (4 cores / 8 threads)
+torch_threads: 1            # per process
+checkpoint_every: 100000    # env steps
+
+ppo:
+  n_steps: 1024             # per env, per rollout
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.995
+  gae_lambda: 0.95
+  learning_rate: 0.0003
+  lr_schedule: linear       # linear decay to 0 over total_steps
+  clip_range: 0.2
+  ent_coef: 0.002
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+
+policy:
+  net_arch: [256, 256]
+  activation: tanh
+
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+  gamma: 0.995              # match ppo.gamma

@@ -3,5 +3,6 @@
     "python.terminal.activateEnvironment": true,
     "files.exclude": {
         "**/__pycache__": true
-    }
+    },
+    "window.title": "${dirty}ML"
 }

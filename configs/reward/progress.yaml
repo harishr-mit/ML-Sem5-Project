@@ -1,0 +1,10 @@
+# Default reward (PROJECT_CONTEXT §7.3).
+# r = progress·Δs − time·dt_agent − steer_change·|Δsteer| − offroad·offroad_frac·dt_agent
+#     + lap_bonus (per lap) − crash (on termination)
+type: progress
+progress: 1.0           # per metre of centreline progress (negative when going backwards)
+time: 0.05              # per second
+steer_change: 0.1       # per unit change of the steer action between decisions
+offroad: 0.5            # per second, times the fraction of wheels off the road
+lap_bonus: 5.0
+crash: 20.0             # subtracted on any termination (barrier, off-road, stuck, wrong way)

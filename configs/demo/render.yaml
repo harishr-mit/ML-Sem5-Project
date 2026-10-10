@@ -1,0 +1,43 @@
+# Rendering settings (PROJECT_CONTEXT §10). Colours are RGB(A) 0–255.
+
+# Minimal debug renderer (racer/render/debug_view.py, scripts/drive.py).
+debug:
+  window: [1280, 800]
+  fps: 60
+  world_px_per_m: 4.0         # resolution of the pre-rendered track surface
+  zoom_px_per_m: 8.0          # initial camera zoom
+  zoom_min: 0.5
+  zoom_max: 20.0
+  zoom_step: 1.15             # per key press
+  camera_lerp: 0.12           # fraction of the gap to the car closed per frame
+  camera_lead_s: 0.4          # camera looks this many seconds ahead of the car
+  kerb_stripe_m: 3.0          # length of each red / white kerb stripe
+  centreline_dash_m: 4.0
+  start_square_m: 1.0         # chequered start/finish line square size
+  trail_length: 900           # substeps kept in the trail (15 s at 60 Hz)
+  trail_speed_max: 70.0       # m/s mapped to the hottest trail colour
+  banner_s: 1.5               # how long the termination banner shows before the reset
+  sim_speeds: [0.25, 0.5, 1.0, 2.0, 4.0]
+  car_sprite: car_1_blue.png  # in assets/sprites/cars/; falls back to a rectangle
+  font: share_tech_mono.ttf   # in assets/fonts/; falls back to pygame's default font
+  font_size: 17
+  colours:
+    outside: [30, 32, 36]
+    grass: [62, 110, 55]
+    road: [88, 88, 94]
+    kerb_red: [196, 42, 42]
+    kerb_white: [232, 232, 232]
+    wall: [215, 215, 220]
+    centreline: [150, 150, 160]
+    start_light: [240, 240, 240]
+    start_dark: [25, 25, 25]
+    car: [40, 140, 255]
+    car_outline: [10, 20, 40]
+    hud_text: [235, 235, 235]
+    hud_dim: [150, 155, 165]
+    hud_bg: [10, 12, 16, 170]
+    hud_good: [90, 220, 120]
+    hud_bad: [240, 90, 80]
+    steer_bar: [90, 170, 255]
+    gas_bar: [90, 220, 120]
+    brake_bar: [240, 90, 80]

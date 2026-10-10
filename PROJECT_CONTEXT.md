@@ -106,21 +106,27 @@ ML Sem5 Project/
 │   ├── physics/  default.yaml, no_grip_limit.yaml, downforce.yaml
 │   ├── env/      rays5.yaml, rays9.yaml, rays5_curvature.yaml
 │   ├── reward/   progress.yaml, speed_naive.yaml (for the reward-hacking demo)
-│   ├── train/    ppo_default.yaml, sac_default.yaml
-│   └── demo/     render.yaml (texture scales, colours), audio.yaml (volumes, gearbox)
+│   ├── train/    ppo_default.yaml, sac_default.yaml, baseline.yaml (hand-coded driver)
+│   ├── track/    default.yaml (kerb threshold, field cell size, generator ranges, clearances)
+│   └── demo/     render.yaml (texture scales, colours; `debug:` window), audio.yaml (volumes, gearbox)
+├── racer/config.py           # YAML preset loader (strict keys, deep-merged overrides)
 ├── racer/
 │   ├── physics/  car.py, surfaces.py
-│   ├── track/    track.py, spline.py, generator.py, progress.py, io.py
+│   ├── track/    track.py, spline.py, field.py, generator.py, progress.py, io.py
 │   ├── env/      racing_env.py, sensors.py, reward.py, obs_spec.py
-│   ├── agents/   loader.py (registry → policy + normaliser + configs), baseline.py
+│   ├── agents/   loader.py (registry → policy + normaliser + configs), baseline.py,
+│   │             evaluation.py (deterministic eval episodes)
 │   ├── registry/ registry.py, export_xlsx.py
-│   └── render/   world.py, camera.py, effects.py, hud.py, brain_panel.py,
+│   └── render/   debug_view.py (Week 1 debug window), world.py, camera.py, effects.py, hud.py, brain_panel.py,
 │                 minimap.py, ui.py (menus/model picker), editor.py,
 │                 audio.py (engine/tyre sound controller), gearbox.py (cosmetic RPM)
 ├── scripts/
 │   ├── train.py  evaluate.py  demo.py  record_video.py  make_plots.py
 │   ├── queue_overnight.py    # runs a list of experiments one after another
-│   └── physics_sanity.py     # skidpad / braking / coast-down tests
+│   ├── physics_sanity.py     # skidpad / braking / coast-down tests
+│   ├── drive.py              # debug window: keyboard / baseline / model driving
+│   ├── preview_tracks.py  generate_tracks.py  bench_env.py
+├── tests/                    # pytest unit tests (spline, field, progress, physics, env)
 ├── tracks/
 │   ├── showcase/   *.json    # 3 hand-designed demo tracks
 │   ├── heldout/    *.json    # fixed generated tracks, NEVER used in training
@@ -132,7 +138,7 @@ ML Sem5 Project/
 ├── models/<model_id>/        # self-contained model folders (see §9)
 ├── registry/  runs.csv  models.csv  registry.xlsx
 ├── runs/                     # TensorBoard logs
-└── outputs/   videos/  plots/  frames/
+└── outputs/   videos/  plots/  frames/  scratch/ (smoke runs, git-ignored)
 ```
 
 ---
@@ -160,7 +166,8 @@ class Kerb(Road):         # thin band at road edges on corners
     name = "kerb"; mu_static = 0.95; mu_kinetic = 0.80; rolling_res = 0.025; visual = "kerb"
 ```
 
-- **No pixel lookup.** The surface is worked out from geometry: the signed distance from the centreline compared with the road half-width and the kerb band.
+- **No pixel lookup.** The surface is worked out from geometry: the distance from the centreline compared with the road half-width and the kerb band.
+- **Kerbs sit inside the road edge** (band `[w/2 − kerb_m, w/2]`, only where |curvature| is above a threshold). The road edge stays at ±w/2 for rays and track limits, and kerbs count as on-track.
 - **Sampled per wheel.** Each of the 4 wheel positions is checked separately, so a car with two wheels on the grass loses about half its extra grip. This looks realistic and costs very little.
 - The barrier (an outer wall at the end of the run-off) is a **collision object, not a surface**.
 
@@ -231,7 +238,7 @@ This produces momentum (velocity persists), understeer when entering a corner to
 
 ### 5.5 Physics sanity tests (`scripts/physics_sanity.py`)
 1. **Skidpad:** a constant-radius circle at increasing speed. The car loses the line at `a_lat ≈ μ·g` (about 10.8 m/s² on road).
-2. **Braking:** stopping distance from 30 m/s ≈ v²/(2μg) ≈ 42 m.
+2. **Braking:** with **threshold braking** (≈ 90 % brake, just under the grip limit), the stopping distance from 30 m/s ≈ v²/(2μg) ≈ 42 m. Full brake (12000 N) exceeds static grip (μ·m·g ≈ 10 800 N), so the wheels lock, kinetic μ applies and the car stops in ≈ 49 m. Learning threshold braking is part of the racing-line skill.
 3. **Coast-down:** speed decays smoothly to 0, with no oscillation and no reversing.
 4. **Grass:** top speed and cornering grip are much lower on grass.
 5. **Stability:** no NaNs or jitter at near-zero speed with full steering lock.
@@ -242,12 +249,14 @@ This produces momentum (velocity persists), understeer when entering a corner to
 
 - **Representation:** a closed **Catmull-Rom spline** through control points, resampled every **1 m of arc length**. For each sample, precompute: position, tangent, normal, curvature and cumulative distance `s`.
 - **Track JSON:** `{name, control_points[[x,y]...], width_m (≈12), runoff_m (≈15), kerb_m (≈1.2), direction (cw/ccw)}`
-- **Geometry derived from the spline:** road edges at ±width/2, kerbs (only where curvature is above a threshold, drawn red and white), grass run-off, and an outer barrier at ±(width/2 + runoff).
-- **Progress:** project the car onto the nearest centreline sample, searching only near the previous index for speed. Progress `Δs` handles the lap wrap-around correctly, and driving backwards gives negative `Δs`.
+- **Geometry derived from the spline:** road edges at ±width/2, kerbs (inside the road edge, only where curvature is above a threshold, drawn red and white), grass run-off, and an outer barrier at ±(width/2 + runoff).
+- **Track field (`field.py`):** a grid of 0.5 m cells holding each cell's distance to the centreline and its nearest centreline sample, built once per track with numba. Surfaces, rays, progress and barrier checks all read it, and the debug renderer draws the world from it, so what you see is what the physics uses.
+- **Barrier = field territory:** the car crashes if it is beyond `width/2 + runoff`, **or** if the field says it is now nearest to a different part of the track (a jump of more than a set arc distance from its tracked index). Where two sections are closer than 2 × (width/2 + runoff), e.g. the legs of a hairpin, this puts a wall halfway between them, as on real circuits. There are no thin walls, so nothing can tunnel through, and the agent can't earn progress by cutting across the grass.
+- **Progress:** take the car's nearest centreline sample from the field and refine it on the segment. Progress `Δs` handles the lap wrap-around correctly, and driving backwards gives negative `Δs`.
 - **Generator:**
   1. Take 8–16 points around a circle with random radius and angle jitter.
   2. Build the spline.
-  3. **Reject** tracks that intersect themselves, have a corner radius below the minimum (about 15 m), or are shorter or longer than allowed.
+  3. **Reject** tracks that intersect themselves (or whose roads come closer than `width + clearance`), have a corner radius below the minimum (about 15 m), or are shorter or longer than allowed.
   4. Randomly choose driving direction and mirroring.
 - **Showcase tracks (3, hand-designed):**
   - "Training Ground": wide and simple
@@ -277,6 +286,12 @@ This produces momentum (velocity persists), understeer when entering a corner to
 | Previous action | 2 | helps smooth control |
 
 That's **13 dimensions** in total.
+
+**Frozen details of `obs_spec` v1** (they live in `configs/env/rays5.yaml`, not in the physics config, so later physics changes can't change what v1 means):
+- Rays start at the car's centre. A ray's distance is the first road-edge crossing along it: leaving the road when the car is on-road, entering it when off-road. Value = distance / range, clipped to [0, 1].
+- Scales: `v_long / 70`, `v_lat / 10`, `yaw_rate / 3 rad/s`, each clipped to [−1, 1]. Kerbs count as road for the on-road fraction.
+- World axes: x right, y up; angles are counter-clockwise, so a ray at −90° points to the car's right.
+- Order: rays (in the listed order, −90° first), sin/cos heading error, `v_long`, `v_lat`, yaw rate, on-road fraction, previous steer, previous gas.
 - **Ablation specs:** `rays9`, `rays5_short` (60 m forward), and `rays5_curvature` (adds the track curvature 25, 50 and 100 m ahead, i.e. map knowledge, to compare).
 - **Implementation:** ray casting uses a precomputed **signed-distance grid** of the road (0.5 m cells) with sphere tracing, or vectorised ray–segment intersection with numba. Target **at least 3k env steps per second per core**.
 
@@ -313,7 +328,7 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
 - **Starting hyperparameters:** `n_steps=1024` per env, `batch_size=256`, `n_epochs=10`, `gamma=0.995`, `gae_lambda=0.95`, `lr=3e-4` (linear decay), `clip=0.2`, `ent_coef=0.002`.
 - **Device:** **CPU**, with `torch.set_num_threads(1)` in each worker. The GTX 1650 is not useful for an MLP this small.
 - **Windows:** SubprocVecEnv needs the `if __name__ == "__main__":` guard in every script.
-- **Expected budget:** 2–5M steps per serious run. At about 3–4k steps per second in total, that's roughly 15–30 minutes per million steps. Run long experiments **overnight** using `queue_overnight.py`.
+- **Expected budget:** 2–5M steps per serious run. **Measured (2026-10-10):** ≈ 1.7k steps/s with 6 envs, so ≈ 10 min per million steps. The PPO update is ~60 % of the time (compute-bound at batch 256; more torch threads don't help); one env alone runs at 13k steps/s. Run long experiments **overnight** using `queue_overnight.py`.
 - **Curriculum:**
   1. A single wide showcase track.
   2. Random generated tracks (wide).
@@ -333,7 +348,7 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
     - mean |lateral g|
     - held-out completion rate (generalisation)
   - Saves a trajectory PNG thumbnail for each showcase track.
-- **Logging:** TensorBoard (`runs/`) for episode reward, length, lap time and losses.
+- **Logging:** TensorBoard (`runs/`) for episode reward, length, lap time and losses, plus `race/*` (lap time, laps, progress) and `end/*` (termination reasons).
 
 ---
 
@@ -584,8 +599,10 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-10 | Audio design: a cosmetic gearbox (sound and HUD only) drives `rpm_ratio`; clips are seeked by RPM (§10.4). Scenery props added as a *Could*. |
 | 2026-10-10 | Initialisation: Python 3.11.9 `.venv`, torch 2.14.1+cpu, all versions pinned in `requirements.txt`; `racer` installed editable via `pyproject.toml`. |
 | 2026-10-10 | Rule: whenever a goal or requirement changes, update this file first, then every document it affects (`CLAUDE.md` working rules, §15). |
+| 2026-10-10 | Week 1 decisions (owner-approved, `log.md` T16 D1–D6): **D1** kerbs inside the road edge, on-track (§5.1); **D2** `obs_spec` v1 details frozen (§7.1); **D3** track field + barrier = field territory, walls between close sections (§6); **D4** braking test: threshold ≈ 42 m, full lock ≈ 49 m, physics unchanged (§5.5); **D5** `configs/track/default.yaml`; **D6** `pytest` + `tests/` (§4). A minimal config loader and `train.py` are pulled forward from Week 2. |
+| 2026-10-10 | **M1 reached:** R001 (PPO, Training Ground, 2M steps, ≈ 20 min). Best checkpoint `R001_ppo_rays5_tg@1200k`: 6/6 deterministic starts, best lap 42.70 s vs 46.6 s for the hand-coded baseline. Reliability oscillates between checkpoints (agent drives at the limit with wheels on the grass), so models are chosen by evaluation, not by recency (§8). |
 
 **Open questions:**
 - Should rays also detect the barrier, or only the road edge? Currently: road edge only.
 - Should the demo default to each model's own physics or a common one? Currently: each model's own, with a toggle.
-- Should kerbs be "road" for track limits? Currently: yes, kerbs count as on-track.
+- ~~Should kerbs be "road" for track limits?~~ Decided (D1): yes, kerbs sit inside the road edge and count as on-track.

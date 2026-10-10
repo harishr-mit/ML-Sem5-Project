@@ -1,0 +1,42 @@
+# Car physics, default preset (PROJECT_CONTEXT §5). SI units; angles in degrees.
+# Every key is required: the loader rejects missing or unknown keys.
+
+physics_hz: 60                # fixed physics rate (dt = 1/60 s)
+
+# --- body ---
+mass_kg: 1000.0
+gravity: 9.81
+wheelbase_m: 2.6
+car_length_m: 4.5
+car_width_m: 1.9
+wheel_track_m: 1.6            # lateral distance between left and right wheels
+
+# --- steering ---
+max_steer_low_deg: 30.0       # steering lock at standstill
+max_steer_high_deg: 8.0       # steering lock at steer_fade_speed and above
+steer_fade_speed: 70.0        # m/s; lock fades linearly from low to high up to this speed
+steer_rate_deg_s: 120.0       # steering rate limit
+
+# --- longitudinal ---
+engine_force_max: 6000.0      # N
+engine_power_max: 150000.0    # W; F_drive <= P / v
+min_drive_speed: 1.0          # m/s; P / max(v, this) avoids infinite force at standstill
+brake_force_max: 12000.0      # N; above static grip (~10 800 N), so full brake locks the wheels
+brake_min_speed: 0.1          # m/s; no brake force below this forward speed
+stop_speed: 0.05              # m/s; with no throttle, slower than this snaps to a standstill
+
+# --- resistances ---
+air_density: 1.225
+cda_m2: 0.70                  # drag area; top speed ~ 69 m/s
+c_lat: 0.9                    # fraction of sideslip removed per step when grip allows
+k_down: 0.0                   # downforce N·s²/m² (0 = off)
+
+# --- grip ---
+sliding_threshold: 0.999      # friction-circle scale below this = sliding (kinetic μ next step)
+
+# Surfaces (§5.1). grass is the base Surface; road overrides it; kerb overrides road.
+# A missing key falls back to the parent surface's value.
+surfaces:
+  grass: {mu_static: 0.45, mu_kinetic: 0.35, rolling_res: 0.12}
+  road:  {mu_static: 1.10, mu_kinetic: 0.90, rolling_res: 0.015}
+  kerb:  {mu_static: 0.95, mu_kinetic: 0.80, rolling_res: 0.025}

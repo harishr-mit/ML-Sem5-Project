@@ -23,6 +23,8 @@ dist/
 runs/
 # raw rendered frames
 outputs/frames/
+# smoke-test runs (train.py --scratch)
+outputs/scratch/
 *.tmp
 
 # --- Original asset downloads (large, kept locally for re-cutting; see assets/LICENSES.md) ---

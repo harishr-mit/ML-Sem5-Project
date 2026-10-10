@@ -5,7 +5,7 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 @PROJECT_CONTEXT.md
 
 ## Context and status tracking (required)
-- **Before doing anything,** read the first 90 lines of `log.md` for the current context and task status.
+- **Before doing anything,** read till the latest record of Change log of `log.md` for the current context and task status.
 - **Use `log.md` as your todo list.**
   - Add tasks as `[ ]` before touching any files.
   - Mark a task `[~]` when you start it, and `[x]` as soon as it's done. Don't batch these updates at the end.

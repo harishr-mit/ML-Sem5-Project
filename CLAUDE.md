@@ -36,5 +36,5 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 - Keep `racer/physics`, `racer/track` and `racer/env` free of pygame. Rendering only wraps simulation objects.
 - Tunable numbers go in `configs/*.yaml`, not in code.
 - Platform is Windows and the project path has spaces: use `pathlib`, and guard SubprocVecEnv scripts with `if __name__ == "__main__":`.
-- Never change an existing `obs_spec` version or edit a saved model folder. Models must stay loadable forever.
+- Never change an existing `obs_spec` version or edit a saved model folder. Models must stay loadable forever. (Only exception: `evaluate.py` may add eval files once, never overwrite; see PROJECT_CONTEXT §9.)
 - Build in small, testable steps. After physics changes, run `scripts/physics_sanity.py`.

@@ -112,6 +112,23 @@ class Car:
         """World positions of the body corners FL, FR, RL, RR."""
         return self._offset_points(self.corner_offsets)
 
+    def abs_brake_limit(self, wheel_surfaces: Sequence[int], margin: float) -> float:
+        """Largest brake command (0..1) that stays inside the friction circle right now.
+
+        A pure query for human-input assists (ABS for keyboard driving); it does not change
+        the physics. Uses the grip that applies on the next step (kinetic if sliding) minus
+        the lateral force currently needed to hold the car's line.
+        """
+        p = self.p
+        sf = self.surfaces
+        table = sf.mu_kinetic_l if self.sliding else sf.mu_static_l
+        mu = sum(table[s if s >= 0 else GRASS_ID] for s in wheel_surfaces) / len(wheel_surfaces)
+        v_long = self.v_long
+        f_max = margin * mu * (p.mass_kg * p.gravity + p.k_down * v_long * v_long)
+        f_lat = p.mass_kg * abs(self.v_lat) / p.dt * p.c_lat
+        f_long = math.sqrt(max(f_max * f_max - f_lat * f_lat, 0.0))
+        return min(f_long / p.brake_force_max, 1.0)
+
     # ------------------------------------------------------------------- step
     def step(self, steer_cmd: float, gas_cmd: float, wheel_surfaces: Sequence[int] = (GRASS_ID,) * 4) -> None:
         """Advance one physics step (``1 / physics_hz``).

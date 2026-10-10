@@ -30,7 +30,7 @@ from racer.track.io import TRACKS_DIR
 
 HELP = ["arrows/WASD drive", "1 human", "2 baseline", "3 model", "R rays", "T trail", "F overview",
         "+/− or wheel zoom", "[ ] sim speed", "Space pause", "Enter reset at start", "Backspace random start",
-        "N next track", "H hide help", "Esc quit"]
+        "N next track", "K ABS on/off", "H hide help", "Esc quit"]
 
 
 def showcase_names() -> list[str]:
@@ -95,6 +95,8 @@ def main() -> int:
     poses: deque = deque()
     trail: deque = deque(maxlen=int(rcfg["trail_length"]))
     show_rays, show_trail, show_help, paused = True, True, True, False   # help shown until H
+    abs_cfg = {"on": bool(rcfg["abs"]["enabled"]), "margin": float(rcfg["abs"]["margin"]),
+               "min_brake": float(rcfg["abs"]["min_brake"]), "active": False}
     end_reason = None          # termination waiting to be shown
     banner_until = 0.0
     acc = 0.0
@@ -130,6 +132,13 @@ def main() -> int:
         keys = pygame.key.get_pressed()
         steer = (1.0 if keys[pygame.K_LEFT] or keys[pygame.K_a] else 0.0) - (1.0 if keys[pygame.K_RIGHT] or keys[pygame.K_d] else 0.0)
         gas = (1.0 if keys[pygame.K_UP] or keys[pygame.K_w] else 0.0) - (1.0 if keys[pygame.K_DOWN] or keys[pygame.K_s] else 0.0)
+        if gas < 0.0 and abs_cfg["on"]:
+            # ABS: keyboard brake is all-or-nothing, so cap it just inside the friction circle.
+            limit = env.car.abs_brake_limit(env._wheels.tolist(), abs_cfg["margin"])
+            gas = -max(limit, abs_cfg["min_brake"])
+            abs_cfg["active"] = limit < 1.0     # ABS is holding the brake back right now
+        else:
+            abs_cfg["active"] = False
         return np.array([steer, gas], dtype=np.float32)
 
     frame = 0
@@ -173,6 +182,8 @@ def main() -> int:
                     reset_start()
                 elif k == pygame.K_BACKSPACE:
                     reset()
+                elif k == pygame.K_k:
+                    abs_cfg["on"] = not abs_cfg["on"]
                 elif k == pygame.K_n:
                     track_i = (track_i + 1) % len(tracks)
                     trail.clear()
@@ -244,7 +255,7 @@ def main() -> int:
             (f"grip {car.grip_scale:4.2f}  μ {car.mu_eff:4.2f}  {'SLIDING' if car.sliding else ''}", c["hud_bad"] if car.sliding else None),
             (f"reward {state['last_r']:+6.2f}   episode {state['ep_reward']:8.1f}", None),
             (f"warning: {info['warning'].replace('_', ' ')} (free drive: no reset)" if info.get("warning") else
-             ("free drive: walls are solid, nothing resets" if env.free_drive else "AI mode: episode ends as in training"),
+             (f"free drive: walls are solid, nothing resets · ABS {'on' if abs_cfg['on'] else 'off'} (K)" if env.free_drive else "AI mode: episode ends as in training"),
              c["hud_bad"] if info.get("warning") else c["hud_dim"]),
             (f"fps {clock.get_fps():4.0f}", c["hud_dim"]),
         ]
@@ -253,7 +264,16 @@ def main() -> int:
         bw = 220
         view.bar(screen, "steer (action)", float(a[0]), pygame.Rect(24, size[1] - 70, bw, 18), c["steer_bar"], True)
         view.bar(screen, "gas", float(max(a[1], 0)), pygame.Rect(24 + bw + 30, size[1] - 70, bw // 2, 18), c["gas_bar"], False)
-        view.bar(screen, "brake", float(max(-a[1], 0)), pygame.Rect(24 + bw + 30 + bw // 2 + 30, size[1] - 70, bw // 2, 18), c["brake_bar"], False)
+        brake_rect = pygame.Rect(24 + bw + 30 + bw // 2 + 30, size[1] - 70, bw // 2, 18)
+        view.bar(screen, "brake", float(max(-a[1], 0)), brake_rect, c["brake_bar"], False)
+        if mode == "human":
+            if not abs_cfg["on"]:
+                label, col = "ABS OFF (K)", c["hud_bad"]
+            elif abs_cfg["active"]:
+                label, col = "ABS ACTIVE", c["abs_active"]
+            else:
+                label, col = "ABS ON (K)", c["hud_good"]
+            view.badge(screen, label, (brake_rect.right + 24, brake_rect.y - 4), col)
         if show_help:
             help_lines = view.wrap(HELP, size[0] - 60)
             lh = view.font.get_linesize()

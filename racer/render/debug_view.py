@@ -297,6 +297,14 @@ class DebugView:
         pygame.draw.rect(screen, colour, r)
         self.text(screen, label, (rect.x + 4, rect.y - self.font.get_linesize() - 2), self.c["hud_dim"])
 
+    def badge(self, screen: pygame.Surface, s: str, topleft: tuple[int, int], colour) -> None:
+        """Small outlined status label, e.g. "ABS ON"."""
+        img = self.font.render(s, True, colour)
+        rect = img.get_rect(topleft=(topleft[0] + 8, topleft[1] + 4))
+        self.panel(screen, rect.inflate(16, 8))
+        pygame.draw.rect(screen, colour, rect.inflate(16, 8), 2, border_radius=4)
+        screen.blit(img, rect)
+
     def banner(self, screen: pygame.Surface, s: str, colour) -> None:
         img = self.font_big.render(s, True, colour)
         rect = img.get_rect(center=(self.w // 2, self.h // 3))

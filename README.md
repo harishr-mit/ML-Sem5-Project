@@ -84,9 +84,9 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Regenerate held-out tracks | `scripts\generate_tracks.py --heldout` (`--stats 200` for the acceptance rate) |
 | Env speed + baseline laps | `scripts\bench_env.py` |
 
-**Debug window keys:** arrows/WASD drive · `1` human · `2` baseline · `3` model · `R` rays · `T` trail · `F` overview · `+/−` or mouse wheel zoom · `[ ]` sim speed · `Space` pause · `Enter` reset at the start line · `Backspace` random start · `N` next track · `H` help · `Esc` quit.
+**Debug window keys:** arrows/WASD drive · `1` human · `2` baseline · `3` model · `R` rays · `T` trail · `F` overview · `+/−` or mouse wheel zoom · `[ ]` sim speed · `Space` pause · `Enter` reset at the start line · `Backspace` random start · `N` next track · `K` ABS on/off · `H` help · `Esc` quit.
 
-In human mode (`1`) the walls are solid and nothing resets the car; baseline and model modes end episodes exactly as in training.
+In human mode (`1`) the walls are solid and nothing resets the car; baseline and model modes end episodes exactly as in training. Keyboard braking uses an ABS assist by default (a key is all-or-nothing, so full brake would lock the wheels); it only affects human driving.
 
 ## Layout
 

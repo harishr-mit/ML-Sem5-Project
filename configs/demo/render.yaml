@@ -17,6 +17,13 @@ debug:
   trail_length: 900           # substeps kept in the trail (15 s at 60 Hz)
   trail_speed_max: 70.0       # m/s mapped to the hottest trail colour
   banner_s: 1.5               # how long the termination banner shows before the reset
+  # ABS assist for keyboard braking (human mode only; physics and models are unaffected).
+  # A key is all-or-nothing, so full brake would lock the wheels; ABS caps the brake just
+  # inside the friction circle instead.
+  abs:
+    enabled: true             # initial state; toggle with K
+    margin: 0.97              # fraction of the available grip to use
+    min_brake: 0.25           # never brake less than this while the key is held (even mid-slide)
   sim_speeds: [0.25, 0.5, 1.0, 2.0, 4.0]
   car_sprite: car_1_blue.png  # in assets/sprites/cars/; falls back to a rectangle
   font: share_tech_mono.ttf   # in assets/fonts/; falls back to pygame's default font
@@ -41,3 +48,4 @@ debug:
     steer_bar: [90, 170, 255]
     gas_bar: [90, 220, 120]
     brake_bar: [240, 90, 80]
+    abs_active: [255, 190, 60]

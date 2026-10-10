@@ -108,12 +108,16 @@ ML Sem5 Project/
 │   ├── reward/   progress.yaml, speed_naive.yaml (for the reward-hacking demo)
 │   ├── train/    ppo_default.yaml, sac_default.yaml, baseline.yaml (hand-coded driver)
 │   ├── track/    default.yaml (kerb threshold, field cell size, generator ranges, clearances)
+│   ├── trackset/ tg.yaml, gen_wide.yaml, final_mix.yaml … (which tracks training samples, §8)
+│   ├── eval/     v1.yaml (evaluation protocol, §8)
+│   ├── queue/    *.yaml (experiment lists for queue_overnight.py)
 │   └── demo/     render.yaml (texture scales, colours; `debug:` window), audio.yaml (volumes, gearbox)
 ├── racer/config.py           # YAML preset loader (strict keys, deep-merged overrides)
 ├── racer/
 │   ├── physics/  car.py, surfaces.py
 │   ├── track/    track.py, spline.py, field.py, generator.py, progress.py, io.py
-│   ├── env/      racing_env.py, sensors.py, reward.py, obs_spec.py
+│   ├── env/      racing_env.py, sensors.py, reward.py, obs_spec.py, trackset.py,
+│   │             race.py (multi-car race for the demo, pygame-free)
 │   ├── agents/   loader.py (registry → policy + normaliser + configs), baseline.py,
 │   │             evaluation.py (deterministic eval episodes)
 │   ├── registry/ registry.py, export_xlsx.py
@@ -121,7 +125,7 @@ ML Sem5 Project/
 │                 minimap.py, ui.py (menus/model picker), editor.py,
 │                 audio.py (engine/tyre sound controller), gearbox.py (cosmetic RPM)
 ├── scripts/
-│   ├── train.py  evaluate.py  demo.py  record_video.py  make_plots.py
+│   ├── train.py  evaluate.py  demo.py  record_video.py  make_plots.py  registry.py
 │   ├── queue_overnight.py    # runs a list of experiments one after another
 │   ├── physics_sanity.py     # skidpad / braking / coast-down tests
 │   ├── drive.py              # debug window: keyboard / baseline / model driving
@@ -138,7 +142,8 @@ ML Sem5 Project/
 ├── models/<model_id>/        # self-contained model folders (see §9); local only, git-ignored
 ├── registry/  runs.csv  models.csv  registry.xlsx
 ├── runs/                     # TensorBoard logs
-└── outputs/   videos/  plots/  frames/  scratch/ (smoke runs, git-ignored)
+└── outputs/   videos/  plots/  frames/  eval/ (copies of every model's eval files)
+               scratch/ (smoke runs, git-ignored)  queue_logs/ (git-ignored)
 ```
 
 ---
@@ -263,6 +268,8 @@ This produces momentum (velocity persists), understeer when entering a corner to
   - "Technical": hairpins and a chicane
   - "Fast Flow": high-speed sweepers where braking matters
 - **Held-out set:** about 10 generated tracks with fixed seeds, saved in `tracks/heldout/`. **Never** used in training, only to test generalisation.
+- **Open track library (owner):** tracks can be added at any time in the project. Any valid track JSON dropped into a `tracks/<folder>/` is picked up by name everywhere (training track sets, evaluation, demo). Training may mix any non-held-out tracks, and new hand-made or generated tracks may be added for variety. Adding a track never changes an existing model (each model's snapshot lists what it trained on).
+- **Final showcase (owner):** faculty members draw a track, it is converted into a track JSON (Draw-a-Track, §10.1), and the trained models drive it live. This is the strongest generalisation demo, so held-out performance is the metric that matters most.
 - **Editor (draw-a-track):**
   1. Click points, or drag to sketch freehand. Freehand input is smoothed and simplified down to control points.
   2. Run the same validation as the generator.
@@ -328,6 +335,7 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
 - **Starting hyperparameters:** `n_steps=1024` per env, `batch_size=256`, `n_epochs=10`, `gamma=0.995`, `gae_lambda=0.95`, `lr=3e-4` (linear decay), `clip=0.2`, `ent_coef=0.002`.
 - **Device:** **CPU**, with `torch.set_num_threads(1)` in each worker. The GTX 1650 is not useful for an MLP this small.
 - **Windows:** SubprocVecEnv needs the `if __name__ == "__main__":` guard in every script.
+- **Overnight queue (D18, owner):** `queue_overnight.py` is started by the owner from a normal terminal and runs **without a Claude session** (no token use). It runs the queue file's runs one after another, logs each to `outputs/queue_logs/`, continues after a failure, resumes finished queues, and keeps Windows awake only while it runs (no power-plan changes).
 - **Expected budget:** 2–5M steps per serious run. **Measured (2026-10-10):** ≈ 1.7k steps/s with 6 envs, so ≈ 10 min per million steps. The PPO update is ~60 % of the time (compute-bound at batch 256; more torch threads don't help); one env alone runs at 13k steps/s. Run long experiments **overnight** using `queue_overnight.py`.
 - **Curriculum:**
   1. A single wide showcase track.
@@ -335,7 +343,10 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
   3. Random tracks with mixed widths and tighter corners.
 
   Each stage either fine-tunes from the previous model (recorded as the `parent` in the registry) or uses mixed sampling.
-- **Checkpoints:** every 100k steps, plus the best model by evaluation score. Every checkpoint is registered (see §9), so evolution races and comparisons can be built from any step.
+  **Chosen (D8):** a chain of separate runs linked by `train.py --parent <model_id>` (policy and VecNormalize statistics carried over, lower learning rate via `ppo_finetune`), so each stage is evaluated and registered on its own: R001 (Training Ground) → R002 (generated wide) → R003 (final mix). R004 trains on the final mix from scratch for comparison.
+- **Track sets (D7, `configs/trackset/*.yaml`):** which tracks a run samples: named tracks with weights, folders of tracks, and a generated pool (training seed stream 0, a seed range, generator overrides such as a width range). Generated fields cost 3–14 MB and ~65 ms each, so each worker keeps a small rotating pool of generated tracks instead of a new one per episode. Held-out tracks are never sampled. The final mix may include showcase tracks and any other added tracks (owner, §6), so showcase lap times are on seen tracks; generalisation is measured on held-out and user-drawn tracks only.
+- **Checkpoints:** every 100k steps. Every checkpoint is registered (see §9) and evaluated after training, and the best is marked `is_best` (D9: highest completion over all evaluation episodes, ties broken by mean showcase lap time relative to the baseline). Evolution races and comparisons can be built from any step.
+- **Reproducibility (D12):** real (`R`) runs refuse to start on a dirty git tree unless `--allow-dirty`, so the `git_commit` in every snapshot points at real code.
 - **Evaluation protocol (`evaluate.py`, runs automatically after training and on demand):**
   - deterministic policy and fixed seeds
   - 3 showcase tracks × 3 starts, plus 10 held-out tracks × 1 start
@@ -348,6 +359,7 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
     - mean |lateral g|
     - held-out completion rate (generalisation)
   - Saves a trajectory PNG thumbnail for each showcase track.
+  - The protocol is versioned in `configs/eval/v1.yaml` (standing starts on the centreline, evenly spaced). The hand-coded baseline is registered as pseudo-model `BASE_pid` (E8 reference).
 - **Logging:** TensorBoard (`runs/`) for episode reward, length, lap time and losses, plus `race/*` (lap time, laps, progress) and `end/*` (termination reasons).
 
 ---
@@ -365,7 +377,8 @@ models/R012_ppo_rays5_curric@1500k/
 └── thumb_<track>.png    # trajectory coloured by speed
 ```
 
-- **Model ID:** `R{run:03d}_{short_tag}@{steps}k` (e.g. `R012_ppo_rays5_curric@1500k`)
+- **What "immutable" means (D10, owner):** `model.zip`, `vecnormalize.pkl` and `config.yaml` are never changed after saving. `evaluate.py` **adds** `eval.json` and `thumb_<track>.png` once per protocol version (a later protocol writes `eval_v2.json`; nothing is overwritten), and copies them to `outputs/eval/<model_id>/`. Models stay local (git-ignored); the copies in `outputs/eval/` and the registry CSVs are tracked.
+- **Model ID:** `R{run:03d}_{short_tag}@{steps}k` (e.g. `R012_ppo_rays5_curric@1500k`). Ablation runs carry the experiment in the tag (D17, e.g. `R010_e2_nogrip_s1@3000k`).
 - **Observation specs are versioned** (`obs_spec: {version: 1, rays: [...], extras: [...]}`). Never change what an existing version means; add a new version instead. The loader builds each car's sensor from that car's own spec.
 
 **`registry/runs.csv`:** one row per training run
@@ -377,7 +390,7 @@ models/R012_ppo_rays5_curric@1500k/
 **`registry/registry.xlsx`:** generated by `export_xlsx.py` (openpyxl)
 - **Sheets:** `Runs`, `Models`, a leaderboard sheet for each showcase track, and `Ablations` (pivot-style summary).
 - **Formatting:** frozen header, filters, conditional formatting (green for the best lap time), hyperlinks to model folders and thumbnails.
-- The CSVs stay the source of truth; the xlsx is regenerated, never edited by hand.
+- The CSVs stay the source of truth; the xlsx is regenerated, never edited by hand (and git-ignored, D11). Rows are upserted by id (evaluation updates them). Scratch runs use a separate registry in `outputs/scratch/registry/`.
 
 ---
 
@@ -389,6 +402,8 @@ models/R012_ppo_rays5_curric@1500k/
    - All the chosen cars race at once as ghost cars with no collisions. Each car gets a distinct colour and label.
    - **Live leaderboard:** position, gap, current, last and best lap.
    - **Physics:** each car uses the physics it was trained with by default. A toggle switches to a common "fair race" preset.
+   - **Race rules (D14):** staggered 2-wide grid behind the start line, 3-2-1 countdown, N-lap race (default 3), then a results table. A crash respawns the car on the centreline where it crashed, from standstill after 1 s, and the crash is counted on the leaderboard (no DNF). Gaps are in seconds (time since the leader passed the same distance).
+   - **Code (D15, D16):** the race itself is simulation (`racer/env/race.py`, pygame-free); rendering uses `render/world.py` and `camera.py`. Models are picked in a basic in-window registry list (sort, filter, multi-select) or with `--models`.
 2. **Evolution Race:** pick one run, and its checkpoints (e.g. 100k, 300k, 1M, 3M) race together. This shows learning in about 20 seconds.
 3. **Draw-a-Track:** sketch a track, validate it, and pick models to drive it live. This demonstrates generalisation.
 4. **Human vs AI:** keyboard (WASD or arrow keys; optional gamepad through pygame joystick) against chosen models. Ghost cars, same physics.
@@ -581,6 +596,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 - Use type hints and short docstrings. Use `pathlib` for paths, because the project path contains spaces.
 - After physics changes, run `scripts/physics_sanity.py`. After env changes, run a 50k-step smoke test of training.
 - When adding an observation feature, create a **new `obs_spec` version**; never change an existing one.
+- Never add a required key to an existing config schema (physics, env, reward, track) unless an explicit snapshot migration fills it for old models; prefer new presets or new types.
 - Never hand-edit `registry.xlsx`; regenerate it from the CSVs.
 - When a goal, requirement or design decision changes, update this file first (and §16), then every other document it affects (`README.md`, `log.md`, `assets/LICENSES.md`, configs).
 
@@ -602,8 +618,13 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-10 | Week 1 decisions (owner-approved, `log.md` T16 D1–D6): **D1** kerbs inside the road edge, on-track (§5.1); **D2** `obs_spec` v1 details frozen (§7.1); **D3** track field + barrier = field territory, walls between close sections (§6); **D4** braking test: threshold ≈ 42 m, full lock ≈ 49 m, physics unchanged (§5.5); **D5** `configs/track/default.yaml`; **D6** `pytest` + `tests/` (§4). A minimal config loader and `train.py` are pulled forward from Week 2. |
 | 2026-10-10 | **M1 reached:** R001 (PPO, Training Ground, 2M steps, ≈ 20 min). Best checkpoint `R001_ppo_rays5_tg@1200k`: 6/6 deterministic starts, best lap 42.70 s vs 46.6 s for the hand-coded baseline. Reliability oscillates between checkpoints (agent drives at the limit with wheels on the grass), so models are chosen by evaluation, not by recency (§8). |
 | 2026-10-10 | **Models stay local** (owner): `models/` is git-ignored and removed from tracking (≈ 33 MB per 2M-step run). Back up by copying the folder (current backup: `C:\Users\Jack\ML_Sem5_models_backup\`). The registry CSVs stay in git. |
+| 2026-10-10 | **Braking feel (owner):** brake force is not the limit (12 000 N already exceeds grip; 20 000 N stops in the same 42 m from 100 km/h). Keyboard braking is all-or-nothing, so it locks the wheels (kinetic μ, little steering). Fix: an **ABS assist for human input only** (`Car.abs_brake_limit`, settings in `configs/demo/render.yaml`): 35 m instead of 42 m, steering kept. Physics, training and saved models are unchanged; no retraining. |
+
+| 2026-10-10 | Week 2 decisions (owner-approved, `log.md` T36 D7–D18): **D7** track sets in `configs/trackset/` with per-worker rotating generated pools; **D8** curriculum as a `--parent` chain R001 → R002 → R003, plus R004 from scratch; any non-held-out tracks may be mixed into training; **D9** eval protocol v1 + `is_best` rule + `BASE_pid`; **D10** evaluation adds `eval.json`/thumbnails to model folders (the three model files never change) and copies them to `outputs/eval/`; **D11** registry upsert, scratch registry, xlsx git-ignored; **D12** no real runs on a dirty tree; **D13** ablations config-only, no new required keys in existing schemas without a snapshot migration; **D14** arena: grid, countdown, N laps, respawn + crash count; **D15** `racer/env/race.py` + `render/world.py`/`camera.py`; **D16** basic in-window model picker; **D17** ablation tags; **D18** overnight queue runs without a Claude session. |
+| 2026-10-10 | **Tracks (owner):** the track library stays open; tracks can be added at any time and mixed into training. The final showcase is a track drawn by faculty, converted into a track and driven live (§6). |
 
 **Open questions:**
+- Faculty track: drawn in the Draw-a-Track editor, or on paper and converted from a photo? Currently: the editor (Week 3); photo import is a possible extension.
 - Should rays also detect the barrier, or only the road edge? Currently: road edge only.
 - Should the demo default to each model's own physics or a common one? Currently: each model's own, with a toggle.
 - ~~Should kerbs be "road" for track limits?~~ Decided (D1): yes, kerbs sit inside the road edge and count as on-track.

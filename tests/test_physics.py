@@ -73,3 +73,24 @@ def test_physics_does_not_import_pygame():
     code = ("import sys, racer.physics.car, racer.physics.surfaces; "
             "sys.exit(1 if 'pygame' in sys.modules else 0)")
     assert subprocess.run([sys.executable, "-c", code]).returncode == 0
+
+
+def test_abs_brake_limit_stops_shorter_than_lockup(params):
+    def stop(abs_on):
+        car = Car(params)
+        car.reset(0, 0, 0, 27.8)
+        while car.speed > 0:
+            gas = -car.abs_brake_limit(ROAD4, 0.97) if abs_on else -1.0
+            car.step(0.0, gas, ROAD4)
+        return car.x
+    locked, abs_d = stop(False), stop(True)
+    assert abs_d < 0.9 * locked
+
+
+def test_abs_brake_limit_leaves_room_for_cornering(params):
+    car = Car(params)
+    car.reset(0, 0, 0, 25.0)
+    car.vy = 0.0
+    straight = car.abs_brake_limit(ROAD4, 0.97)
+    car.vy = 0.3     # sideways velocity → lateral force demand
+    assert car.abs_brake_limit(ROAD4, 0.97) < straight

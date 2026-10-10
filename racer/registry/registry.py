@@ -21,15 +21,22 @@ from racer.config import PROJECT_ROOT, load_yaml
 REGISTRY_DIR = PROJECT_ROOT / "registry"
 SCRATCH_REGISTRY_DIR = PROJECT_ROOT / "outputs" / "scratch" / "registry"
 SHOWCASE = ("training_ground", "technical", "fast_flow")
+# Maps added with the map library (D19) and evaluated by protocol v2. Columns are only ever
+# appended, so older CSVs and readers keep working.
+LIBRARY_MAPS = ("hairpin_valley", "esses", "oval_infield", "city_blocks", "alpine", "coastline")
 
 RUN_COLUMNS = [
     "run_id", "created_at", "tag", "algorithm", "parent_model", "obs_spec", "physics_preset", "reward_preset",
     "track_set", "curriculum", "total_steps", "wall_clock_min", "seed", "hparams_json", "notes",
+    # model shape (D23): number of inputs, output layout, parameters of the driving network
+    "obs_dim", "action_layout", "n_params",
 ]
 MODEL_COLUMNS = [
     "model_id", "run_id", "steps", "path", "is_best", "completion_rate", "crash_rate", "heldout_completion",
     *[f"best_lap_{t}" for t in SHOWCASE], "mean_speed", "offroad_pct", "mean_lat_g",
     "overall_completion", "lap_ratio", "score", "eval_protocol", "eval_date", "tags", "notes",
+    # protocol v2 (D20)
+    "test_completion", "unseen_completion", *[f"best_lap_{t}" for t in LIBRARY_MAPS],
 ]
 
 
@@ -128,10 +135,15 @@ class Registry:
         """Mark the best evaluated checkpoint of a run (D9 ranking); returns its id."""
         from racer.agents.evaluation import rank_key
 
+        from racer.agents.evaluation import protocol_version
+
         rows = self.models()
         cands = [r for r in rows if r["run_id"] == run_id and r.get("eval_date")]
         if not cands:
             return None
+        # Rank only within the newest protocol used in this run (metrics differ between protocols).
+        newest = max(protocol_version(r.get("eval_protocol")) for r in cands)
+        cands = [r for r in cands if protocol_version(r.get("eval_protocol")) == newest]
         best = min(cands, key=lambda r: (rank_key({k: typed(v) for k, v in r.items()}), int(r["steps"] or 0)))
         for r in rows:
             if r["run_id"] == run_id:
@@ -159,9 +171,15 @@ def track_set_label(env_config: Mapping[str, Any]) -> str:
 def run_row(snapshot: Mapping[str, Any], total_steps: int | None = None,
             wall_clock_min: float | None = None) -> dict[str, Any]:
     """runs.csv row from a model folder's config.yaml snapshot."""
+    from racer.agents.compat import manifest_of
+
     env = snapshot["env_config"]
     train = snapshot["train"]
-    hp = {k: train[k] for k in ("ppo", "policy", "vecnormalize", "n_envs") if k in train}
+    hp = {k: train[k] for k in ("ppo", "sac", "policy", "vecnormalize", "n_envs") if k in train}
+    try:
+        man = manifest_of(snapshot)
+    except (KeyError, ValueError):      # a model this engine can't describe (e.g. an unknown feature)
+        man = {}
     return {
         "run_id": snapshot["run_id"], "created_at": snapshot.get("created_at"), "tag": snapshot.get("tag"),
         "algorithm": snapshot.get("algorithm", "ppo"), "parent_model": snapshot.get("parent_model"),
@@ -169,6 +187,7 @@ def run_row(snapshot: Mapping[str, Any], total_steps: int | None = None,
         "reward_preset": env["presets"]["reward"], "track_set": track_set_label(env),
         "curriculum": snapshot.get("curriculum"), "total_steps": total_steps, "wall_clock_min": wall_clock_min,
         "seed": snapshot.get("seed"), "hparams_json": json.dumps(hp, sort_keys=True), "notes": snapshot.get("notes"),
+        "obs_dim": man.get("obs_dim"), "action_layout": man.get("action_layout"), "n_params": man.get("n_params"),
     }
 
 
@@ -180,11 +199,25 @@ def model_row(folder: Path, snapshot: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def metrics_row(doc: Mapping[str, Any]) -> dict[str, Any]:
-    """models.csv metric columns from an eval.json document."""
+    """models.csv metric columns from an eval.json document.
+
+    Every metric column is set (missing ones blank), so a row never mixes two protocols.
+    """
     m = doc["metrics"]
-    row = {k: m.get(k) for k in MODEL_COLUMNS if k in m}
+    first = MODEL_COLUMNS.index("completion_rate")
+    metric_cols = [c for c in MODEL_COLUMNS[first:] if c not in ("eval_protocol", "eval_date", "tags", "notes")]
+    row = {k: m.get(k) for k in metric_cols}
     row.update({"model_id": doc["model_id"], "eval_protocol": doc["protocol"], "eval_date": doc["evaluated_at"]})
     return row
+
+
+def newer_or_same_protocol(existing: Mapping[str, Any] | None, doc: Mapping[str, Any]) -> bool:
+    """True if ``doc`` may replace the metrics of ``existing`` (the newest protocol wins, §9)."""
+    from racer.agents.evaluation import protocol_version
+
+    if not existing or not existing.get("eval_protocol"):
+        return True
+    return protocol_version(doc["protocol"]) >= protocol_version(existing["eval_protocol"])
 
 
 def register_folder(reg: Registry, folder: Path) -> dict[str, Any]:

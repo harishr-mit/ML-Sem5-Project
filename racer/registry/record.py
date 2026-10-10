@@ -5,10 +5,10 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from racer.agents.evaluation import SCRATCH_DIR, evaluate_many
+from racer.agents.evaluation import DEFAULT_PROTOCOL, SCRATCH_DIR, evaluate_many
 from racer.registry.export_xlsx import export
-from racer.registry.registry import (REGISTRY_DIR, SCRATCH_REGISTRY_DIR, Registry, metrics_row, register_folder,
-                                     run_row)
+from racer.registry.registry import (REGISTRY_DIR, SCRATCH_REGISTRY_DIR, Registry, metrics_row,
+                                     newer_or_same_protocol, register_folder, run_row)
 
 
 def is_scratch(folder: Path) -> bool:
@@ -30,12 +30,13 @@ def record(results: Sequence[dict[str, Any]], folders: Sequence[Path], reg: Regi
         snap = register_folder(reg, Path(folder))
         if reg.run(snap["run_id"]) is None:
             reg.upsert_run(run_row(snap))
-        reg.upsert_model(metrics_row(doc))
+        if newer_or_same_protocol(reg.model(doc["model_id"]), doc):
+            reg.upsert_model(metrics_row(doc))
         run_ids.append(snap["run_id"])
     return sorted(set(run_ids))
 
 
-def evaluate_and_record(folders: Sequence[Path], protocol: str = "v1", workers: int = 6,
+def evaluate_and_record(folders: Sequence[Path], protocol: str = DEFAULT_PROTOCOL, workers: int = 6,
                         do_export: bool = True) -> list[dict[str, Any]]:
     """Evaluate folders, update their registries, mark each run's best, regenerate the xlsx."""
     t0 = time.perf_counter()

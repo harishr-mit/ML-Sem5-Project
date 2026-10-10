@@ -99,16 +99,38 @@ def format_summary(summary: Mapping[str, Any]) -> str:
 
 
 # ----------------------------------------------------------------- protocol
-def load_protocol(name: str = "v1") -> dict[str, Any]:
+DEFAULT_PROTOCOL = "v2"   # used by train.py and evaluate.py (D20); v1 stays available and frozen
+
+
+def load_protocol(name: str = DEFAULT_PROTOCOL) -> dict[str, Any]:
     p = load_preset("eval", name)
     p["name"] = name
     return p
+
+
+def protocol_version(name_or_protocol: str | Mapping[str, Any] | None) -> int:
+    """Version number of a protocol (by name like 'v2', or a loaded protocol); 0 if unknown."""
+    if isinstance(name_or_protocol, Mapping):
+        return int(name_or_protocol["version"])
+    m = str(name_or_protocol or "").lstrip("v")
+    return int(m) if m.isdigit() else 0
+
+
+def lap_groups(protocol: Mapping[str, Any]) -> list[str]:
+    """Groups with lap tables and thumbnails: v1 has only 'showcase' (frozen); later versions list them."""
+    return list(protocol.get("lap_groups", ["showcase"]))
+
+
+def lap_tracks(protocol: Mapping[str, Any]) -> list[str]:
+    """Tracks that get best/mean lap columns and count towards ``lap_ratio``."""
+    return [t for g in lap_groups(protocol) for t in protocol["groups"][g]["tracks"]]
 
 
 def run_protocol(env_config: Mapping[str, Any], act: Act, protocol: Mapping[str, Any],
                  baseline_laps: Mapping[str, float] | None = None) -> dict[str, Any]:
     """Run every episode of the protocol and compute the registry metrics."""
     groups = protocol["groups"]
+    thumb_groups = protocol.get("thumbnail_groups", ["showcase"])
     all_tracks = [t for g in groups.values() for t in g["tracks"]]
     config = dict(env_config)
     config["tracks"] = list(all_tracks)
@@ -119,14 +141,20 @@ def run_protocol(env_config: Mapping[str, Any], act: Act, protocol: Mapping[str,
             env.set_track(name)
             for k in range(int(g["starts"])):
                 e = run_episode(env, act, name, k * env.track.length / int(g["starts"]), protocol["start"],
-                                trajectory=(gname == "showcase" and k == 0))
+                                trajectory=(gname in thumb_groups and k == 0))
                 e["group"] = gname
                 episodes.append(e)
-    return {"metrics": compute_metrics(episodes, groups, baseline_laps), "episodes": episodes}
+    return {"metrics": compute_metrics(episodes, groups, baseline_laps, protocol), "episodes": episodes}
 
 
 def compute_metrics(episodes: Sequence[Mapping[str, Any]], groups: Mapping[str, Any],
-                    baseline_laps: Mapping[str, float] | None) -> dict[str, Any]:
+                    baseline_laps: Mapping[str, float] | None,
+                    protocol: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Registry metrics. v1 (no ``protocol`` or version 1) is frozen; later versions use
+    the protocol's ``metrics`` and ``lap_groups`` lists."""
+    if protocol is not None and int(protocol["version"]) >= 2:
+        return _compute_metrics_v2(episodes, protocol, baseline_laps)
+
     def mean(xs):
         xs = list(xs)
         return float(np.mean(xs)) if xs else None
@@ -153,6 +181,35 @@ def compute_metrics(episodes: Sequence[Mapping[str, Any]], groups: Mapping[str, 
     m["lap_ratio"] = mean(ratios)
     m["score"] = m["overall_completion"]
     # Lap times are multiples of the 0.05 s agent step; strip float noise.
+    return {k: (round(v, 3 if "lap_" in k else 4) if isinstance(v, float) else v) for k, v in m.items()}
+
+
+def _compute_metrics_v2(episodes: Sequence[Mapping[str, Any]], protocol: Mapping[str, Any],
+                        baseline_laps: Mapping[str, float] | None) -> dict[str, Any]:
+    def mean(xs):
+        xs = list(xs)
+        return float(np.mean(xs)) if xs else None
+
+    m: dict[str, Any] = {}
+    for name, gs in protocol["metrics"].items():
+        m[name] = mean(e["completed"] for e in episodes if e["group"] in gs)
+    m.update({
+        "overall_completion": mean(e["completed"] for e in episodes),
+        "crash_rate": mean(e["termination"] is not None for e in episodes),
+        "mean_speed": mean(e["mean_speed"] for e in episodes),
+        "offroad_pct": mean(e["offroad_pct"] for e in episodes),
+        "mean_lat_g": mean(e["mean_lat_g"] for e in episodes),
+    })
+    ratios = []
+    for name in lap_tracks(protocol):
+        laps = [t for e in episodes if e["track"] == name for t in e["lap_times"]]
+        best = min(laps) if laps else None
+        m[f"best_lap_{name}"] = best
+        m[f"mean_lap_{name}"] = mean(laps)
+        if best is not None and baseline_laps and baseline_laps.get(name):
+            ratios.append(best / baseline_laps[name])
+    m["lap_ratio"] = mean(ratios)
+    m["score"] = m["overall_completion"]
     return {k: (round(v, 3 if "lap_" in k else 4) if isinstance(v, float) else v) for k, v in m.items()}
 
 
@@ -251,8 +308,7 @@ def baseline_laps(protocol: Mapping[str, Any], eval_root: Path = EVAL_DIR) -> di
     if not path.is_file():
         evaluate_baseline(protocol)
     metrics = json.loads(path.read_text(encoding="utf-8"))["metrics"]
-    return {t: metrics[f"best_lap_{t}"] for t in protocol["groups"]["showcase"]["tracks"]
-            if metrics.get(f"best_lap_{t}")}
+    return {t: metrics[f"best_lap_{t}"] for t in lap_tracks(protocol) if metrics.get(f"best_lap_{t}")}
 
 
 def evaluate_baseline(protocol: Mapping[str, Any]) -> dict[str, Any]:
@@ -262,14 +318,14 @@ def evaluate_baseline(protocol: Mapping[str, Any]) -> dict[str, Any]:
     env_config = make_env_config(["training_ground"])
     ctrl = BaselineController(load_preset("train", "baseline"))
     result = run_protocol(env_config, lambda obs, env: ctrl.act(env), protocol)
-    laps = {t: result["metrics"][f"best_lap_{t}"] for t in protocol["groups"]["showcase"]["tracks"]
+    laps = {t: result["metrics"][f"best_lap_{t}"] for t in lap_tracks(protocol)
             if result["metrics"].get(f"best_lap_{t}")}
-    result["metrics"] = compute_metrics(result["episodes"], protocol["groups"], laps)
+    result["metrics"] = compute_metrics(result["episodes"], protocol["groups"], laps, protocol)
     result["baseline_laps"] = laps
     return write_eval_files(None, protocol["baseline_id"], result, protocol, env_config, EVAL_DIR)
 
 
-def evaluate_model(folder: Path | str, protocol_name: str = "v1") -> dict[str, Any]:
+def evaluate_model(folder: Path | str, protocol_name: str = DEFAULT_PROTOCOL) -> dict[str, Any]:
     """Evaluate one model folder (or return its existing results for this protocol)."""
     folder = Path(folder)
     protocol = load_protocol(protocol_name)
@@ -301,7 +357,8 @@ def _evaluate_model_worker(args: tuple[str, str]) -> dict[str, Any]:
     return evaluate_model(args[0], args[1])
 
 
-def evaluate_many(folders: Sequence[Path | str], protocol_name: str = "v1", workers: int = 6) -> list[dict[str, Any]]:
+def evaluate_many(folders: Sequence[Path | str], protocol_name: str = DEFAULT_PROTOCOL,
+                  workers: int = 6) -> list[dict[str, Any]]:
     """Evaluate several model folders in a process pool (callers need the __main__ guard on Windows)."""
     protocol = load_protocol(protocol_name)
     roots = {eval_root_for(Path(f)) for f in folders}

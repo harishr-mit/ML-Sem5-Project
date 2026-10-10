@@ -1,0 +1,29 @@
+# SAC training preset (PROJECT_CONTEXT §8, E7 comparison with PPO; algorithm registry D23).
+algorithm: sac
+seed: 0
+total_steps: 1000000
+n_envs: 6                   # SubprocVecEnv workers
+torch_threads: 1            # per process
+checkpoint_every: 100000    # env steps
+
+sac:
+  learning_rate: 0.0003
+  lr_schedule: constant     # constant | linear (decay to 0 over total_steps)
+  buffer_size: 1000000      # replay buffer (transitions)
+  learning_starts: 10000    # random-policy steps before learning starts
+  batch_size: 256
+  tau: 0.005                # target network smoothing
+  gamma: 0.995
+  train_freq: 1             # env steps (per env) between updates
+  gradient_steps: 1         # gradient steps per update
+  ent_coef: auto            # entropy weight, tuned automatically
+
+policy:
+  net_arch: [256, 256]
+  activation: relu
+
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+  gamma: 0.995              # match sac.gamma

@@ -6,6 +6,7 @@
 reward, track settings), so the model always runs with what it was trained with.
 A model can be referred to by folder path or by model id (registry, then ``models/``,
 then ``outputs/scratch/``). Inference runs the torch policy directly, batched.
+Before loading, the snapshot is checked against what the engine supports (D23).
 """
 from __future__ import annotations
 
@@ -40,27 +41,28 @@ def resolve_model(ref: str | Path) -> Path:
     raise FileNotFoundError(f"model not found: {ref}")
 
 
-def _algorithm_class(name: str):
-    from stable_baselines3 import PPO, SAC   # imported lazily: torch is slow to import
-    classes = {"ppo": PPO, "sac": SAC}
-    if name not in classes:
-        raise ValueError(f"unknown algorithm {name!r} (known: {sorted(classes)})")
-    return classes[name]
-
-
 class LoadedModel:
-    """A policy plus its observation normaliser and config snapshot."""
+    """A policy plus its observation normaliser and config snapshot.
+
+    Raises :class:`racer.agents.compat.IncompatibleModel` (with the reasons) if the engine
+    lacks something the model needs (D23).
+    """
 
     def __init__(self, folder: Path | str) -> None:
-        import torch
+        from racer.agents.algorithms import algorithm_class
+        from racer.agents.compat import ensure_compatible, manifest_of
 
-        self._torch = torch
         self.folder = resolve_model(folder)
         self.config: dict[str, Any] = load_yaml(self.folder / "config.yaml")
         self.model_id = self.config.get("model_id", self.folder.name)
+        ensure_compatible(self.config)
+        import torch
+
+        self._torch = torch
         self.env_config: dict[str, Any] = self.config["env_config"]
         self.algorithm = self.config.get("algorithm", "ppo")
-        self.policy = _algorithm_class(self.algorithm).load(self.folder / "model.zip", device="cpu")
+        self.manifest = manifest_of(self.config)
+        self.policy = algorithm_class(self.algorithm).load(self.folder / "model.zip", device="cpu")
         self.vecnorm = None
         vn_path = self.folder / "vecnormalize.pkl"
         if vn_path.is_file():
@@ -76,7 +78,7 @@ class LoadedModel:
         return self.vecnorm.normalize_obs(obs)
 
     def act_batch(self, obs: np.ndarray, deterministic: bool = True) -> np.ndarray:
-        """Actions for a batch of raw observations, shape (n, obs_dim) → (n, 2).
+        """Actions for a batch of raw observations, shape (n, obs_dim) → (n, action_dim).
 
         Same result as SB3 ``predict`` (normalise, policy, clip to the action space),
         without its per-call overhead.

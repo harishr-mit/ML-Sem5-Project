@@ -9,7 +9,8 @@ A 2D top-down racing game written from scratch, where a car learns to drive a ra
 The demo (pygame-ce) loads any trained model from a registry and races up to 20 of them as ghost cars (Model Arena). Week 3 adds the evolution race, draw-a-track mode and human vs AI.
 
 > **Status:** milestone M2 (Week 2) done. Track sets with generated tracks, fine-tuning (`--parent`), the evaluation protocol, the model registry (CSV → xlsx), an overnight experiment queue and the Model Arena (20 different models at a steady 60 FPS) are in place. The best model so far, `R015_t50_narrow7_s1@4600k` (7 narrow rays, trained on the map library), is faster than the hand-coded baseline and completes 88 % of the runs on maps it has never seen. Experiment results so far: [PROJECT_CONTEXT.md §11](PROJECT_CONTEXT.md).
-> **New (2026-10-11):** a map library of 9 hand-designed maps (7 for training, 2 test maps never trained on), evaluation protocol v2, and an upgradable model design: inputs are built from named features, the outputs follow a versioned action layout, and PPO and SAC are both supported. Any model the engine can run races in the arena. The AI Sandbox app is planned next: [docs/SANDBOX_PLAN.md](docs/SANDBOX_PLAN.md).
+> **New (2026-10-11):** a map library of 9 hand-designed maps (7 for training, 2 test maps never trained on), evaluation protocol v2, and an upgradable model design: inputs are built from named features, the outputs follow a versioned action layout, and PPO and SAC are both supported. Any model the engine can run races in the arena.
+> **New: the AI Sandbox** (`scripts\sandbox.py`, a local web app). It explains every trained model (what it senses, its network, what it was trained with and why), compares models, builds and queues new training runs, and launches races in separate game windows. See [AI Sandbox](#understand-compare-build-and-race-models-ai-sandbox) below.
 > Full design, plan and timeline: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). Progress and change log: [log.md](log.md).
 
 ## Setup (Windows)
@@ -75,6 +76,33 @@ Run these from the project folder.
 - **Physics:** each car uses the physics it was trained with; `--fair` (or `Shift+P`) puts every car on the default physics.
 - **Any model:** each car uses its own inputs and outputs, so models with different sensors, action layouts or algorithms race together. A model the engine can't run yet is shown dimmed in the picker with the reason.
 
+### Understand, compare, build and race models (AI Sandbox)
+
+```bat
+.venv\Scripts\python scripts\sandbox.py
+```
+
+This opens http://localhost:8501 in your browser. The sandbox runs on this PC only, sends no usage statistics and writes nothing to your user profile. Stop it with `Ctrl+C` in its console; game windows and a queue it started keep running.
+
+- **Overview:** a leaderboard of every run's best checkpoint (sorted by completion on unseen tracks, then lap time against the baseline), plus what is running now: the queue and any open game windows.
+- **Model Explorer:**
+  - **What it senses:** its rays drawn to scale on a straight road, and cast on any real map by the model's own sensor code.
+  - **Its brain:** a network diagram with the parameters per layer.
+  - **What it trained with:** the car, reward, tracks, hyperparameters and episode rules. Every value has a note on what it affects, and values that differ from the default preset are marked.
+  - **Why the run was made** and what it showed, from `registry\run_notes.yaml`, which you can edit on the page.
+  - **Results** for every evaluation protocol, plus learning curves from TensorBoard.
+- **Compare (2–4 models):** only the settings that differ, each with its note, then their shape, results (within one protocol), learning curves and driven lines side by side.
+- **Build & Queue:** start from a trained model's setup or from presets, then change what you want to test:
+  - **Inputs:** a ray table with a live diagram, plus the car's own readings.
+  - **Network:** outputs, hidden layers and a live parameter count.
+  - **Training:** algorithm and hyperparameters, car, reward, track set.
+  - **Budget:** steps (1/2/3/5M or custom) and seeds.
+  - **Why:** a required note on what the run should show.
+
+  *Add to queue* reuses an existing input preset, or writes a new `configs\env\sb_<tag>.yaml`. Hyperparameter changes become `train.py --set` arguments. The entry goes into `configs\queue\sandbox.yaml` (git-ignored). *Start queue* opens the overnight queue in its own window, 2 runs at a time; *Stop queue* asks it to stop like `Ctrl+C`. Real runs still need committed code; a new untracked preset doesn't count.
+- **Launch:** pick up to 20 models (or every N-th checkpoint of one run, as an evolution race), a map, laps, the baseline car and same physics for all, then press *Launch*. Each press opens a separate game window named `AI Sandbox #N · …`, so several can run at once; *Stop* closes one.
+- **Glossary:** every setting, what it affects and its typical range, searchable.
+
 ### Run experiments overnight
 
 ```bat
@@ -116,8 +144,9 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Train | `scripts\train.py --tag … (--tracks … or --trackset maps7) [--parent <model_id>] [--train ppo_default\|ppo_finetune\|sac_default] [--physics …] [--env rays5\|rays7_narrow\|…] [--action-layout steer_gas\|steer_throttle_brake] [--reward …] [--steps N] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval] [--protocol v2]` |
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |
-| Model Arena | `scripts\demo.py [--track …] [--models … or --run R002 [--every N] or --best] [--baseline] [--laps 3] [--fair]` |
-| Overnight queue | `scripts\queue_overnight.py configs\queue\<queue>.yaml [--parallel 2] [--dry-run] [--retry-failed]` |
+| Model Arena | `scripts\demo.py [--track …] [--models … or --run R002 [--every N] or --best] [--baseline] [--laps 3] [--fair] [--title "caption"]` |
+| AI Sandbox | `scripts\sandbox.py [--port 8501] [--no-browser]` (localhost only) |
+| Overnight queue | `scripts\queue_overnight.py configs\queue\<queue>.yaml [--parallel 2] [--dry-run] [--retry-failed]` (a `stop.request` file next to its `state.json` stops it like Ctrl+C) |
 | TensorBoard | `-m tensorboard.main --logdir runs` |
 | Unit tests | `-m pytest -q` |
 | Physics sanity tests | `scripts\physics_sanity.py` (run after every physics change) |
@@ -135,16 +164,16 @@ In human mode (`1`) the walls are solid and nothing resets the car; baseline and
 
 | Folder | Contents |
 |---|---|
-| `racer/` | `physics`, `track`, `env` (headless, no pygame); `agents`, `registry`, `render` (pygame-ce, demo only) |
-| `configs/` | YAML presets: `physics/`, `env/`, `reward/`, `train/`, `track/` (geometry and generator), `trackset/` (what training samples), `eval/` (evaluation protocol), `queue/` (overnight experiment lists), `demo/` (render, arena and audio settings) |
-| `scripts/` | train, evaluate, registry, demo (Model Arena), queue_overnight, drive (debug window), physics sanity, track previews / generation, env benchmark; later record video, plots |
+| `racer/` | `physics`, `track`, `env` (headless, no pygame); `agents`, `registry`, `render` (pygame-ce, demo only); `sandbox` (AI Sandbox: data, explanations + `glossary.yaml`, diagrams, curves, run builder, queue, launcher; Streamlit only in `sandbox/pages/`) |
+| `configs/` | YAML presets: `physics/`, `env/`, `reward/`, `train/`, `track/` (geometry and generator), `trackset/` (what training samples), `eval/` (evaluation protocol), `queue/` (overnight experiment lists; `sandbox.yaml` is git-ignored), `demo/` (render, arena and audio settings), `sandbox/` (AI Sandbox settings) |
+| `scripts/` | train, evaluate, registry, demo (Model Arena), sandbox (AI Sandbox), queue_overnight, drive (debug window), physics sanity, track previews / generation, env benchmark; later record video, plots |
 | `tests/` | pytest unit tests |
 | `tracks/` | `showcase/` and `train/` (the 7 training maps), `test/` (2 test maps) and `heldout/` (generated), both never used in training, `user/` (drawn in the editor). Any other folder works too: a track JSON added at any time is found by name |
-| `docs/` | `SANDBOX_PLAN.md`: implementation plan of the AI Sandbox app |
+| `docs/` | `SANDBOX_PLAN.md`: design and build plan of the AI Sandbox app |
 | `models/` | self-contained, immutable model folders; **local only** (git-ignored), back them up by copying the folder |
-| `registry/` | `runs.csv`, `models.csv` → `registry.xlsx` |
+| `registry/` | `runs.csv`, `models.csv` → `registry.xlsx`; `run_notes.yaml` (why each run was made and what it showed) |
 | `assets/` | sprites, textures, fonts, sounds; see [assets/LICENSES.md](assets/LICENSES.md) |
-| `runs/`, `outputs/` | TensorBoard logs; `eval/` (copies of every model's evaluation), videos, plots, frames, `scratch/` (smoke runs) and `queue_logs/` (both git-ignored) |
+| `runs/`, `outputs/` | TensorBoard logs; `eval/` (copies of every model's evaluation), videos, plots, frames, `scratch/` (smoke runs), `queue_logs/` and `sandbox/` (game windows started from the sandbox, with their logs) (the last three git-ignored) |
 
 ## Credits
 

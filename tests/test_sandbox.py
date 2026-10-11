@@ -606,8 +606,8 @@ def test_stop_request_interrupts_a_running_queue(tmp_path):
                                "--script", str(tmp_path / "slow.py"), "--poll", "0.2"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        for _ in range(100):
-            if [e["status"] for e in qc.entries()] == ["running", "running"]:
+        for _ in range(300):                                   # up to 60 s (slow while trainings run)
+            if [e["status"] for e in qc.entries()] == ["running", "running"] and qc.runner() is not None:
                 break
             time.sleep(0.2)
         assert qc.runner() is not None
@@ -620,8 +620,14 @@ def test_stop_request_interrupts_a_running_queue(tmp_path):
         assert qc.runner() is None and not (qc.log_dir / "runner.json").exists()
         assert not any(procs.alive(p, None) for p in pids)
     finally:
-        if runner.poll() is None:
-            runner.kill()
+        if runner.poll() is None:                              # kill the venv launcher's child and its runs too
+            import psutil
+            for p in [*psutil.Process(runner.pid).children(recursive=True), psutil.Process(runner.pid)]:
+                try:
+                    p.kill()
+                except psutil.NoSuchProcess:
+                    pass
+            runner.wait(timeout=10)
         shutil.rmtree(qc.log_dir, ignore_errors=True)
 
 
@@ -729,6 +735,29 @@ def test_build_page_adds_a_run_to_the_queue(tmp_path, monkeypatch):
     assert any("Added sbtest_s1, sbtest_s2" in m.value for m in at.success)
     at.button(key="bq_rm_sbtest_s2").click().run()
     assert qc.names() == {"sbtest_s1"}
+
+
+def test_overview_leaderboard_order(tmp_path, monkeypatch):
+    """Sorted by unseen completion then lap ratio; another car or reward goes last (not comparable)."""
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.data import Store
+    from racer.sandbox.pages import _ui
+    from racer.sandbox.pages.overview import leaderboard
+    for run, unseen, lap, physics in (("R001", 0.5, 1.1, "default"), ("R002", 0.9, 0.97, "default"),
+                                      ("R003", 1.0, 0.4, "no_grip_limit"), ("R004", 0.5, 0.95, "default")):
+        snap = make_snapshot(run, f"{run}_x@100k", 100_000)
+        snap["env_config"]["presets"]["physics"] = physics
+        add_model(tmp_path, snap, {"overall_completion": unseen, "unseen_completion": unseen, "lap_ratio": lap},
+                  ("v2",), is_best=True)
+    monkeypatch.setattr(_ui, "STORE", Store(tmp_path))
+    df = leaderboard("v2")
+    assert list(df["run"]) == ["R002", "R004", "R001", "R003"]
+    assert df.iloc[-1]["not comparable"] == "physics: no_grip_limit"
+    at = AppTest.from_function(_run_page, args=("overview",), default_timeout=120)
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert [m.value for m in at.metric][:2] == ["4", "4"]          # runs, checkpoints
 
 
 def test_glossary_search():

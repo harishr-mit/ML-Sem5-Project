@@ -1,6 +1,9 @@
 # AI Sandbox: implementation plan
 
-> **Status:** plan v2 (T65, 2026-10-11): owner decisions taken (§7), checked against the code, build tasks T66–T72 in `log.md`. v1 was T58.
+> **Status:** **built** (T66–T72, 2026-10-11); run it with `.venv\Scripts\python scripts\sandbox.py`. This is plan v2 (T65), with the owner's decisions in §7; v1 was T58. The build follows this plan. The differences are listed in `log.md` T66–T72:
+> - The end-to-end trial run used 100k steps, not 20k: a checkpoint is saved every 100k, so a 20k run has nothing to show in the Explorer.
+> - Overview lists runs with another car or reward (e.g. no grip limit) last, as not comparable.
+> - Tunable numbers live in `configs/sandbox/default.yaml`.
 > **Owner's goals, in order:** (1) understand a model: see what it was trained with, and why; (2) compare models; (3) configure a new model and queue it, choosing the number of steps; (4) pick trained models and launch a game window with them, several at once.
 
 ---

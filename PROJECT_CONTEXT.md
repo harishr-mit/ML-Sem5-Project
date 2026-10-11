@@ -110,7 +110,8 @@ ML Sem5 Project/
 │   ├── track/    default.yaml (kerb threshold, field cell size, generator ranges, clearances)
 │   ├── trackset/ tg.yaml, gen_wide.yaml, final_mix.yaml, maps7.yaml … (which tracks training samples, §8)
 │   ├── eval/     v1.yaml, v2.yaml (evaluation protocols, §8)
-│   ├── queue/    *.yaml (experiment lists for queue_overnight.py)
+│   ├── queue/    *.yaml (experiment lists for queue_overnight.py; sandbox.yaml is the sandbox's, git-ignored)
+│   ├── sandbox/  default.yaml (AI Sandbox: game-window cascade, stop grace, queue time estimates)
 │   └── demo/     render.yaml (texture scales, colours; `debug:` window), audio.yaml (volumes, gearbox)
 ├── racer/config.py           # YAML preset loader (strict keys, deep-merged overrides)
 ├── racer/
@@ -124,7 +125,7 @@ ML Sem5 Project/
 │   │             algorithms.py (PPO/SAC registry), compat.py (manifest + engine check)
 │   ├── registry/ registry.py, export_xlsx.py, record.py (evaluate + record)
 │   ├── sandbox/  data, explain, diagrams, curves, builder, queue, procs, launcher, glossary.yaml,
-│   │             pages/ (AI Sandbox, §10.5; planned)
+│   │             pages/ (AI Sandbox, §10.5; Streamlit is imported only in pages/)
 │   └── render/   debug_view.py (Week 1 debug window), world.py, camera.py, cars.py (tinted sprites),
 │                 effects.py, hud.py, brain_panel.py,
 │                 minimap.py, ui.py (menus/model picker), editor.py,
@@ -136,7 +137,7 @@ ML Sem5 Project/
 │   ├── drive.py              # debug window: keyboard / baseline / model driving
 │   ├── preview_tracks.py  generate_tracks.py  make_maps.py  bench_env.py
 │   ├── bench_train.py        # training throughput: CPU vs GPU, minibatch, parallel runs (T62)
-│   ├── sandbox.py            # AI Sandbox (Streamlit, §10.5; planned)
+│   ├── sandbox.py            # AI Sandbox (Streamlit, §10.5): understand, compare, build/queue, launch
 ├── tests/                    # pytest unit tests (spline, field, progress, physics, env)
 ├── tracks/
 │   ├── showcase/   *.json    # 3 hand-designed demo tracks (training maps)
@@ -150,7 +151,7 @@ ML Sem5 Project/
 │   ├── sprites/cars/  sprites/props/  textures/ground/  fonts/  sounds/  licenses/
 │   └── _source/              # original downloads (git-ignored), for re-cutting
 ├── models/<model_id>/        # self-contained model folders (see §9); local only, git-ignored
-├── registry/  runs.csv  models.csv  registry.xlsx  run_notes.yaml (why + outcome per run; planned)
+├── registry/  runs.csv  models.csv  registry.xlsx  run_notes.yaml (why + outcome per run)
 ├── runs/                     # TensorBoard logs
 └── outputs/   videos/  plots/  frames/  eval/ (copies of every model's eval files)
                scratch/ (smoke runs, git-ignored)  queue_logs/ (git-ignored)
@@ -368,7 +369,7 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
 - **Starting hyperparameters:** `n_steps=1024` per env, `batch_size=256`, `n_epochs=10`, `gamma=0.995`, `gae_lambda=0.95`, `lr=3e-4` (linear decay), `clip=0.2`, `ent_coef=0.002`.
 - **Device:** **CPU**, with `torch.set_num_threads(1)` in each worker. The GTX 1650 is not useful for an MLP this small. **Measured (T62, 2026-10-11, `scripts/bench_train.py`):** the GPU trains at 0.64× the CPU's speed (0.90× at best with batch 2048): every env step runs the policy on tiny batches, and the transfer overhead doubles collection time. **Two runs in parallel on the CPU (6 envs each) give 1.62× the total throughput**, so the queue will run 2 at a time (T64).
 - **Windows:** SubprocVecEnv needs the `if __name__ == "__main__":` guard in every script.
-- **Overnight queue (D18, owner):** `queue_overnight.py` is started by the owner from a normal terminal and runs **without a Claude session** (no token use). It runs the queue file's runs, logs each to `outputs/queue_logs/`, continues after a failure, resumes finished queues, and keeps Windows awake only while it runs (no power-plan changes). **Parallel runs (T64):** `--parallel N` (or `parallel: N` in the queue file) runs N entries at once; 2 is the measured best (1.62× total throughput, T62). Run ids are reserved atomically (`models/.run_ids/`), registry writes hold a lock file, and parallel runs share the evaluation workers. The queue file is re-read whenever a slot frees, so entries can be added while it runs.
+- **Overnight queue (D18, owner):** `queue_overnight.py` is started by the owner from a normal terminal and runs **without a Claude session** (no token use). It runs the queue file's runs, logs each to `outputs/queue_logs/`, continues after a failure, resumes finished queues, and keeps Windows awake only while it runs (no power-plan changes). **Parallel runs (T64):** `--parallel N` (or `parallel: N` in the queue file) runs N entries at once; 2 is the measured best (1.62× total throughput, T62). Run ids are reserved atomically (`models/.run_ids/`), registry writes hold a lock file, and parallel runs share the evaluation workers. The queue file is re-read whenever a slot frees, so entries can be added while it runs. **Sandbox control (T71):** while it runs it writes `runner.json` (its PID) and each running entry's PID to `state.json`. A `stop.request` file next to `state.json` stops it like Ctrl+C. Stopping kills each run's whole process tree: a venv's `python.exe` is a launcher, so `train.py` and its env workers are its children.
 - **Expected budget:** 2–5M steps per serious run. **Measured (2026-10-10):** ≈ 1.7k steps/s with 6 envs, so ≈ 10 min per million steps. The PPO update is ~60 % of the time (compute-bound at batch 256; more torch threads don't help); one env alone runs at 13k steps/s. Run long experiments **overnight** using `queue_overnight.py`.
 - **Curriculum:**
   1. A single wide showcase track.
@@ -517,6 +518,22 @@ The sandbox only reads the registry and model folders and writes queue files; it
 - The sandbox **may start the queue**: *Start queue* opens `queue_overnight.py` in its own console. It is refused while another queue or training is running.
 - The "why" and outcome of each run live in a tracked `registry/run_notes.yaml`. Snapshots can't change, so old runs are filled in from §11. New runs get their "why" through `train.py --notes`.
 - Build steps S0–S6 are tasks T66–T72.
+- **Later the same day (T66):**
+  - New runs default to **real runs**; a *Trial* checkbox makes a scratch run.
+  - The sandbox may **stop a running queue**, after a confirmation step: it writes a `stop.request` next to the queue's `state.json`, which acts like Ctrl+C.
+  - **Outcome notes can be edited** in the Explorer.
+
+**Built (T66–T72, 2026-10-11).** Pages:
+- **Overview:** leaderboard, plus what is running.
+- **Model Explorer:** rays on a straight road and on any map by the model's own sensor, network diagram and layer table, every setting with its glossary note, results for each protocol, learning curves.
+- **Compare**, **Build & Queue**, **Launch**, **Glossary**.
+
+How it is built:
+- All logic lives in `racer/sandbox/` without Streamlit, so it is unit-tested; the pages are tested headless with `streamlit.testing`.
+- Explanations come from one glossary (`racer/sandbox/glossary.yaml`) plus the code registries. A test fails if any key of any preset or saved snapshot has no explanation.
+- **Queue runner:** writes `runner.json` while it runs, records each entry's PID, and stops a run's whole process tree.
+- **Game windows** are separate `demo.py --title …` processes, matched by PID + creation time.
+- **Tunable numbers** live in `configs/sandbox/default.yaml`.
 
 ---
 
@@ -570,7 +587,7 @@ Results are one seed per setting unless two are listed; with real grip, only the
 |---|---|---|
 | **1** (Oct 10–16) | Physics, surfaces, spline tracks, generator, progress, sensors, Gymnasium env, physics sanity tests, minimal debug renderer, first PPO run | **M1:** the car completes laps on a showcase track |
 | **2** (Oct 17–23) | Config system, train/evaluate scripts, checkpoints, **registry and xlsx export**, loader, curriculum and multi-track training, **basic Model Arena with 20 cars** | **M2:** load any 20 models from the registry and race them |
-| **3** (Oct 24–30) | **First: AI Sandbox (§10.5, owner priority, right after M2, T50 and T51).** Then textures, effects, HUD, brain panel, minimap, camera, Evolution Race, Draw-a-Track, Human vs AI, video recorder | **M3:** full live demo |
+| **3** (Oct 24–30) | **First: AI Sandbox (§10.5, owner priority, right after M2, T50 and T51; built 2026-10-11, T66–T72).** Then textures, effects, HUD, brain panel, minimap, camera, Evolution Race, Draw-a-Track, Human vs AI, video recorder | **M3:** full live demo |
 | **4** (Oct 31–Nov 7) | Ablations (overnight queue from week 2 onwards), plots, telemetry/analysis view, highlight video, slides, README, rehearsal, buffer | **M4:** ready to present |
 
 **Keep the CPU busy every night from week 2:** queue the experiment runs.
@@ -704,6 +721,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-11 | **M2 reached** (T07: T37–T48 done): any registered model loads and 20 of them race at a steady 60 FPS; the night1 ablations are registered (§11 "Runs so far"). The D8 curriculum chain was replaced by training from scratch on mixed tracks after R002's negative result (§8). |
 | 2026-10-11 | **Results (owner-approved runs):** 7 narrow rays (`rays7_narrow`) on `maps7` (R015) meet the new T50 target (v2 lap ratio < 1.0, unseen completion ≥ 80 %): R015@4600k is faster than the PID baseline on the unseen test maps; earlier models had 0 % on them. 9 rays on `maps7` (R016) and fine-tuning R015 (R017) did worse. The arena spreads model decisions over substeps (steady 60 FPS with 20 different models, T51). **Training stays on the CPU** (the GPU was slower, T62); parallel runs on the CPU are next (T64). |
 | 2026-10-11 | **AI Sandbox decisions (owner, T65):** Streamlit 1.65.0 (no pin changes), local only (localhost), the sandbox may start the queue in its own console, run "why" and outcome notes in `registry/run_notes.yaml`. Plan v2 in `docs/SANDBOX_PLAN.md`; build tasks T66–T72 (§10.5). |
+| 2026-10-11 | **AI Sandbox built (T66–T72).** Owner decisions taken during the build: the Build form defaults to real runs; the sandbox may stop a running queue (after a confirmation step); outcome notes can be edited; critical issues are skipped and logged while the owner is away (none came up). The queue runner gained `runner.json`, per-entry PIDs, `stop.request` and process-tree stopping (§8). `demo.py --title`. **Reliability runs for R015's setup (owner)**, queued through the sandbox: R018 (seed 2, 5M) and R019 (seed 1, 8M). |
 
 **Open questions:**
 - `final_mix` trains on every track in `tracks/user/`, so a track drawn and saved in the demo becomes training data for later `final_mix` runs. `maps7` leaves `user/` out. Should `final_mix` stay as it is (its meaning is frozen in old snapshots either way), and should faculty-drawn tracks be saved to `tracks/test/` instead? Currently: unchanged; use `maps7` for new runs.

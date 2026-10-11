@@ -150,8 +150,10 @@ def main() -> int:
     stop_path = log_dir / "stop.request"
     stop_path.unlink(missing_ok=True)                              # a stale request from an earlier run
     runner_path = log_dir / "runner.json"
-    runner_path.write_text(json.dumps({"pid": os.getpid(), "queue": str(args.queue.resolve()), "started": now(),
-                                       "parallel": n_slots}), encoding="utf-8")
+    tmp = runner_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"pid": os.getpid(), "queue": str(args.queue.resolve()), "started": now(),
+                               "parallel": n_slots}), encoding="utf-8")
+    tmp.replace(runner_path)
 
     def start(r: dict) -> None:
         log_path = log_dir / f"{r['name']}.log"

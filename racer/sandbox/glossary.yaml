@@ -1,0 +1,648 @@
+# AI Sandbox glossary (T67): what every parameter is and what it affects.
+# Keys use the sandbox namespace (racer/sandbox/explain.py): physics.*, reward.*, env.*,
+# tracks.*, track.*, presets.*, train.*, manifest.*, run.*, metric.*. Wildcards allowed.
+# Fields: short (what it is), affects (what changing it does), range (typical values),
+# related (experiment or decision). Observation features, action layouts and algorithms are
+# described in their code registries (features.py, actions.py, algorithms.py), not here.
+# tests/test_sandbox.py fails if any preset or saved snapshot has a key without an entry.
+
+car:
+  title: The car (physics)
+  intro: "Arcade-sim physics (PROJECT_CONTEXT §5): momentum, a grip limit per surface, engine power and drag. The racing line exists because corners taken too fast make the car slide."
+  keys:
+    physics.physics_hz:
+      short: "Physics steps per second."
+      affects: "Simulation accuracy versus speed. The agent decides every 3rd step (agent_hz 20)."
+      range: "60"
+    physics.mass_kg:
+      short: "Car mass (kg)."
+      affects: "Acceleration and braking for a given force, and momentum when sliding. Without downforce it does not change the maximum cornering g: grip and inertia both grow with mass."
+      range: "800–1500"
+    physics.gravity:
+      short: "Gravity (m/s²)."
+      affects: "Normal force, so the grip available: max tyre force = μ·m·g."
+      range: "9.81"
+    physics.wheelbase_m:
+      short: "Distance between front and rear axles (m)."
+      affects: "Turning radius for a given wheel angle (R = L / tan δ): a longer car turns more slowly."
+      range: "2.4–3.0"
+    physics.car_length_m:
+      short: "Body length (m)."
+      affects: "The car's outline: drawing and body corners. Not part of the grip model."
+    physics.car_width_m:
+      short: "Body width (m)."
+      affects: "The car's outline: drawing and body corners. Not part of the grip model."
+    physics.wheel_track_m:
+      short: "Distance between the left and right wheels (m)."
+      affects: "Where the 4 wheels sample the surface: a wider track puts wheels on the grass sooner."
+    physics.max_steer_low_deg:
+      short: "Steering lock at standstill (degrees)."
+      affects: "How tight the car can turn at low speed (hairpins)."
+      range: "25–35"
+    physics.max_steer_high_deg:
+      short: "Steering lock at and above steer_fade_speed (degrees)."
+      affects: "Limits how hard the car can turn at speed; more lock makes high-speed driving twitchy."
+      range: "6–12"
+    physics.steer_fade_speed:
+      short: "Speed (m/s) at which the steering lock has faded from the low- to the high-speed value."
+      affects: "Lower = steering is limited earlier."
+    physics.steer_rate_deg_s:
+      short: "How fast the front wheels can turn (degrees per second)."
+      affects: "Lower = smoother but slower reactions, so the agent has to turn in earlier."
+      range: "90–180"
+    physics.engine_force_max:
+      short: "Maximum driving force at low speed (N)."
+      affects: "Launch acceleration (6000 N on 1000 kg ≈ 0.6 g)."
+    physics.engine_power_max:
+      short: "Engine power limit (W): driving force ≤ power / speed."
+      affects: "Acceleration at speed and, with drag, the top speed (≈ 68 m/s with the defaults)."
+      range: "100–200 kW"
+    physics.min_drive_speed:
+      short: "Speed floor (m/s) in power / speed."
+      affects: "Keeps the power-limited force finite at standstill. Technical."
+    physics.brake_force_max:
+      short: "Maximum braking force (N)."
+      affects: "Full brake (12000 N) exceeds road grip (≈ 10800 N), so it locks the wheels and the car stops on the lower kinetic grip. Braking at ≈ 90 % (threshold braking) stops shortest: part of the skill the agent learns."
+    physics.brake_min_speed:
+      short: "Below this forward speed (m/s) the brakes do nothing."
+      affects: "There is no reverse gear: braking can't make the car go backwards."
+    physics.stop_speed:
+      short: "When coasting or braking below this speed (m/s), the car is set to rest."
+      affects: "Stops endless creeping at near-zero speed. Technical."
+    physics.air_density:
+      short: "Air density ρ (kg/m³) in the drag formula."
+      affects: "Drag = ½·ρ·CdA·v²."
+      range: "1.225"
+    physics.cda_m2:
+      short: "Drag area CdA (m²)."
+      affects: "Air resistance; with the power limit it sets the top speed."
+      range: "0.6–0.9"
+    physics.c_lat:
+      short: "Fraction of sideways sliding removed each physics step, when grip allows."
+      affects: "How planted the tyres feel. Lower = the car keeps drifting longer."
+      range: "0.5–1.0"
+    physics.k_down:
+      short: "Downforce coefficient (N·s²/m²): extra normal force k·v²."
+      affects: "More grip at high speed, so fast corners can be taken faster than slow ones (E9). 0 = no downforce."
+      range: "0 (default), 1.5 (downforce preset)"
+      related: E9
+    physics.sliding_threshold:
+      short: "If the friction circle cuts the tyre forces below this fraction, the car counts as sliding."
+      affects: "Sliding switches to kinetic grip on the next step and draws skid marks."
+    physics.surfaces.*.mu_static:
+      short: "Grip coefficient μ of this surface while the tyres hold (road 1.10, kerb 0.95, grass 0.45)."
+      affects: "Max tyre force = μ × normal force: how fast the car can corner and brake on it (≈ μ·g). E2 sets road and kerb to 100: no grip limit."
+      related: E2
+    physics.surfaces.*.mu_kinetic:
+      short: "Grip coefficient while sliding (lower than static)."
+      affects: "Losing grip is punished: a sliding car brakes and corners worse until it recovers."
+    physics.surfaces.*.rolling_res:
+      short: "Rolling-resistance coefficient of this surface."
+      affects: "Constant slowing force; grass (0.12) slows the car a lot, road (0.015) hardly."
+    "*.extends":
+      short: "The preset this one starts from; only the listed keys differ."
+      affects: "Nothing by itself: the saved model stores the full merged values."
+
+reward:
+  title: What it is rewarded for
+  intro: "The reward is the only thing that tells the agent what good driving is (PROJECT_CONTEXT §7.3). Each term is added every decision (20 per second)."
+  keys:
+    reward.type:
+      short: "Which reward function: progress (default) or speed (E3, naive)."
+      affects: "What the agent optimises. 'speed' pays for moving in any direction, which invites circling (reward hacking)."
+      related: E3
+    reward.progress:
+      short: "Reward per metre of progress along the centreline (negative when going backwards)."
+      affects: "The main signal; the other weights are relative to it."
+      range: "1.0"
+    reward.time:
+      short: "Penalty per second."
+      affects: "Pressure to go fast: every second costs, so a faster lap scores more."
+      range: "0.02–0.1"
+    reward.steer_change:
+      short: "Penalty per unit change of the steering output between decisions."
+      affects: "Smoother steering (looks better, and is usually faster). Too high = the car is reluctant to turn."
+      range: "0.05–0.2"
+    reward.offroad:
+      short: "Penalty per second, times the fraction of wheels off the road."
+      affects: "Discourages cutting corners across the grass and driving with wheels off."
+      range: "0.2–1.0"
+    reward.lap_bonus:
+      short: "Bonus for each completed lap."
+      affects: "Extra incentive to finish laps cleanly."
+    reward.crash:
+      short: "Penalty when the episode ends early (barrier, off-road too long, stuck, wrong way)."
+      affects: "Higher = more cautious driving."
+      range: "10–50"
+    reward.speed:
+      short: "(speed reward, E3) Reward per metre travelled in any direction."
+      affects: "Pays for circling or weaving as much as racing: the reward-hacking demo."
+      related: E3
+
+inputs:
+  title: What it senses (inputs) and controls (outputs)
+  intro: "The network sees only these numbers, never the map (PROJECT_CONTEXT §7.1). Each input is scaled to about [−1, 1]. Feature descriptions come from racer/env/features.py."
+  keys:
+    env.obs_spec.version:
+      short: "Observation spec version: 1 = fixed layout (rays + extras, frozen); 2 = an ordered list of features."
+      affects: "How the inputs are described. Old models keep their version forever."
+    env.obs_spec.name:
+      short: "Name of the input layout (e.g. rays5, rays9, rays7_narrow)."
+      affects: "Nothing by itself: the list of rays and features is what counts."
+    env.obs_spec.rays:
+      short: "(v1) Ray list: angle (0 = straight ahead, + = left) and range (m) of each ray."
+      affects: "What the car can see. Shallow angles see bends early; long forward rays let it brake in time (E4: a 60 m forward ray brakes late)."
+      related: E4
+    env.obs_spec.extras:
+      short: "(v1) The non-ray inputs, in order."
+      affects: "What the car knows about itself (heading, speeds, wheels on road, last action)."
+    env.obs_spec.scales.v_long:
+      short: "(v1) Forward speed is divided by this (m/s) and clipped to ±1."
+      affects: "Input scaling only."
+    env.obs_spec.scales.v_lat:
+      short: "(v1) Sideways speed is divided by this (m/s) and clipped to ±1."
+      affects: "Input scaling only."
+    env.obs_spec.scales.yaw_rate:
+      short: "(v1) Turning rate is divided by this (rad/s) and clipped to ±1."
+      affects: "Input scaling only."
+    env.obs_spec.features:
+      short: "(v2) The ordered list of input features, each with its parameters."
+      affects: "Adding or removing a feature changes what the car can sense and the number of inputs."
+    env.action_spec.layout:
+      short: "Output layout: what the network's outputs mean (steer_gas = 2 outputs; steer_throttle_brake = 3)."
+      affects: "How the car is controlled. Old models without it mean steer_gas."
+    env.raycast.hit_eps_m:
+      short: "A ray starting within this distance (m) of a road edge reads 0."
+      affects: "Ray precision. Technical; doesn't change what a ray means."
+    env.raycast.min_step_m:
+      short: "Smallest marching step (m) when tracing a ray."
+      affects: "Speed versus precision of ray casting. Technical."
+    env.raycast.min_step_growth:
+      short: "The minimum step grows by this fraction of the distance already travelled."
+      affects: "Cheaper long rays, slightly coarser far away. Technical."
+    env.raycast.max_iters:
+      short: "Maximum marching steps per ray; a ray that hits nothing returns its range."
+      affects: "Technical."
+    env.raycast.bisect_iters:
+      short: "Refinement steps once a ray has crossed an edge."
+      affects: "Hit precision (halved with each step). Technical."
+
+episode:
+  title: Episode rules
+  intro: "How each training episode starts and ends (PROJECT_CONTEXT §7.4). Ending early costs the crash penalty; truncation doesn't."
+  keys:
+    env.episode.agent_hz:
+      short: "Decisions per second; each action is held for physics_hz / agent_hz physics steps."
+      affects: "Reaction time versus the number of decisions to learn."
+      range: "20"
+    env.episode.start_lateral_max_m:
+      short: "Random sideways offset (m) of the starting position."
+      affects: "Variety of starts, so the agent learns to recover."
+    env.episode.start_heading_max_deg:
+      short: "Random heading offset (degrees) at the start."
+      affects: "Variety of starts."
+    env.episode.start_speed_min:
+      short: "Lowest random starting speed (m/s)."
+      affects: "Variety of starts."
+    env.episode.start_speed_max:
+      short: "Highest random starting speed (m/s)."
+      affects: "Starting at speed teaches braking from the first second."
+    env.episode.offroad_limit_s:
+      short: "All 4 wheels off the road this long (s) ends the episode with the crash penalty."
+      affects: "Stricter = learns to stay on the road, but fewer chances to recover."
+      range: "0.5–2"
+    env.episode.noprogress_window_s:
+      short: "Time window (s) for the no-progress check."
+      affects: "Ends episodes where the car stops or crawls."
+    env.episode.noprogress_min_m:
+      short: "Minimum progress (m) required within the window."
+      affects: "Ends episodes where the car stops or crawls."
+    env.episode.wrongway_deg:
+      short: "Heading error (degrees) that counts as driving the wrong way."
+      affects: "Ends episodes going backwards."
+    env.episode.wrongway_limit_s:
+      short: "Time (s) the car may point the wrong way before the episode ends."
+      affects: "Ends episodes going backwards."
+    env.episode.max_laps:
+      short: "Episode is truncated (no penalty) after this many laps."
+      affects: "Longer episodes = more full laps per update."
+    env.episode.max_steps:
+      short: "Episode is truncated after this many decisions (4000 = 200 s)."
+      affects: "Caps very slow episodes."
+
+training:
+  title: How it trained (hyperparameters)
+  intro: "Settings of the learning algorithm and the network (PROJECT_CONTEXT §8). PPO and SAC descriptions come from racer/agents/algorithms.py."
+  keys:
+    train.algorithm:
+      short: "Learning algorithm (ppo or sac)."
+      affects: "How the policy is improved from experience (E7)."
+      related: E7
+    train.seed:
+      short: "Random seed of the run."
+      affects: "Starting weights and random starts. Two seeds of the same setting show how much results vary by luck."
+    train.total_steps:
+      short: "Environment steps of training, all envs together (decisions)."
+      affects: "Training time: ≈ 10 min per million steps alone, ≈ 13 min with 2 runs in parallel. The best checkpoint may come earlier."
+      range: "1M–5M"
+    train.n_envs:
+      short: "Environments simulated in parallel processes."
+      affects: "Throughput, and the amount of data per update (n_steps × n_envs)."
+      range: "6"
+    train.torch_threads:
+      short: "torch threads per process."
+      affects: "1 is fastest for a network this small (T62)."
+    train.checkpoint_every:
+      short: "Steps between saved checkpoints; each one is evaluated."
+      affects: "How finely you can pick the best moment of a run."
+    train.ppo.n_steps:
+      short: "Steps per env collected before each update (rollout length)."
+      affects: "Larger = more stable updates but fewer of them."
+      range: "512–2048"
+    train.ppo.batch_size:
+      short: "Minibatch size for each gradient step."
+      affects: "Smaller = noisier, more steps; larger = smoother, slower per epoch."
+      range: "64–512"
+    train.ppo.n_epochs:
+      short: "Passes over each rollout."
+      affects: "More = learns more from each batch of driving, but risks unstable updates."
+      range: "5–20"
+    train.ppo.gamma:
+      short: "Discount: how much future rewards count."
+      affects: "How far ahead the agent plans. 0.995 ≈ 200 decisions (10 s): enough to brake for a corner well ahead."
+      range: "0.99–0.999"
+    train.ppo.gae_lambda:
+      short: "GAE λ: bias versus variance of the advantage estimate."
+      affects: "Lower = less noisy but more biased learning signal."
+      range: "0.9–0.98"
+    train.ppo.learning_rate:
+      short: "Step size of each update."
+      affects: "Higher = learns faster but can collapse; lower = slow but steady. Fine-tuning uses a lower rate."
+      range: "1e-4–1e-3"
+    train.ppo.lr_schedule:
+      short: "constant, or linear decay to 0 at the end of training."
+      affects: "Linear decay lets the policy settle at the end."
+    train.ppo.clip_range:
+      short: "Maximum change of the policy per update (PPO's trust region)."
+      affects: "Smaller = more cautious updates."
+      range: "0.1–0.3"
+    train.ppo.ent_coef:
+      short: "Entropy bonus weight."
+      affects: "Keeps the policy exploring. Too high = sloppy, random-looking driving."
+      range: "0–0.01"
+    train.ppo.vf_coef:
+      short: "Weight of the critic (value) loss."
+      affects: "Balance between learning to act and learning to predict reward."
+    train.ppo.max_grad_norm:
+      short: "Gradient clipping."
+      affects: "Protects against occasional huge updates."
+    train.sac.learning_rate:
+      short: "(SAC) Step size of each update."
+      affects: "As for PPO."
+    train.sac.lr_schedule:
+      short: "(SAC) constant or linear decay."
+      affects: "As for PPO."
+    train.sac.buffer_size:
+      short: "(SAC) Replay buffer size (transitions kept)."
+      affects: "How much past driving the agent keeps learning from."
+    train.sac.learning_starts:
+      short: "(SAC) Random-policy steps before learning starts."
+      affects: "Fills the buffer with varied data first."
+    train.sac.batch_size:
+      short: "(SAC) Minibatch size."
+      affects: "Noise versus cost of each update."
+    train.sac.tau:
+      short: "(SAC) Target-network smoothing."
+      affects: "Smaller = more stable, slower value learning."
+    train.sac.gamma:
+      short: "(SAC) Discount factor."
+      affects: "How far ahead the agent plans (as for PPO)."
+    train.sac.train_freq:
+      short: "(SAC) Env steps (per env) between updates."
+      affects: "Learning per sample versus training speed."
+    train.sac.gradient_steps:
+      short: "(SAC) Gradient steps per update."
+      affects: "Learning per sample versus training speed."
+    train.sac.ent_coef:
+      short: "(SAC) Entropy weight (auto = tuned to a target)."
+      affects: "Exploration."
+    train.policy.net_arch:
+      short: "Hidden layer widths of the network (the critic has the same shape)."
+      affects: "Capacity: bigger can learn more complex driving but trains slower and needs more data."
+      range: "[64, 64] – [256, 256]"
+    train.policy.activation:
+      short: "Activation function between layers (tanh or relu)."
+      affects: "Shape of what the network can represent; tanh is the PPO default here."
+    train.vecnormalize.norm_obs:
+      short: "Normalise inputs by their running mean and spread (statistics saved with the model)."
+      affects: "Makes all inputs equally visible to the network."
+    train.vecnormalize.norm_reward:
+      short: "Scale rewards by the running spread of the return."
+      affects: "Keeps the learning signal in a stable range."
+    train.vecnormalize.clip_obs:
+      short: "Normalised inputs are clipped to ± this."
+      affects: "Guards against outliers."
+    train.vecnormalize.gamma:
+      short: "Discount used for reward normalisation."
+      affects: "Should match the algorithm's gamma."
+
+baseline:
+  title: Baseline driver (hand-coded, E8)
+  intro: "The PID baseline is not trained. It sees the centreline (map knowledge the RL car doesn't have) and drives at a planned safe speed. Lap ratio compares every model's laps with its laps."
+  keys:
+    train.lookahead_min_m:
+      short: "Pure-pursuit steering target distance at low speed (m)."
+      affects: "Shorter = tighter line but twitchier."
+    train.lookahead_time_s:
+      short: "Seconds of travel added to the steering target distance."
+      affects: "Smoother steering at speed."
+    train.lat_acc_target:
+      short: "Planned cornering acceleration (m/s²); corner speed = √(a / |curvature|)."
+      affects: "Higher = faster corners, closer to the grip limit (μg ≈ 10.8)."
+    train.brake_decel:
+      short: "Planned braking deceleration (m/s²) into slower sections."
+      affects: "Braking distance it plans for."
+    train.plan_horizon_m:
+      short: "How far ahead (m) it looks for slow sections."
+      affects: "Early enough braking for long straights."
+    train.v_max:
+      short: "Speed cap (m/s)."
+      affects: "Top speed on straights."
+    train.speed_gain:
+      short: "Pedal = gain × (target speed − speed)."
+      affects: "How aggressively it tracks its speed plan."
+
+tracks:
+  title: Where it trained (track sets)
+  intro: "Which tracks each training episode samples (PROJECT_CONTEXT §6, §8). Test maps and held-out tracks are never trained on, so they measure generalisation."
+  keys:
+    tracks:
+      short: "(old snapshots) The list of track names trained on."
+      affects: "What the car practised on."
+    tracks.trackset:
+      short: "Name of the track set."
+      affects: "What the car practised on."
+    tracks.fixed:
+      short: "Named maps and their sampling weights."
+      affects: "How often each hand-designed map comes up."
+    tracks.generated:
+      short: "Generated-track pool settings (empty = no generated tracks)."
+      affects: "Variety: random tracks fight overfitting to the named maps (E5)."
+      related: E5
+    tracks.generated.weight:
+      short: "Total sampling weight of generated tracks, against the fixed maps."
+      affects: "Share of episodes on random tracks."
+    tracks.generated.seeds:
+      short: "Range of generator seeds (training stream 0, never the held-out stream)."
+      affects: "How many different random tracks can appear."
+    tracks.generated.pool_size:
+      short: "Generated tracks each env keeps loaded."
+      affects: "Memory and variety; building a track takes ~65 ms."
+    tracks.generated.refresh_episodes:
+      short: "Episodes between swapping one pooled track for a new one."
+      affects: "How quickly new random tracks come in."
+    tracks.generated.track_overrides.generator.width_m:
+      short: "Road width range (m) of generated tracks."
+      affects: "Narrow roads are harder and teach precise lines."
+    tracks.generated.track_overrides.generator.radius_jitter:
+      short: "Radius jitter of generated tracks."
+      affects: "Deeper in/out wiggles = tighter corners."
+    tracks.generated.track_overrides.generator.angle_jitter:
+      short: "Angle jitter of generated tracks."
+      affects: "Less regular corner spacing."
+    presets.physics:
+      short: "Physics preset the run started from."
+      affects: "See the car section for its values."
+    presets.env:
+      short: "Input / episode preset the run started from."
+      affects: "See the inputs section for its values."
+    presets.reward:
+      short: "Reward preset the run started from."
+      affects: "See the reward section for its values."
+    presets.track:
+      short: "Track-geometry preset."
+      affects: "Spline, kerb, field and generator settings."
+    presets.trackset:
+      short: "Track-set preset the run trained on."
+      affects: "See the track set for its maps."
+
+track_geometry:
+  title: Track geometry (shared settings)
+  intro: "How tracks are built from their control points (PROJECT_CONTEXT §6). The same for every model so far; listed for completeness."
+  keys:
+    track.spline.alpha:
+      short: "Catmull-Rom parameterisation (0.5 = centripetal: no cusps or loops)."
+      affects: "Shape of the centreline between control points."
+    track.spline.dense_per_segment:
+      short: "Samples per control-point segment before resampling."
+      affects: "Precision of the centreline. Technical."
+    track.spline.resample_m:
+      short: "Spacing (m) of the resampled centreline."
+      affects: "Precision of progress and curvature. Technical."
+    track.spline.curvature_smooth_m:
+      short: "Window (m) for the smoothed curvature."
+      affects: "Kerb placement and the curvature_ahead feature."
+    track.kerb.curvature_min:
+      short: "Kerbs appear where |curvature| exceeds this (1/m; 0.02 = radius < 50 m)."
+      affects: "Where the slightly less grippy kerbs are."
+    track.kerb.extend_m:
+      short: "Kerbs start and end this far (m) before and after the curve."
+      affects: "Kerb length."
+    track.kerb.min_length_m:
+      short: "Shorter kerb runs are dropped (m)."
+      affects: "Kerb clutter."
+    track.field.cell_m:
+      short: "Grid cell size (m) of the track field (distance to the centreline)."
+      affects: "Precision of surfaces, rays and the barrier. Technical."
+    track.field.margin_m:
+      short: "The grid extends this far (m) beyond the barrier."
+      affects: "Technical."
+    track.field.territory_jump_m:
+      short: "A jump this far (m, along the track) to another section counts as hitting the barrier."
+      affects: "Puts walls between close sections, so the car can't cut across the grass."
+    track.validation.min_corner_radius_m:
+      short: "Tightest corner (m) a valid track may have."
+      affects: "Which tracks are accepted."
+    track.validation.min_length_m:
+      short: "Shortest valid track (m)."
+      affects: "Which tracks are accepted."
+    track.validation.max_length_m:
+      short: "Longest valid track (m)."
+      affects: "Which tracks are accepted."
+    track.validation.clearance_m:
+      short: "Minimum grass gap (m) between roads of different sections."
+      affects: "Which tracks are accepted."
+    track.validation.adjacency_arc_m:
+      short: "Samples closer than this (m) along the track count as the same section."
+      affects: "Technical."
+    track.generator.n_points:
+      short: "Control points of a generated track (range)."
+      affects: "More = more corners."
+    track.generator.radius_m:
+      short: "Base radius (m) of the circle generated tracks are built around."
+      affects: "Track size and length."
+    track.generator.radius_jitter:
+      short: "Each point's radius = base × a random factor from this range."
+      affects: "How wiggly generated tracks are."
+    track.generator.angle_jitter:
+      short: "Random shift of each point's angle (fraction of the spacing)."
+      affects: "Irregular corner spacing."
+    track.generator.width_m:
+      short: "Road width (m) of generated tracks."
+      affects: "Difficulty."
+    track.generator.runoff_m:
+      short: "Grass run-off (m) between the road edge and the barrier."
+      affects: "Room to recover before hitting the barrier."
+    track.generator.kerb_m:
+      short: "Kerb band width (m)."
+      affects: "Kerb size."
+    track.generator.max_attempts:
+      short: "Tries before the generator gives up on a seed."
+      affects: "Technical."
+    track.heldout.count:
+      short: "Number of generated held-out tracks."
+      affects: "Size of the generalisation test."
+    track.heldout.stream:
+      short: "Seed stream of the held-out tracks (training uses stream 0)."
+      affects: "Keeps held-out tracks out of training."
+
+shape:
+  title: Model shape (manifest)
+  intro: "A summary of the model the engine derives from its snapshot (D23): sizes, labels and versions."
+  keys:
+    manifest.obs_spec:
+      short: "Name of the input layout."
+      affects: "—"
+    manifest.obs_spec_version:
+      short: "Observation spec version (1 or 2)."
+      affects: "—"
+    manifest.obs_dim:
+      short: "Number of inputs."
+      affects: "Size of the network's first layer."
+    manifest.obs_labels:
+      short: "Name of every input, in order."
+      affects: "—"
+    manifest.inputs:
+      short: "The input features with their sizes and parameters."
+      affects: "—"
+    manifest.action_layout:
+      short: "Output layout."
+      affects: "—"
+    manifest.action_dim:
+      short: "Number of outputs."
+      affects: "—"
+    manifest.action_labels:
+      short: "Name of every output."
+      affects: "—"
+    manifest.physics_version:
+      short: "Physics equations version (1 = the §5 model)."
+      affects: "Which car code runs the model."
+    manifest.algorithm:
+      short: "Learning algorithm."
+      affects: "—"
+    manifest.net_arch:
+      short: "Hidden layer widths."
+      affects: "—"
+    manifest.activation:
+      short: "Activation function."
+      affects: "—"
+    manifest.n_params:
+      short: "Parameters of the driving network (the actor)."
+      affects: "What runs in the game."
+    manifest.n_params_total:
+      short: "All trained parameters, including the critic used only during training."
+      affects: "—"
+
+run:
+  title: The run (identity)
+  intro: "Who, when and how: ids, dates, notes and the exact command."
+  keys:
+    run.run_id:
+      short: "Run id (R = real run, S = trial run)."
+      affects: "—"
+    run.tag:
+      short: "Short name of the experiment; the seed suffix (_s1) groups repeats."
+      affects: "—"
+    run.algorithm:
+      short: "Learning algorithm."
+      affects: "—"
+    run.seed:
+      short: "Random seed."
+      affects: "—"
+    run.created_at:
+      short: "When the run started."
+      affects: "—"
+    run.git_commit:
+      short: "Code version the run used (real runs need a clean tree, D12)."
+      affects: "—"
+    run.obs_spec_version:
+      short: "Observation spec version."
+      affects: "—"
+    run.notes:
+      short: "Why the run was made, written when it started."
+      affects: "—"
+    run.parent_model:
+      short: "Model it was fine-tuned from (empty = trained from scratch)."
+      affects: "A fine-tune starts from the parent's driving and normaliser."
+    run.curriculum:
+      short: "Short description of the run's place in the experiments."
+      affects: "—"
+    run.command:
+      short: "The exact training command."
+      affects: "—"
+    run.model_id:
+      short: "This checkpoint's id: run, tag and steps."
+      affects: "—"
+    run.steps:
+      short: "Training steps at this checkpoint."
+      affects: "—"
+    run.saved_at:
+      short: "When this checkpoint was saved."
+      affects: "—"
+    run.versions.*:
+      short: "Library version used for training."
+      affects: "—"
+
+results:
+  title: Results (evaluation metrics)
+  intro: "Deterministic driving with fixed starts (PROJECT_CONTEXT §8). Protocol v2: 7 training maps × 2 starts, 2 test maps × 3, 10 generated held-out tracks × 1. Compare models only within one protocol."
+  keys:
+    metric.completion_rate:
+      short: "Share of episodes that completed laps without crashing on the seen maps (v1: showcase tracks; v2: the 7 training maps)."
+      affects: "Reliability on tracks it trained on."
+    metric.test_completion:
+      short: "(v2) Completion on the 2 hand-designed test maps, never trained on."
+      affects: "Generalisation to new hand-made tracks."
+    metric.heldout_completion:
+      short: "Completion on the 10 generated held-out tracks, never trained on."
+      affects: "Generalisation to random tracks."
+    metric.unseen_completion:
+      short: "(v2) Completion on all unseen tracks: test maps + held-out tracks."
+      affects: "The number that matters for a faculty-drawn track."
+    metric.overall_completion:
+      short: "Completion over every evaluation episode."
+      affects: "Used to pick the best checkpoint (D9)."
+    metric.crash_rate:
+      short: "Share of episodes ended by a crash, off-road, stuck or wrong way."
+      affects: "—"
+    metric.mean_speed:
+      short: "Mean speed over all episodes (m/s)."
+      affects: "—"
+    metric.offroad_pct:
+      short: "Mean share of wheels off the road over all decisions (%; 25 = one wheel off all the time)."
+      affects: "Corner cutting and sloppy lines."
+    metric.mean_lat_g:
+      short: "Mean sideways acceleration (g)."
+      affects: "How hard it uses the grip in corners."
+    metric.lap_ratio:
+      short: "Best lap ÷ the baseline's best lap, averaged over the maps it lapped."
+      affects: "Below 1.0 = faster than the hand-coded driver."
+    metric.score:
+      short: "Ranking score (= overall completion)."
+      affects: "—"
+    metric.best_lap_*:
+      short: "Best lap time (s) on that map."
+      affects: "—"
+    metric.mean_lap_*:
+      short: "Mean lap time (s) on that map."
+      affects: "—"

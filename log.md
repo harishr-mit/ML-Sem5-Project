@@ -104,7 +104,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * *T65–T72 (2026-10-11): the AI Sandbox (D24), built in the steps S0–S6 of `docs/SANDBOX_PLAN.md` §5. Owner decisions (T65): Streamlit 1.65.0; the sandbox may start the queue in its own console; localhost only; retroactive run notes in `registry/run_notes.yaml`.*
 * [x] T65: Sandbox implementation plan v2: owner's 4 decisions recorded (PROJECT_CONTEXT §10.5, §16), plan refined against the code (data sources checked, build steps with "done when"), tasks T66–T72.
 * [x] T66: **S0** Install Streamlit 1.65.0 into `.venv` (dry run: +26 packages, no pin changes); pin it and psutil 7.2.2 (already in `.venv`, never recorded); `.gitignore`; `scripts/sandbox.py` launcher (localhost, headless, no usage stats, no files written to the user profile) + empty pages. **Done when:** the app opens on `localhost:8501` with every page listed; `pip check` clean; no `~/.streamlit/` created; the server stops cleanly.
-* [ ] T67: **S1** `racer/sandbox/data.py`, `explain.py`, `glossary.yaml`, `registry/run_notes.yaml` (why + outcome for R001–R017, from PROJECT_CONTEXT §11). **Done when:** tests pass, including: every key of every preset in `configs/{physics,reward,train,env,trackset}` and of every snapshot in `models/` has a glossary entry; the diff of R004 vs R008 is only the ray list (+ tag/seed/ids).
+* [x] T67: **S1** `racer/sandbox/data.py`, `explain.py`, `glossary.yaml`, `registry/run_notes.yaml` (why + outcome for R001–R017, from PROJECT_CONTEXT §11). **Done when:** tests pass, including: every key of every preset in `configs/{physics,reward,train,env,trackset}` and of every snapshot in `models/` has a glossary entry; the diff of R004 vs R008 is only the ray list (+ tag/seed/ids).
 * [ ] T68: **S2** Model Explorer + `diagrams.py` (ray diagram on a straight and on a real map with the real sensor code; network diagram) + `curves.py` (TensorBoard). **Done when:** R001 (v1), R015 (v2 obs) and a 3-output scratch model display correctly; the ray-diagram hit distances match the sensor within 0.1 m (test).
 * [ ] T69: **S3** Compare page (2–4 models: config diff with glossary notes, shapes, metrics within one protocol, overlaid curves, thumbnails, *Launch these*). **Done when:** R004 vs R008 vs R015 shows the expected differences; mixed protocols give a warning.
 * [ ] T70: **S4** Launch page + `racer/sandbox/procs.py` (psutil; pid + creation time) + `launcher.py` + `demo.py --title`. **Done when:** two game windows run at once from the sandbox; *Stop* closes one and leaves the other; incompatible models can't be picked; instances survive a sandbox restart in the list.
@@ -126,6 +126,21 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T67: Sandbox S1 (data, glossary, run notes)
+
+* **Status:** DONE. `tests/test_sandbox.py` has 21 tests and all pass.
+* **Glossary coverage:** every key of every preset in `configs/{physics,reward,train,env,trackset,track}`, of one snapshot per run in `models/` (R001–R017), and every metric column of `models.csv` has an entry with "what it is" and "what it affects".
+* **Diff check:** comparing R004 with R008 (real data) shows only `presets.env`, `env.obs_spec.name` and `env.obs_spec.rays` as config differences.
+* **What was built:**
+  * `racer/sandbox/data.py`: `Store`, read-only, with caches keyed on file mtime and size. It reads real and trial (scratch) runs and checkpoints with a model folder, best checkpoints, snapshots, manifests (stored or derived) and engine problems (`check`). It also reads every protocol's eval files, from the model folder or `outputs/eval/`, plus thumbnails per protocol, per-checkpoint metrics from the eval files (so v1 numbers stay visible after a v2 re-evaluation), parent chains, track previews, TensorBoard folders and run notes. Reading all 560 snapshots takes ~6 s (CSafeLoader); the pages load one run at a time.
+  * `racer/sandbox/explain.py`: one key namespace (`physics.*`, `reward.*`, `env.*`, `tracks.*`, `track.*`, `presets.*`, `train.*`, `manifest.*`, `run.*`, `metric.*`), glossary lookup with wildcards, snapshot flattening, a diff that sorts each row into identity / derived / config, and compact value formatting (ray lists as `+7°/200 m`).
+  * `racer/sandbox/glossary.yaml`: 179 entries in 11 groups. Feature, layout and algorithm texts stay in their code registries.
+  * `registry/run_notes.yaml`: why + outcome for R001–R014, and the outcome for R015–R017 (their "why" is already in the snapshot notes), from PROJECT_CONTEXT §11.
+  * **Glossary page:** searchable, with the input features, output layouts and algorithms taken from the code registries.
+* **Files:**
+  * Created: `racer/sandbox/{data,explain}.py`, `racer/sandbox/glossary.yaml`, `racer/sandbox/pages/_ui.py`, `registry/run_notes.yaml`.
+  * Edited: `racer/sandbox/pages/glossary.py`, `tests/test_sandbox.py`, `log.md`.
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T66: Sandbox S0 (install, skeleton)
 

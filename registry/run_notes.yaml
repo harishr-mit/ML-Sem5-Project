@@ -1,0 +1,68 @@
+# Why each run was made and what it showed (AI Sandbox, T67; owner decision T65).
+# Model snapshots can never change, so explanations written after a run live here, keyed by
+# run id. Edited by hand or in the sandbox's Model Explorer. Fields: why, outcome.
+R001:
+  why: 'M1, the first real run: can PPO learn to lap one wide track (Training Ground) with 5 rays and the grip
+    physics?'
+  outcome: 'Yes: @1200k it laps all 6 starts in 42.70 s against the baseline''s 46.6 s. Fast on its own track only
+    (v2: seen 29 %, unseen 19 %, lap ratio 0.94).'
+R002:
+  why: 'D8 curriculum stage 2: fine-tune R001@1200k on generated wide tracks, so it learns to drive any track.'
+  outcome: 'Negative result: it did not generalise (10 % held-out on v1; v2: seen 21 %, unseen 6 %, lap ratio
+    1.11); the car kept leaving the road. Stage 3 was dropped, and every later run trains from scratch on mixed
+    tracks.'
+R003:
+  why: 'Train from scratch on final_mix (showcase tracks + generated tracks) instead of continuing the curriculum
+    chain.'
+  outcome: 'Reliable on v1 within ~1M steps (100 % showcase, 80 % held-out) but slow: lap ratio 1.19. v2: seen 57 %,
+    unseen 50 %.'
+R004:
+  why: 'E1 reference, seed 1: rays5 on final_mix from scratch, 3M steps. The overnight ablations are compared with
+    it.'
+  outcome: 'v2: seen 43 %, unseen 50 %, lap ratio 1.16. Seed 2 (R010) is similar: the setting is reliable but slow.'
+R005:
+  why: 'E2, seed 1: grip limit off (road and kerb μ = 100). Does the physics create the racing line?'
+  outcome: 'Completes everything (100 %) at lap ratio 0.40, but on different physics, so not comparable: flat out
+    everywhere, no braking zones, no real racing line. Shows the grip limit is what makes the problem
+    interesting.'
+R006:
+  why: 'E5, seed 1: train on one track only (Training Ground). Does it overfit?'
+  outcome: 'Yes: seen 14 %, unseen 0 %. Fast where it laps (lap ratio 0.92), useless on new tracks.'
+R007:
+  why: 'E4, seed 1: forward ray shortened to 60 m (rays5_short). Does the car need to see far ahead?'
+  outcome: 'Slowest setting: lap ratio 1.26, seen 29 %, unseen 63 %. It brakes late, so it learns to drive slowly
+    everywhere.'
+R008:
+  why: 'E4, seed 1: 9 rays (±10°, ±30°, ±60°, ±90°, 0°) instead of 5. Do more directions help?'
+  outcome: 'Best of the overnight runs: lap ratio 0.97, seen 43 %, unseen 63 % (seed 2, R014: 1.03, 64 %, 69 %).
+    Led to the narrower rays of R015.'
+R009:
+  why: 'E3: naive reward (pay for speed in any direction) to show reward hacking.'
+  outcome: 'v2: seen 36 %, unseen 63 %, lap ratio 1.14. The reward-hacking demo for the presentation; watch how it
+    drives rather than the numbers.'
+R010:
+  why: 'E1 reference, seed 2 (repeat of R004).'
+  outcome: 'v2: seen 43 %, unseen 38 %, lap ratio 1.18: close to seed 1, so differences of ~10 % between single runs
+    can be luck.'
+R011:
+  why: 'E2, seed 2 (repeat of R005): grip limit off.'
+  outcome: 'Same as seed 1: 100 % completion, lap ratio 0.40, no racing line.'
+R012:
+  why: 'E5, seed 2 (repeat of R006): one track only.'
+  outcome: 'Same as seed 1: seen 14 %, unseen 0 %, lap ratio 0.91.'
+R013:
+  why: 'E4, seed 2 (repeat of R007): 60 m forward ray.'
+  outcome: 'v2: seen 43 %, unseen 56 %, lap ratio 1.18: slow, like seed 1.'
+R014:
+  why: 'E4, seed 2 (repeat of R008): 9 rays.'
+  outcome: 'v2: seen 64 %, unseen 69 %, lap ratio 1.03: confirms 9 rays beat 5.'
+R015:
+  outcome: 'Meets the T50 target. @4600k: seen 64 %, unseen 87.5 % (@4800k 93.8 %), lap ratio 0.969: faster than the
+    baseline, also on the test maps that earlier models never finished. Still fails Fast Flow and Technical. Its best
+    checkpoints were its last ones (still improving at 5M).'
+R016:
+  outcome: 'Worse than R015: seen 50 %, unseen 75 %, lap ratio 0.99. Narrow rays beat 9 evenly spread ones on the map
+    library.'
+R017:
+  outcome: 'No gain over its parent R015@4600k: seen 57 %, unseen 88 %, lap ratio 0.97. Fine-tuning on the same tracks
+    doesn''t help; a second seed or longer training is the next test.'

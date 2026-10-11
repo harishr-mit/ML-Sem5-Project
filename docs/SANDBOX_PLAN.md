@@ -171,3 +171,7 @@ The Streamlit app itself is checked with `streamlit.testing.v1.AppTest` (headles
 2. **The sandbox may start the queue.** *Start queue* runs the same `queue_overnight.py` in its own console window.
 3. **Local only.** Bound to `localhost`, not shared on the LAN.
 4. **Run notes:** a tracked `registry/run_notes.yaml` holds the why and outcome of each run. Old runs are filled from PROJECT_CONTEXT §11. New runs from the form get their "why" through `--notes`, and their outcome is added later.
+5. **New runs default to real runs.** The Build form has a *Trial* checkbox for scratch runs.
+6. **The sandbox may stop a running queue**, after a confirmation step. It writes a stop request (`stop.request` next to `state.json`), and the runner treats it like Ctrl+C: running entries become `interrupted`, finished checkpoints stay, and the entries resume when the queue starts again.
+7. **Outcome notes can be edited** in the Explorer. They save to `registry/run_notes.yaml`; snapshots are never touched.
+8. **Owner away during T66–T72:** anything critical is skipped or given the safe option, and logged.

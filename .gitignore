@@ -30,6 +30,11 @@ outputs/scratch/
 # overnight queue logs and state (scripts/queue_overnight.py)
 outputs/queue_logs/
 *.tmp
+# AI Sandbox state (game instances, logs, caches) and local Streamlit settings
+outputs/sandbox/
+.streamlit/
+# the sandbox's queue file changes all the time; it must not make the tree dirty (D12)
+configs/queue/sandbox.yaml
 
 # --- Original asset downloads (large, kept locally for re-cutting; see assets/LICENSES.md) ---
 assets/_source/

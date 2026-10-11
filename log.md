@@ -103,7 +103,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T61: Re-evaluate the best checkpoint of every run with protocol v2 (`evaluate.py --model <best ids>`), so all models are comparable on the map library (≈ 1 min per model). Optional: every checkpoint overnight (≈ 430 checkpoints ≈ 1 h on 6 workers).
 * *T65–T72 (2026-10-11): the AI Sandbox (D24), built in the steps S0–S6 of `docs/SANDBOX_PLAN.md` §5. Owner decisions (T65): Streamlit 1.65.0; the sandbox may start the queue in its own console; localhost only; retroactive run notes in `registry/run_notes.yaml`.*
 * [x] T65: Sandbox implementation plan v2: owner's 4 decisions recorded (PROJECT_CONTEXT §10.5, §16), plan refined against the code (data sources checked, build steps with "done when"), tasks T66–T72.
-* [ ] T66: **S0** Install Streamlit 1.65.0 into `.venv` (dry run: +26 packages, no pin changes); pin it and psutil 7.2.2 (already in `.venv`, never recorded); `.gitignore`; `scripts/sandbox.py` launcher (localhost, headless, no usage stats, no files written to the user profile) + empty pages. **Done when:** the app opens on `localhost:8501` with every page listed; `pip check` clean; no `~/.streamlit/` created; the server stops cleanly.
+* [x] T66: **S0** Install Streamlit 1.65.0 into `.venv` (dry run: +26 packages, no pin changes); pin it and psutil 7.2.2 (already in `.venv`, never recorded); `.gitignore`; `scripts/sandbox.py` launcher (localhost, headless, no usage stats, no files written to the user profile) + empty pages. **Done when:** the app opens on `localhost:8501` with every page listed; `pip check` clean; no `~/.streamlit/` created; the server stops cleanly.
 * [ ] T67: **S1** `racer/sandbox/data.py`, `explain.py`, `glossary.yaml`, `registry/run_notes.yaml` (why + outcome for R001–R017, from PROJECT_CONTEXT §11). **Done when:** tests pass, including: every key of every preset in `configs/{physics,reward,train,env,trackset}` and of every snapshot in `models/` has a glossary entry; the diff of R004 vs R008 is only the ray list (+ tag/seed/ids).
 * [ ] T68: **S2** Model Explorer + `diagrams.py` (ray diagram on a straight and on a real map with the real sensor code; network diagram) + `curves.py` (TensorBoard). **Done when:** R001 (v1), R015 (v2 obs) and a 3-output scratch model display correctly; the ray-diagram hit distances match the sensor within 0.1 m (test).
 * [ ] T69: **S3** Compare page (2–4 models: config diff with glossary notes, shapes, metrics within one protocol, overlaid curves, thumbnails, *Launch these*). **Done when:** R004 vs R008 vs R015 shows the expected differences; mixed protocols give a warning.
@@ -126,6 +126,24 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T66: Sandbox S0 (install, skeleton)
+
+* **Owner decisions before leaving (T66–T72 run without the owner):**
+  * The Build form defaults to a **real run**, with a *Trial* checkbox for scratch runs.
+  * The sandbox may **stop a running queue**, with a confirmation step. It works like Ctrl+C: running entries become `interrupted` and resume on the next start.
+  * **Run outcome notes can be edited** in the Explorer (they save to `registry/run_notes.yaml`).
+  * On anything critical: **skip that piece, log it and continue.**
+* **Status:** DONE.
+  * The app opens on `localhost:8501` (listening on 127.0.0.1 only) with all 6 pages.
+  * `pip check` is clean.
+  * The before/after `pip freeze` shows the existing packages unchanged; only the 26 new ones were added.
+  * `~/.streamlit/` was not created, and after stopping no process or socket remains.
+  * `tests/test_sandbox.py` has 9 tests (launcher settings, routing, each page headless with `AppTest`, the app with navigation); all pass.
+* **Install:** `streamlit==1.65.0` into `.venv` only. It added altair 6.3.0, anyio, attrs, certifi, charset_normalizer, click, h11, httptools, idna, itsdangerous, jsonschema (+ specifications), narwhals, pyarrow 25.0.1, pydeck, python-multipart, referencing, requests, rpds-py, starlette 1.7.0, toml, urllib3, uvicorn 0.54.0, watchdog, websockets. `psutil==7.2.2` was already installed (unrecorded) and is now pinned.
+* **Files:**
+  * Created: `scripts/sandbox.py` (re-runs itself under `streamlit run` with all settings on the command line: localhost, headless, no usage stats, no file watcher; waits for `/_stcore/health`, opens the browser, `--port`, `--no-browser`; reuses a running server), `racer/sandbox/__init__.py`, `racer/sandbox/pages/{__init__,overview,explorer,compare,build,launch,glossary}.py` (placeholders), `tests/test_sandbox.py`.
+  * Edited: `requirements.txt` (streamlit, psutil), `.gitignore` (`outputs/sandbox/`, `.streamlit/`, `configs/queue/sandbox.yaml`), `PROJECT_CONTEXT.md` (§14.1 pins), `log.md`.
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T65: AI Sandbox plan v2
 

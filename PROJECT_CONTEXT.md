@@ -638,6 +638,9 @@ pandas==3.0.6
 openpyxl==3.1.5
 matplotlib==3.11.2
 imageio[ffmpeg]==2.38.1
+pytest==9.1.1
+streamlit==1.65.0    # AI Sandbox (T66, 2026-10-11): +26 packages, no change to the pins above
+psutil==7.2.2        # AI Sandbox process checks
 # torch==2.14.1+cpu is installed separately from the CPU index (above)
 ```
 

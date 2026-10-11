@@ -137,8 +137,8 @@ ML Sem5 Project/
 │   ├── drive.py              # debug window: keyboard / baseline / model driving
 │   ├── preview_tracks.py  generate_tracks.py  make_maps.py  bench_env.py
 │   ├── bench_train.py        # training throughput: CPU vs GPU, minibatch, parallel runs (T62)
-│   ├── sandbox.py            # AI Sandbox (Streamlit, §10.5): understand, compare, build/queue, launch
-├── tests/                    # pytest unit tests (spline, field, progress, physics, env)
+│   ├── sandbox.py            # AI Sandbox (Streamlit in its own window, §10.5): understand, compare, build/queue, launch
+├── tests/                    # pytest unit tests (spline, field, progress, physics, env, …; test_integrity.py: registry ↔ model folders ↔ eval copies ↔ docs ↔ pins)
 ├── tracks/
 │   ├── showcase/   *.json    # 3 hand-designed demo tracks (training maps)
 │   ├── train/      *.json    # more hand-designed training maps (D19)
@@ -406,7 +406,7 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
 **Rule:** every model folder is **self-contained and immutable**. The demo must be able to load and run correctly any model ever trained, even after the code has moved on.
 
 ```
-models/R012_ppo_rays5_curric@1500k/
+models/R015_t50_narrow7_s1@4600k/
 ├── model.zip            # SB3 policy
 ├── vecnormalize.pkl     # observation normaliser statistics
 ├── config.yaml          # FULL snapshot: obs_spec, physics, reward, train hparams, seed, git hash
@@ -415,7 +415,7 @@ models/R012_ppo_rays5_curric@1500k/
 ```
 
 - **What "immutable" means (D10, owner):** `model.zip`, `vecnormalize.pkl` and `config.yaml` are never changed after saving. `evaluate.py` **adds** `eval.json` and `thumb_<track>.png` once per protocol version (a later protocol writes `eval_v2.json`; nothing is overwritten), and copies them to `outputs/eval/<model_id>/`. Models stay local (git-ignored); the copies in `outputs/eval/` and the registry CSVs are tracked.
-- **Model ID:** `R{run:03d}_{short_tag}@{steps}k` (e.g. `R012_ppo_rays5_curric@1500k`). Ablation runs carry the experiment in the tag (D17, e.g. `R010_e2_nogrip_s1@3000k`).
+- **Model ID:** `R{run:03d}_{short_tag}@{steps}k` (e.g. `R015_t50_narrow7_s1@4600k`). Ablation runs carry the experiment in the tag (D17, e.g. `R005_e2_nogrip_s1@3000k`).
 - **Observation specs are versioned** (`obs_spec: {version: 1, rays: [...], extras: [...]}`). Never change what an existing version means; add a new version instead. The loader builds each car's sensor from that car's own spec.
 - **Upgradable engine (D23).** Everything that defines a model is versioned and looked up in a registry: obs spec version and features (§7.1), action layout (§7.2), physics version (§5.2) and algorithm (`racer/agents/algorithms.py`: PPO, SAC). New snapshots carry a **manifest** (`obs_dim`, `action_dim`, `n_params`, `net_arch`, the versions above, input labels); for older snapshots the loader derives it. Before loading, the engine checks the manifest against what it supports: a model that needs something the engine doesn't have yet (e.g. an unknown feature) is listed with the reason and greyed out in the picker, instead of crashing the demo. To support it, register the missing piece; existing models are never touched.
 - **Comparing models:** the registry row of a model holds the metrics of the newest protocol it was evaluated with (`eval_protocol` column); compare models only within one protocol. `runs.csv` also records `obs_dim`, `action_layout` and `n_params`, so input count and network size can be compared directly.
@@ -505,7 +505,7 @@ All clips and their RPM curves are described in `assets/LICENSES.md` and `assets
 
 ### 10.5 AI Sandbox (D24, owner; plan in `docs/SANDBOX_PLAN.md`)
 
-A **standalone** local web app (Streamlit, `scripts/sandbox.py`), separate from the game. Its main purpose is to **understand a model**:
+A **standalone** local app (Streamlit, `scripts/sandbox.py`), separate from the game, shown in **its own desktop window** (D25: pywebview, a "mini browser" on Edge WebView2; `--browser` opens a browser tab instead). Its main purpose is to **understand a model**:
 - **Model explorer:** pick any registered model and see what it was trained with: its inputs (ray diagram, feature list), network size, physics, reward terms, track set and hyperparameters. Each parameter has a short "what it affects" note, and each run its notes on why it was made.
 - **Compare:** 2–4 models side by side: config differences highlighted, evaluation metrics, learning curves and thumbnails.
 - **Configure and queue:** build a new run from presets (add or remove inputs, network size, steps, track set, …), see the resulting input count and parameter count, and add it to a queue file. The queue still runs through `queue_overnight.py`.
@@ -534,6 +534,7 @@ How it is built:
 - **Queue runner:** writes `runner.json` while it runs, records each entry's PID, and stops a run's whole process tree.
 - **Game windows** are separate `demo.py --title …` processes, matched by PID + creation time.
 - **Tunable numbers** live in `configs/sandbox/default.yaml`.
+- **Window (D25, T75):** `scripts/sandbox.py` starts the Streamlit server, then opens a pywebview window on it. Closing the window stops the server (game windows and queues it started keep running). WebView2 runs in private mode with its data folder in the git-ignored `outputs/sandbox/webview/`, so nothing goes to the user profile. If the server is already running, it only opens another window.
 
 ---
 
@@ -663,6 +664,7 @@ imageio[ffmpeg]==2.38.1
 pytest==9.1.1
 streamlit==1.65.0    # AI Sandbox (T66, 2026-10-11): +26 packages, no change to the pins above
 psutil==7.2.2        # AI Sandbox process checks
+pywebview==6.2.1     # AI Sandbox window (D25, T75): Edge WebView2, ships with Windows 11; +6 packages, no change to the pins above
 # torch==2.14.1+cpu is installed separately from the CPU index (above)
 ```
 
@@ -728,6 +730,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-11 | **AI Sandbox decisions (owner, T65):** Streamlit 1.65.0 (no pin changes), local only (localhost), the sandbox may start the queue in its own console, run "why" and outcome notes in `registry/run_notes.yaml`. Plan v2 in `docs/SANDBOX_PLAN.md`; build tasks T66–T72 (§10.5). |
 | 2026-10-11 | **AI Sandbox built (T66–T72).** Owner decisions taken during the build: the Build form defaults to real runs; the sandbox may stop a running queue (after a confirmation step); outcome notes can be edited; critical issues are skipped and logged while the owner is away (none came up). The queue runner gained `runner.json`, per-entry PIDs, `stop.request` and process-tree stopping (§8). `demo.py --title`. **Reliability runs for R015's setup (owner)**, queued through the sandbox: R018 (seed 2, 5M) and R019 (seed 1, 8M). |
 | 2026-10-11 | **R015 doesn't reproduce reliably (T73).** R018 (seed 2): seen 64 %, held-out 100 %, test maps 0 %, lap ratio 1.00. R019 (8M): stuck early, best overall 7 %. The T50 target was met by one lucky run, not by a robust setting (§11). **Open question for the owner:** what to do about the variance, e.g. more seeds per setting, keeping exploration up (entropy), or the curriculum. |
+| 2026-10-11 | **D25 (owner): the AI Sandbox opens in its own desktop window** (pywebview 6.2.1 on Edge WebView2, a "mini browser") instead of a browser tab. Streamlit stays the app, so pages and tests are unchanged; `scripts/sandbox.py --browser` keeps the browser tab as a fallback. WebView2 data stays in `outputs/sandbox/webview/` (git-ignored), nothing in the user profile (§10.5, T74–T75). |
 
 **Open questions:**
 - `final_mix` trains on every track in `tracks/user/`, so a track drawn and saved in the demo becomes training data for later `final_mix` runs. `maps7` leaves `user/` out. Should `final_mix` stay as it is (its meaning is frozen in old snapshots either way), and should faculty-drawn tracks be saved to `tracks/test/` instead? Currently: unchanged; use `maps7` for new runs.

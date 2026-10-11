@@ -42,6 +42,40 @@ def test_server_settings_are_local_and_private():
     assert opts["--server.headless"] == "true"          # no first-run e-mail prompt, no ~/.streamlit
 
 
+def _sandbox_script():
+    sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+    try:
+        return importlib.import_module("sandbox")
+    finally:
+        sys.path.pop(0)
+
+
+def test_window_settings_keep_webview_data_in_the_project():      # D25, T75
+    sandbox = _sandbox_script()
+    cfg = sandbox.window_settings()
+    storage = (PROJECT_ROOT / cfg["storage_dir"]).resolve()
+    assert storage.is_relative_to((PROJECT_ROOT / "outputs" / "sandbox").resolve())   # git-ignored
+    assert len(cfg["size_px"]) == 2 and len(cfg["min_size_px"]) == 2
+
+
+def test_window_falls_back_to_the_browser(monkeypatch):
+    sandbox = _sandbox_script()
+    opened = []
+    monkeypatch.setattr(sandbox.webbrowser, "open", opened.append)
+    monkeypatch.setattr(sandbox, "open_window", lambda url, cfg: False)     # e.g. no WebView2
+    assert sandbox.show("http://localhost:1", "window", {}) is False
+    assert sandbox.show("http://localhost:1", "browser", {}) is False
+    assert sandbox.show("http://localhost:1", "none", {}) is False
+    assert opened == ["http://localhost:1", "http://localhost:1"]
+
+
+def test_window_blocks_until_closed(monkeypatch):
+    sandbox = _sandbox_script()
+    monkeypatch.setattr(sandbox, "open_window", lambda url, cfg: True)
+    monkeypatch.setattr(sandbox.webbrowser, "open", lambda url: pytest.fail("browser opened"))
+    assert sandbox.show("http://localhost:1", "window", {}) is True
+
+
 def test_every_page_is_routed():
     from racer.sandbox import pages
     assert [k for k, *_ in pages.PAGES] == PAGE_KEYS

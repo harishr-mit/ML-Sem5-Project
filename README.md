@@ -10,7 +10,7 @@ The demo (pygame-ce) loads any trained model from a registry and races up to 20 
 
 > **Status:** milestone M2 (Week 2) done. Track sets with generated tracks, fine-tuning (`--parent`), the evaluation protocol, the model registry (CSV → xlsx), an overnight experiment queue and the Model Arena (20 different models at a steady 60 FPS) are in place. The best model so far, `R015_t50_narrow7_s1@4600k` (7 narrow rays, trained on the map library), is faster than the hand-coded baseline and completes 88 % of the runs on maps it has never seen. A second seed and a longer run of the same setup didn't reproduce that (R018, R019), so results vary a lot between runs. Experiment results so far: [PROJECT_CONTEXT.md §11](PROJECT_CONTEXT.md).
 > **New (2026-10-11):** a map library of 9 hand-designed maps (7 for training, 2 test maps never trained on), evaluation protocol v2, and an upgradable model design: inputs are built from named features, the outputs follow a versioned action layout, and PPO and SAC are both supported. Any model the engine can run races in the arena.
-> **New: the AI Sandbox** (`scripts\sandbox.py`, a local web app). It explains every trained model (what it senses, its network, what it was trained with and why), compares models, builds and queues new training runs, and launches races in separate game windows. See [AI Sandbox](#understand-compare-build-and-race-models-ai-sandbox) below.
+> **New: the AI Sandbox** (`scripts\sandbox.py`, a local app in its own window). It explains every trained model (what it senses, its network, what it was trained with and why), compares models, builds and queues new training runs, and launches races in separate game windows. See [AI Sandbox](#understand-compare-build-and-race-models-ai-sandbox) below.
 > Full design, plan and timeline: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). Progress and change log: [log.md](log.md).
 
 ## Setup (Windows)
@@ -33,6 +33,67 @@ py -3.11 -m venv .venv
 ## Quickstart
 
 Run these from the project folder.
+
+### Everything at a glance
+
+Every command below starts with `.venv\Scripts\python`, run from the project folder. For example, `scripts\sandbox.py` means `.venv\Scripts\python scripts\sandbox.py`. Keep the quotes around model ids, because the `@` can confuse some shells. All the flags for each script are in [Commands](#commands).
+
+**Showcase (live demo, in presentation order)**
+
+| # | What it shows | Command |
+|---|---|---|
+| 1 | The AI Sandbox: every model explained, compared and launched from one window | `scripts\sandbox.py` |
+| 2 | The game and its physics: drive it yourself (momentum, sliding, grass) | `scripts\drive.py --track technical` |
+| 3 | **Learning:** one run's checkpoints race each other (5 cars, 100k to 1.7M steps) | `scripts\demo.py --track training_ground --run R001 --every 4` |
+| 4 | **Generalisation:** the best models on a test map they never trained on, against the baseline | `scripts\demo.py --track coastline --models "R015_t50_narrow7_s1@4600k" "R016_t50_rays9_s1@2600k" --baseline` |
+| 5 | **Arena:** every run's best checkpoint plus the baseline (up to 20 cars) | `scripts\demo.py --track technical --best --baseline` |
+| 6 | **The physics creates the racing line (E2):** a normal model next to one trained without a grip limit | `scripts\demo.py --track fast_flow --models "R004_e1_main_s1@3000k" "R005_e2_nogrip_s1@900k"` |
+| 6b | The same race on one common physics: the no-grip model can't handle real grip | the same command + `--fair` |
+| 7 | **Overfitting (E5):** a model trained on one track against one trained on the map library, on an unseen map | `scripts\demo.py --track alpine --models "R006_e5_single_s1@2600k" "R015_t50_narrow7_s1@4600k"` |
+| 8 | **Naive speed reward (E3):** a model rewarded for speed rather than progress | `scripts\drive.py --model "R009_e3_speed_s1@2900k" --track training_ground` |
+| 9 | One model up close: its rays (`R`) and speed-coloured trail (`T`) on an unseen map | `scripts\drive.py --model "R015_t50_narrow7_s1@4600k" --track alpine` |
+| 10 | Learning curves (open http://localhost:6006) | `-m tensorboard.main --logdir runs` |
+| 11 | The model registry as a spreadsheet (then open `registry\registry.xlsx`) | `scripts\registry.py export` |
+| 12 | Track gallery: PNG previews in `outputs\plots\tracks\` | `scripts\preview_tracks.py showcase train test heldout` |
+
+Tracks: `training_ground`, `technical`, `fast_flow` (showcase); `city_blocks`, `esses`, `hairpin_valley`, `oval_infield` (training maps); `alpine`, `coastline` (test maps, never trained on); `heldout_00` … `heldout_09` (generated, never trained on). Draw-a-track, Human vs AI, video recording and the report plots are planned for Weeks 3–4 and aren't built yet.
+
+**Understand and compare models**
+
+| What | Command |
+|---|---|
+| Explorer, Compare, Glossary (easiest) | `scripts\sandbox.py` (`--browser` opens it in a browser tab instead) |
+| Each run's best checkpoint, in the terminal | `scripts\registry.py list --best` |
+| Every checkpoint of one run | `scripts\registry.py list --run R015` |
+| Inputs, outputs and parameter count per run; models the engine can't run | `scripts\registry.py describe` |
+
+**Train and experiment**
+
+| What | Command |
+|---|---|
+| Build and queue runs without typing commands | `scripts\sandbox.py` → *Build & Queue* |
+| Quick smoke test (scratch run, nothing registered) | `scripts\train.py --tag smoke --trackset maps7 --steps 50000 --scratch` |
+| A real run (commit your changes first) | `scripts\train.py --tag my_run --trackset maps7 --env rays7_narrow --steps 5000000` |
+| Check an overnight queue without running it | `scripts\queue_overnight.py configs\queue\night1.yaml --dry-run` |
+| Run a queue, 2 runs at a time (stop with `Ctrl+C`) | `scripts\queue_overnight.py configs\queue\night1.yaml --parallel 2` |
+
+**Evaluate**
+
+| What | Command |
+|---|---|
+| Evaluate one model (protocol v2) | `scripts\evaluate.py --model "R015_t50_narrow7_s1@4600k"` |
+| Evaluate every checkpoint of a run and mark the best | `scripts\evaluate.py --run R015` |
+| Evaluate the hand-coded baseline | `scripts\evaluate.py --baseline` |
+
+**Tracks and checks**
+
+| What | Command |
+|---|---|
+| Check the hand-designed maps still build | `scripts\make_maps.py --check` |
+| Regenerate the held-out tracks | `scripts\generate_tracks.py --heldout` |
+| Unit tests | `-m pytest -q` |
+| Physics sanity tests (after any physics change) | `scripts\physics_sanity.py` |
+| Simulation speed and baseline laps | `scripts\bench_env.py` |
 
 ### Play the game
 
@@ -82,7 +143,7 @@ Run these from the project folder.
 .venv\Scripts\python scripts\sandbox.py
 ```
 
-This opens http://localhost:8501 in your browser. The sandbox runs on this PC only, sends no usage statistics and writes nothing to your user profile. Stop it with `Ctrl+C` in its console; game windows and a queue it started keep running.
+This opens the sandbox in its own window (a small built-in browser, Edge WebView2, part of Windows 11). Close the window, or press `Ctrl+C` in its console, to stop it; game windows and a queue it started keep running. Add `--browser` to open it in your normal browser at http://localhost:8501 instead. The sandbox runs on this PC only, sends no usage statistics and writes nothing to your user profile.
 
 - **Overview:** a leaderboard of every run's best checkpoint (sorted by completion on unseen tracks, then lap time against the baseline), plus what is running now: the queue and any open game windows.
 - **Model Explorer:**
@@ -145,7 +206,7 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |
 | Model Arena | `scripts\demo.py [--track …] [--models … or --run R002 [--every N] or --best] [--baseline] [--laps 3] [--fair] [--title "caption"]` |
-| AI Sandbox | `scripts\sandbox.py [--port 8501] [--no-browser]` (localhost only) |
+| AI Sandbox | `scripts\sandbox.py [--port 8501] [--browser \| --no-browser]` (localhost only) |
 | Overnight queue | `scripts\queue_overnight.py configs\queue\<queue>.yaml [--parallel 2] [--dry-run] [--retry-failed]` (a `stop.request` file next to its `state.json` stops it like Ctrl+C) |
 | TensorBoard | `-m tensorboard.main --logdir runs` |
 | Unit tests | `-m pytest -q` |
@@ -167,7 +228,7 @@ In human mode (`1`) the walls are solid and nothing resets the car; baseline and
 | `racer/` | `physics`, `track`, `env` (headless, no pygame); `agents`, `registry`, `render` (pygame-ce, demo only); `sandbox` (AI Sandbox: data, explanations + `glossary.yaml`, diagrams, curves, run builder, queue, launcher; Streamlit only in `sandbox/pages/`) |
 | `configs/` | YAML presets: `physics/`, `env/`, `reward/`, `train/`, `track/` (geometry and generator), `trackset/` (what training samples), `eval/` (evaluation protocol), `queue/` (overnight experiment lists; `sandbox.yaml` is git-ignored), `demo/` (render, arena and audio settings), `sandbox/` (AI Sandbox settings) |
 | `scripts/` | train, evaluate, registry, demo (Model Arena), sandbox (AI Sandbox), queue_overnight, drive (debug window), physics sanity, track previews / generation, env benchmark; later record video, plots |
-| `tests/` | pytest unit tests |
+| `tests/` | pytest unit tests; `test_integrity.py` checks that the registry, model folders, eval copies, run notes, docs and pinned packages agree |
 | `tracks/` | `showcase/` and `train/` (the 7 training maps), `test/` (2 test maps) and `heldout/` (generated), both never used in training, `user/` (drawn in the editor). Any other folder works too: a track JSON added at any time is found by name |
 | `docs/` | `SANDBOX_PLAN.md`: design and build plan of the AI Sandbox app |
 | `models/` | self-contained, immutable model folders; **local only** (git-ignored), back them up by copying the folder |

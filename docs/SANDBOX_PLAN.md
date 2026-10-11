@@ -10,13 +10,14 @@
 
 ## 1. What it is
 
-A **standalone local web app** (Streamlit 1.65.0) that runs next to the game, never inside it.
+A **standalone local app** (Streamlit 1.65.0) that runs next to the game, never inside it. Since D25 (T75) it is shown in its own desktop window (pywebview 6.2.1 on Edge WebView2) instead of a browser tab.
 
 ```
-.venv\Scripts\python scripts\sandbox.py          → opens http://localhost:8501
+.venv\Scripts\python scripts\sandbox.py              → sandbox window on http://localhost:8501
+.venv\Scripts\python scripts\sandbox.py --browser    → the same in a browser tab
 ```
 
-`scripts/sandbox.py` is both the launcher and the app. Run with plain `python`, it re-runs itself through `streamlit run`, passing the settings on the command line: `--server.address localhost`, `--server.port 8501`, `--server.headless true` and `--browser.gatherUsageStats false`. It then opens the browser itself. Headless mode skips Streamlit's first-run e-mail prompt, so nothing is written to `~/.streamlit/`, and the project needs no global config.
+`scripts/sandbox.py` is both the launcher and the app. Run with plain `python`, it re-runs itself through `streamlit run`, passing the settings on the command line: `--server.address localhost`, `--server.port 8501`, `--server.headless true` and `--browser.gatherUsageStats false`. It then opens a pywebview window on it (or the browser with `--browser`). Closing the window stops the server. WebView2 runs in private mode with its data folder in `outputs/sandbox/webview/` (git-ignored). Headless mode skips Streamlit's first-run e-mail prompt, so nothing is written to `~/.streamlit/`, and the project needs no global config.
 
 | Principle | Consequence |
 |---|---|

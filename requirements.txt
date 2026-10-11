@@ -21,3 +21,4 @@ imageio[ffmpeg]==2.38.1
 pytest==9.1.1              # unit tests in tests/ (dev only)
 streamlit==1.65.0          # AI Sandbox (scripts/sandbox.py, D24); adds no change to the pins above
 psutil==7.2.2              # AI Sandbox: process checks (queue, trainings, game windows)
+pywebview==6.2.1           # AI Sandbox window (D25): Edge WebView2; adds bottle, cffi, clr_loader, proxy_tools, pycparser, pythonnet

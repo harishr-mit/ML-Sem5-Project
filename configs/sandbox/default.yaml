@@ -15,3 +15,10 @@ queue:
   minutes_per_million_alone: 10.0
   minutes_per_million_parallel: 13.0
   eval_minutes_per_checkpoint: 0.15  # protocol v2 on shared workers, after training
+
+window:                         # the sandbox's own window (D25, T75; pywebview on Edge WebView2)
+  title: "AI Sandbox — RL Racing Line"
+  size_px: [1400, 900]
+  min_size_px: [900, 600]
+  storage_dir: outputs/sandbox/webview   # WebView2 data folder (git-ignored), not the user profile
+  server_wait_s: 60.0           # how long to wait for the Streamlit server before giving up

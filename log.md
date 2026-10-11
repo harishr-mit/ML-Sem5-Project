@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-11 (Claude Opus 5.5): T52–T62 done, all on `main` (merged, committed locally, not pushed; 117 tests pass). 9-map library (7 train, 2 test), evaluation protocol v2, upgradable engine (obs_spec v2 features, action layouts, physics versions, PPO/SAC, manifest, compatibility check), AI Sandbox plan (`docs/SANDBOX_PLAN.md`). **T50 done:** `R015_t50_narrow7_s1@4600k` (7 narrow rays on `maps7`) is faster than the baseline (v2 lap ratio 0.969) with 87.5 % unseen completion (@4800k: 93.8 %), but still fails Fast Flow / Technical; R016 (rays9) and R017 (fine-tune) were worse. **T51 done:** arena steady 60 FPS with 20 distinct models. **T62 done:** the GPU trains slower than the CPU (0.64×) → training stays on the CPU (T63 not needed); 2 parallel CPU runs give 1.62×. **M2 closed (T07, T46–T48). T64 done:** `queue_overnight.py --parallel 2` runs two trainings at once (≈ 1.6× per night; run ids reserved atomically, registry writes locked). **T65–T72 done: the AI Sandbox is built.** Run it with `.venv\Scripts\python scripts\sandbox.py`, on localhost only. It has 6 pages: Overview, Model Explorer, Compare, Build & Queue, Launch, Glossary; see the README. **T73 done:** R015's result doesn't reproduce reliably. R018 (seed 2) gets 0 % on the test maps, and R019 (8M) got stuck early (PROJECT_CONTEXT §11). 172 tests pass; nothing is running. **Next:** the owner walks through the sandbox; the owner decides how to handle run-to-run variance (more seeds, keeping exploration up, curriculum); Week 3 visuals (T08).
+* **Last updated:** 2026-10-11 (Claude Opus 5.5): T52–T62 done, all on `main` (merged, committed locally, not pushed; 117 tests pass). 9-map library (7 train, 2 test), evaluation protocol v2, upgradable engine (obs_spec v2 features, action layouts, physics versions, PPO/SAC, manifest, compatibility check), AI Sandbox plan (`docs/SANDBOX_PLAN.md`). **T50 done:** `R015_t50_narrow7_s1@4600k` (7 narrow rays on `maps7`) is faster than the baseline (v2 lap ratio 0.969) with 87.5 % unseen completion (@4800k: 93.8 %), but still fails Fast Flow / Technical; R016 (rays9) and R017 (fine-tune) were worse. **T51 done:** arena steady 60 FPS with 20 distinct models. **T62 done:** the GPU trains slower than the CPU (0.64×) → training stays on the CPU (T63 not needed); 2 parallel CPU runs give 1.62×. **M2 closed (T07, T46–T48). T64 done:** `queue_overnight.py --parallel 2` runs two trainings at once (≈ 1.6× per night; run ids reserved atomically, registry writes locked). **T65–T72 done: the AI Sandbox is built.** Run it with `.venv\Scripts\python scripts\sandbox.py`, on localhost only. It has 6 pages: Overview, Model Explorer, Compare, Build & Queue, Launch, Glossary; see the README. **T73 done:** R015's result doesn't reproduce reliably. R018 (seed 2) gets 0 % on the test maps, and R019 (8M) got stuck early (PROJECT_CONTEXT §11). 172 tests pass; nothing is running. **T74–T75 done (D25):** the sandbox opens in its own window (pywebview on Edge WebView2); `--browser` for a tab. **T76 open:** flaky registry-lock test (Windows `PermissionError`). **T78–T80 done:** integrity check clean, `tests/test_integrity.py` added (185 tests). **Not backed up:** only R001 is in `C:\Users\Jack\ML_Sem5_models_backup\`; R002–R019 (670 folders, ≈ 1.2 GB) exist only in `models/`. **Next:** the owner walks through the sandbox; the owner decides how to handle run-to-run variance (more seeds, keeping exploration up, curriculum); Week 3 visuals (T08).
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
 * **Plan:** `PROJECT_CONTEXT.md` is the single source of truth: design, physics, env, training, registry, demo, timeline (§12) and setup (§14). `CLAUDE.md` holds the agent rules.
 * **Architecture:** a headless simulation (`racer/physics`, `racer/track`, `racer/env`, with no pygame) used by the training scripts (`scripts/train.py`, `evaluate.py`) and by the pygame-ce demo (`scripts/demo.py`, `racer/render`).
@@ -112,6 +112,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
 * [x] T73: Record the R015 reliability runs R018 (seed 2, 5M) and R019 (seed 1, 8M), queued through the sandbox (owner): commit registry rows + eval copies, PROJECT_CONTEXT §11/§16, `registry/run_notes.yaml`, README status.
 * [x] T72: **S6** Overview page (counts, leaderboard, queue status, running games), polish, README + PROJECT_CONTEXT, full tests. **Done when:** the owner can do all 4 goals without the terminal.
+* *Owner decision (2026-10-11, D25): the sandbox opens in its own native window (pywebview on Edge WebView2, a "mini browser") instead of a browser tab. Streamlit stays the app; `--browser` keeps the old behaviour as a fallback.*
+* [x] T74: Record D25 in the docs: PROJECT_CONTEXT §10.5, §14.1, §16; `docs/SANDBOX_PLAN.md`; README.
+* [x] T75: Sandbox window: dry-run + install pywebview into `.venv`, pin it, `.gitignore`; `scripts/sandbox.py` opens a pywebview window (storage in git-ignored `outputs/sandbox/webview/`, private mode), closing the window stops the server; `--browser` fallback; tests. **Done when:** the window opens the sandbox, closing it leaves no process or socket on 8501, nothing new in the user profile, `pip check` clean, tests pass.
+* [ ] T76: **Flaky registry lock (found in T75).** `tests/test_queue.py::test_registry_writes_from_parallel_processes_are_not_lost` fails about 1 in 5 runs (also without T75's changes): on Windows, creating `registry.lock` while another process is still deleting it raises `PermissionError`, but `file_lock` (`racer/registry/registry.py:85`) only retries on `FileExistsError`. Can also hit real parallel queue runs. Fix: treat that `PermissionError` as "held" and retry. **Done when:** the test passes 50 runs in a row.
+* [x] T77: README: a task-based command list under Quickstart ("what can I do / show, and which command"), every showcase command checked headless.
+* [x] T78: Project integrity check (owner): tests, deps vs pins, configs, tracks, registry vs model folders vs eval copies, every model loads, docs vs files.
+* [x] T79: Integrity test (only if T78 finds gaps the suite doesn't cover).
+* [x] T80: Week 3 readiness scan: open tasks, running processes, git state, blockers; report to the owner.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -128,6 +136,59 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T78–T80: Integrity check, integrity test, Week 3 readiness
+
+* **Task:** Owner asked for a quick integrity check of the whole project, an integrity test if needed, and whether it's clear to start Week 3.
+* **Status:** DONE.
+  * Full suite: 175 passed (the flaky T76 test passed this time). With the new file: 185.
+  * `physics_sanity.py`: all 5 pass (skidpad 10.72 vs μg 10.79 m/s², threshold braking 41.0 m, full lock 48.8 m).
+  * `pip check` clean.
+* **T78 (one-off check script, in the scratchpad, read-only):**
+  * Every installed package matches its pin; torch is 2.14.1.
+  * Nothing tracked that should be ignored (only `models/.gitkeep`, on purpose). All 19 tracks load, and their names are unique.
+  * Registry: 20 runs and 691 models. The ids are unique, every model belongs to a run, and each run has exactly one best checkpoint.
+  * All 690 model folders match their registry rows. Each has its 3 files, the eval file of its protocol, and its copy in `outputs/eval/`. All of them pass `compat.check`.
+  * `run_notes.yaml` covers every run.
+  * Found: 2 made-up example ids in PROJECT_CONTEXT §9 (`R012_ppo_rays5_curric@1500k`, `R010_e2_nogrip_s1@3000k`) didn't match the real runs. Replaced with real ids (`R015_t50_narrow7_s1@4600k`, `R005_e2_nogrip_s1@3000k`).
+  * `configs/demo/audio.yaml` is named in the §4 layout but is planned (audio is Week 3), so it isn't a fault.
+* **T79:** `tests/test_integrity.py` (10 tests, < 1 s):
+  * registry ids unique and linked; one best per run; an eval copy for every evaluated model (tracked, so this runs everywhere); run notes match the runs.
+  * Model folders ↔ registry, and folder completeness. These skip without a local `models/`.
+  * Model ids named in README/PROJECT_CONTEXT exist; presets used in README commands exist; track names are unique; installed packages match the pins.
+* **T80 (readiness):**
+  * Open tasks: T08 (M3, Week 3), T09 (M4), T76 (flaky lock test).
+  * Git: `main` is 10 commits ahead of `origin` (not pushed). This session's changes (T74–T80) are not committed yet. `rootline` is the old local initial-commit branch (already in main). No stashes or extra worktrees.
+  * Running: only the owner's own sandbox (8501). No training or queue.
+  * Disk: 73 GB free; `models/` 1.2 GB.
+  * **Risk:** the models backup (`C:\Users\Jack\ML_Sem5_models_backup\`) holds only R001. R002–R019 exist only in `models/`.
+  * The R015 variance question (PROJECT_CONTEXT §16) is still open. It doesn't block Week 3 visuals, but it decides what the nights are used for.
+* **Files:** created `tests/test_integrity.py`; edited `PROJECT_CONTEXT.md` (§4 tests line, §9 example ids), `README.md` (layout row), `log.md`.
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T77: README command list
+
+* **Task:** Owner asked for one list of commands covering everything the project can do and show, under the README Quickstart.
+* **Status:** DONE.
+  * New README section *Everything at a glance* (first in Quickstart). It has a 12-step showcase table in presentation order, with what each step shows: sandbox, driving, evolution race (R001), generalisation on a test map (R015/R016 vs baseline), arena `--best`, E2 grip with and without `--fair` (R004 vs R005), E5 overfitting (R006 vs R015), E3 speed reward (R009), one model up close, TensorBoard, the xlsx registry and the track gallery. Below it are short tables for understand/compare, train/queue, evaluate, and tracks/checks. It links to the existing full-flag *Commands* table and says which features aren't built yet.
+  * Checks: all 9 showcase game commands ran headless (`--screenshot`, 240 frames), and one screenshot was inspected (the R001 evolution race). `registry.py list --best` / `list --run R015` / `describe`, `make_maps.py --check`, the queue `--dry-run` and the `train.py` flags all ran OK. None of them changed a file. `evaluate.py`, a real `train.py` run, TensorBoard and `preview_tracks.py` were not run (they write files or start servers); their flags were checked against the argparse definitions.
+  * The showcase models are each run's best checkpoint by D9 (`registry/models.csv`) and exist in `models/`.
+* **Files (edited):** `README.md`, `log.md`.
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T74, T75: Sandbox in its own window (D25)
+
+* **Task:** Owner asked whether the sandbox was meant to be a pygame desktop app. It never was (D24/T65: Streamlit). Owner then chose to keep Streamlit but show it in a native window, a "mini browser" (D25, pywebview).
+* **Status:** DONE.
+  * New tests (3) pass. Full suite: 174 passed, 1 failed: the pre-existing flaky registry-lock test (T76). It fails about 1 in 5 runs on clean code as well.
+  * Real check on port 8599: the window opened (title "AI Sandbox — RL Racing Line"), WebView2 held live connections to the app, and closing the window stopped the server's whole tree. No sockets or processes were left.
+  * With a server already running (the owner's own sandbox on 8501), the launcher only opens a window. Closing it leaves that server running (checked).
+  * No `%APPDATA%\pywebview`, `%LOCALAPPDATA%\pywebview` or `~/.streamlit` was created. WebView2 data went to `outputs/sandbox/webview/EBWebView` (git-ignored via `outputs/sandbox/`).
+* **Install (`.venv` only):** pywebview 6.2.1 + bottle 0.13.4, cffi 2.1.1, clr_loader 0.3.1, proxy_tools 0.1.0, pycparser 3.11, pythonnet 3.2.1. `pip check` clean, no pinned package changed. WebView2 runtime 154.0.4258.62 is already part of Windows 11 (nothing installed globally).
+* **Details:**
+  * `scripts/sandbox.py`: default view is the window. `--browser` opens a browser tab (old behaviour), `--no-browser` only runs the server. If the window can't open (no pywebview or WebView2), it falls back to the browser.
+  * Closing the window stops the server with `procs.stop` (whole tree: the venv's `python.exe` is a launcher). Ctrl+C does the same. A server that is still starting is given `server_wait_s`.
+  * Window settings (title, size, minimum size, storage folder, server wait) are in `configs/sandbox/default.yaml` `window:`.
+* **Files (edited):** `scripts/sandbox.py`, `configs/sandbox/default.yaml`, `tests/test_sandbox.py`, `requirements.txt`, `PROJECT_CONTEXT.md` (§4, §10.5, §14.1, §16 D25), `docs/SANDBOX_PLAN.md` (§1), `README.md`, `log.md`.
+* **Notes:** The owner's own sandbox (started before this task, PIDs 7144/19816 on 8501) was left running. It still runs the old launcher code; restart it to get the window.
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T73: R015 reliability runs (R018, R019)
 

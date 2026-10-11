@@ -8,6 +8,12 @@
 
 runs:
   - name: t50_narrow7_s1
-    args: --tag t50_narrow7_s1 --trackset maps7 --env rays7_narrow --steps 5000000 --seed 1 --curriculum "T50: 7 narrow rays on maps7" --notes "Shallow rays (±7°, ±20°) see bends 35-70 m earlier than rays5's ±45° rays; maps7 adds tight corners. Goal: faster than the baseline and unseen completion >= 80 %."
+    args: >-
+      --tag t50_narrow7_s1 --trackset maps7 --env rays7_narrow --steps 5000000 --seed 1
+      --curriculum "T50: 7 narrow rays on maps7"
+      --notes "Shallow rays (±7°, ±20°) see bends 35-70 m earlier than the ±45° rays of rays5; maps7 adds tight corners. Goal: faster than the baseline and unseen completion >= 80 %."
   - name: t50_rays9_s1
-    args: --tag t50_rays9_s1 --trackset maps7 --env rays9 --steps 5000000 --seed 1 --curriculum "T50: 9 rays on maps7" --notes "rays9 generalised best overnight (R014: 69 % unseen on v2). Same spec, trained on maps7 with tight corners."
+    args: >-
+      --tag t50_rays9_s1 --trackset maps7 --env rays9 --steps 5000000 --seed 1
+      --curriculum "T50: 9 rays on maps7"
+      --notes "rays9 generalised best overnight (R014: 69 % unseen on v2). Same spec, trained on maps7 with tight corners."

@@ -568,8 +568,13 @@ How it is built:
 | **R015** | T50 | **rays7_narrow, `maps7`, 5M** | **64 %** | **88 %** (@4800k 94 %) | **0.97** | **meets T50; faster than the baseline on the test maps** |
 | R016 | T50 | rays9, `maps7`, 5M | 50 % | 75 % | 0.99 | |
 | R017 | T50 follow-up | fine-tune of R015@4600k on `maps7` | 57 % | 88 % | 0.97 | no gain over its parent |
+| R018 | R015 reliability (seed 2) | rays7_narrow, `maps7`, 5M | 64 % | 63 % (test maps 0 %) | 1.00 | held-out 100 %, but never finishes the test maps |
+| R019 | R015 reliability (seed 1, 8M) | rays7_narrow, `maps7`, 8M | 14 % | 0 % | 0.92 | failed to learn: stuck at ~50 % barrier crashes |
 
-Results are one seed per setting unless two are listed; with real grip, only the narrow-ray layout trained on the map library passes the test maps reliably.
+Results are one seed per setting unless two are listed. **R015's result doesn't reproduce reliably (R018, R019, 2026-10-11).**
+- **Seed 2 (R018):** the same setup matches R015 on the seen maps (64 %) and the generated held-out tracks (100 %), at the baseline's lap time. But it finishes none of the test-map episodes at its best checkpoints (2 of its 50 checkpoints manage 17–33 %), where R015 managed 67 %.
+- **8M steps (R019, seed 1):** a longer schedule changes the learning-rate decay from the first update, so it doesn't repeat R015's path either. It got stuck early: episode reward ≈ 500–600 against R015's > 1700, and about half its episodes ended at the barrier. Its exploration noise then collapsed (policy std 0.04) and it never recovered.
+- So narrow rays on the map library *can* reach the T50 target, but the result varies strongly between runs. Claims need several seeds.
 
 **Plots (`make_plots.py`):**
 - reward and lap time against training steps (mean ± std over seeds where possible)
@@ -722,6 +727,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-11 | **Results (owner-approved runs):** 7 narrow rays (`rays7_narrow`) on `maps7` (R015) meet the new T50 target (v2 lap ratio < 1.0, unseen completion ≥ 80 %): R015@4600k is faster than the PID baseline on the unseen test maps; earlier models had 0 % on them. 9 rays on `maps7` (R016) and fine-tuning R015 (R017) did worse. The arena spreads model decisions over substeps (steady 60 FPS with 20 different models, T51). **Training stays on the CPU** (the GPU was slower, T62); parallel runs on the CPU are next (T64). |
 | 2026-10-11 | **AI Sandbox decisions (owner, T65):** Streamlit 1.65.0 (no pin changes), local only (localhost), the sandbox may start the queue in its own console, run "why" and outcome notes in `registry/run_notes.yaml`. Plan v2 in `docs/SANDBOX_PLAN.md`; build tasks T66–T72 (§10.5). |
 | 2026-10-11 | **AI Sandbox built (T66–T72).** Owner decisions taken during the build: the Build form defaults to real runs; the sandbox may stop a running queue (after a confirmation step); outcome notes can be edited; critical issues are skipped and logged while the owner is away (none came up). The queue runner gained `runner.json`, per-entry PIDs, `stop.request` and process-tree stopping (§8). `demo.py --title`. **Reliability runs for R015's setup (owner)**, queued through the sandbox: R018 (seed 2, 5M) and R019 (seed 1, 8M). |
+| 2026-10-11 | **R015 doesn't reproduce reliably (T73).** R018 (seed 2): seen 64 %, held-out 100 %, test maps 0 %, lap ratio 1.00. R019 (8M): stuck early, best overall 7 %. The T50 target was met by one lucky run, not by a robust setting (§11). **Open question for the owner:** what to do about the variance, e.g. more seeds per setting, keeping exploration up (entropy), or the curriculum. |
 
 **Open questions:**
 - `final_mix` trains on every track in `tracks/user/`, so a track drawn and saved in the demo becomes training data for later `final_mix` runs. `maps7` leaves `user/` out. Should `final_mix` stay as it is (its meaning is frozen in old snapshots either way), and should faculty-drawn tracks be saved to `tracks/test/` instead? Currently: unchanged; use `maps7` for new runs.

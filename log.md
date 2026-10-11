@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-11 (Claude Opus 5.5): T52–T62 done, all on `main` (merged, committed locally, not pushed; 117 tests pass). 9-map library (7 train, 2 test), evaluation protocol v2, upgradable engine (obs_spec v2 features, action layouts, physics versions, PPO/SAC, manifest, compatibility check), AI Sandbox plan (`docs/SANDBOX_PLAN.md`). **T50 done:** `R015_t50_narrow7_s1@4600k` (7 narrow rays on `maps7`) is faster than the baseline (v2 lap ratio 0.969) with 87.5 % unseen completion (@4800k: 93.8 %), but still fails Fast Flow / Technical; R016 (rays9) and R017 (fine-tune) were worse. **T51 done:** arena steady 60 FPS with 20 distinct models. **T62 done:** the GPU trains slower than the CPU (0.64×) → training stays on the CPU (T63 not needed); 2 parallel CPU runs give 1.62×. **M2 closed (T07, T46–T48). T64 done:** `queue_overnight.py --parallel 2` runs two trainings at once (≈ 1.6× per night; run ids reserved atomically, registry writes locked). **T65–T72 done: the AI Sandbox is built.** Run it with `.venv\Scripts\python scripts\sandbox.py`, on localhost only. It has 6 pages: Overview, Model Explorer, Compare, Build & Queue, Launch, Glossary; see the README. **Running (started 11:00 from the sandbox, own console window):** the R015 reliability runs, R018 (seed 2, 5M) and R019 (seed 1, 8M), 2 at a time, ≈ 2–2.5 h with evaluation. **Next:** when they finish, commit their registry rows and eval copies, add their results to PROJECT_CONTEXT §11 and `registry/run_notes.yaml`, then run the full suite on an idle machine. After that, the owner walks through the sandbox, then Week 3 visuals (T08).
+* **Last updated:** 2026-10-11 (Claude Opus 5.5): T52–T62 done, all on `main` (merged, committed locally, not pushed; 117 tests pass). 9-map library (7 train, 2 test), evaluation protocol v2, upgradable engine (obs_spec v2 features, action layouts, physics versions, PPO/SAC, manifest, compatibility check), AI Sandbox plan (`docs/SANDBOX_PLAN.md`). **T50 done:** `R015_t50_narrow7_s1@4600k` (7 narrow rays on `maps7`) is faster than the baseline (v2 lap ratio 0.969) with 87.5 % unseen completion (@4800k: 93.8 %), but still fails Fast Flow / Technical; R016 (rays9) and R017 (fine-tune) were worse. **T51 done:** arena steady 60 FPS with 20 distinct models. **T62 done:** the GPU trains slower than the CPU (0.64×) → training stays on the CPU (T63 not needed); 2 parallel CPU runs give 1.62×. **M2 closed (T07, T46–T48). T64 done:** `queue_overnight.py --parallel 2` runs two trainings at once (≈ 1.6× per night; run ids reserved atomically, registry writes locked). **T65–T72 done: the AI Sandbox is built.** Run it with `.venv\Scripts\python scripts\sandbox.py`, on localhost only. It has 6 pages: Overview, Model Explorer, Compare, Build & Queue, Launch, Glossary; see the README. **T73 done:** R015's result doesn't reproduce reliably. R018 (seed 2) gets 0 % on the test maps, and R019 (8M) got stuck early (PROJECT_CONTEXT §11). 172 tests pass; nothing is running. **Next:** the owner walks through the sandbox; the owner decides how to handle run-to-run variance (more seeds, keeping exploration up, curriculum); Week 3 visuals (T08).
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
 * **Plan:** `PROJECT_CONTEXT.md` is the single source of truth: design, physics, env, training, registry, demo, timeline (§12) and setup (§14). `CLAUDE.md` holds the agent rules.
 * **Architecture:** a headless simulation (`racer/physics`, `racer/track`, `racer/env`, with no pygame) used by the training scripts (`scripts/train.py`, `evaluate.py`) and by the pygame-ce demo (`scripts/demo.py`, `racer/render`).
@@ -110,6 +110,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T70: **S4** Launch page + `racer/sandbox/procs.py` (psutil; pid + creation time) + `launcher.py` + `demo.py --title`. **Done when:** two game windows run at once from the sandbox; *Stop* closes one and leaves the other; incompatible models can't be picked; instances survive a sandbox restart in the list.
 * *Owner check-in during T71 (2026-10-11): the end-to-end queue test also queues the R015 reliability runs through the sandbox form: R015's setup with seed 2 (5M) and seed 1 for 8M steps, plus a short trial run, 2 at a time (≈ 2–2.5 h). The sandbox server is stopped at the end (not left running).*
 * [x] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
+* [x] T73: Record the R015 reliability runs R018 (seed 2, 5M) and R019 (seed 1, 8M), queued through the sandbox (owner): commit registry rows + eval copies, PROJECT_CONTEXT §11/§16, `registry/run_notes.yaml`, README status.
 * [x] T72: **S6** Overview page (counts, leaderboard, queue status, running games), polish, README + PROJECT_CONTEXT, full tests. **Done when:** the owner can do all 4 goals without the terminal.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
@@ -127,6 +128,27 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T73: R015 reliability runs (R018, R019)
+
+* **Status:** DONE.
+  * The sandbox queue (`configs/queue/sandbox.yaml`, 2 at a time) finished at 12:30. All 3 entries are `done`; the runner exited and removed `runner.json`.
+  * Full suite on the idle machine afterwards: **172 passed**, including the Launch tests that once failed under load.
+  * No Python processes and no sockets on 8501 are left.
+* **Results (protocol v2, best checkpoint by D9):**
+  * **R018_rel_narrow7_s2** (seed 2, 5M, 57 min):
+    * Best @3400k: seen 64 %, held-out 100 %, **test maps 0 %**, unseen 62.5 %, lap ratio 0.998.
+    * Only @1000k (33 %) and @3000k (17 %) finish any test-map episodes. R015 managed 67 % there.
+  * **R019_rel_narrow7_8m_s1** (seed 1, 8M, 86 min; 80 checkpoints evaluated in 189 s):
+    * Failed to learn. Best @1700k: overall 6.7 %; crash rate ≈ 93–100 % at every checkpoint.
+    * Training curves: episode reward plateaued at 500–600 (R015/R018 > 1650), barrier endings stayed ≈ 50 % (R015/R018 fell below 10 %), and policy std collapsed to 0.04, so it stopped exploring.
+    * Same seed as R015, but `total_steps` sets the linear learning-rate decay, so its path differs from the first update.
+  * The pipeline isn't to blame: R018 was launched the same way and trained normally, and nothing in training, env or physics changed.
+* **Conclusion:** R015's T50 result is partly seed luck. The narrow-ray setup on `maps7` varies strongly between runs, so claims need several seeds. Recorded in PROJECT_CONTEXT §11 (table + note) and §16 (with an open question for the owner), `registry/run_notes.yaml` (R015 outcome updated, R018/R019 added) and the README status.
+* **Files:**
+  * Edited: `registry/runs.csv`, `registry/models.csv` (R018: 50 checkpoints, R019: 80, written by the runs), `PROJECT_CONTEXT.md`, `README.md`, `registry/run_notes.yaml`, `log.md`.
+  * Created: `outputs/eval/R018_*`, `outputs/eval/R019_*` (eval copies).
+  * Models (`models/R018_*`, `models/R019_*`) stay local, as always.
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T72: Sandbox S6 (Overview, docs)
 

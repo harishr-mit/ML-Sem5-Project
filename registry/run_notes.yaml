@@ -59,10 +59,20 @@ R014:
 R015:
   outcome: 'Meets the T50 target. @4600k: seen 64 %, unseen 87.5 % (@4800k 93.8 %), lap ratio 0.969: faster than the
     baseline, also on the test maps that earlier models never finished. Still fails Fast Flow and Technical. Its best
-    checkpoints were its last ones (still improving at 5M).'
+    checkpoints were its last ones (still improving at 5M). Not reproduced by seed 2 (R018: 0 % on the test maps) or
+    by an 8M run (R019: stuck early), so it is partly a lucky run.'
 R016:
   outcome: 'Worse than R015: seen 50 %, unseen 75 %, lap ratio 0.99. Narrow rays beat 9 evenly spread ones on the map
     library.'
 R017:
   outcome: 'No gain over its parent R015@4600k: seen 57 %, unseen 88 %, lap ratio 0.97. Fine-tuning on the same tracks
     doesn''t help; a second seed or longer training is the next test.'
+R018:
+  outcome: 'Does not reproduce R015. Best @3400k: seen 64 % and held-out 100 % like R015, lap ratio 0.998, but 0 % on
+    the test maps (R015: 67 %); only 2 of its 50 checkpoints finish any test-map episode (17-33 %). R015''s test-map
+    result is seed luck.'
+R019:
+  outcome: 'Failed to learn: the episode reward plateaued at ~500-600 (R015 > 1700) with about half the episodes ending
+    at the barrier, and the policy''s exploration noise collapsed (std 0.04), so it never recovered. Best overall 7 %.
+    A different total_steps changes the learning-rate decay from the first update, so "seed 1 again" does not repeat
+    R015.'

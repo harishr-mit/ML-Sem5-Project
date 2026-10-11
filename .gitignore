@@ -41,6 +41,8 @@ assets/_source/
 # registry/ IS tracked (small CSVs); registry.xlsx is regenerated from them (D11).
 registry/registry.xlsx
 registry/*.csv.tmp
+# held while a process writes the registry (parallel runs, T64)
+registry/registry.lock
 
 # --- Editors / OS ---
 .vscode/*

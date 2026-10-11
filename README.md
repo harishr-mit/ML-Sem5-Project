@@ -82,7 +82,8 @@ Run these from the project folder.
 .venv\Scripts\python scripts\queue_overnight.py configs\queue\night1.yaml
 ```
 
-- Start it yourself from a normal terminal; it needs no Claude session. It runs the queue's training runs one after another, logs each to `outputs\queue_logs\`, keeps going if one fails, and resumes where it left off if you start it again.
+- Start it yourself from a normal terminal; it needs no Claude session. It runs the queue's training runs, logs each to `outputs\queue_logs\`, keeps going if one fails, and resumes where it left off if you start it again.
+- **Two at a time:** add `--parallel 2` (or `parallel: 2` at the top of the queue file). Two runs at once get about 1.6× more training done per night than one after another; each run takes about 20 % longer. Entries added to the queue file while it runs are picked up.
 - It keeps Windows awake while it runs. Keep the laptop plugged in, with the lid open.
 
 ### Replay a trained model
@@ -116,7 +117,7 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |
 | Model Arena | `scripts\demo.py [--track …] [--models … or --run R002 [--every N] or --best] [--baseline] [--laps 3] [--fair]` |
-| Overnight queue | `scripts\queue_overnight.py configs\queue\<queue>.yaml [--dry-run] [--retry-failed]` |
+| Overnight queue | `scripts\queue_overnight.py configs\queue\<queue>.yaml [--parallel 2] [--dry-run] [--retry-failed]` |
 | TensorBoard | `-m tensorboard.main --logdir runs` |
 | Unit tests | `-m pytest -q` |
 | Physics sanity tests | `scripts\physics_sanity.py` (run after every physics change) |

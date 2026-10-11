@@ -69,6 +69,24 @@ def next_run_id(prefix: str, *dirs: Path) -> str:
     return f"{prefix}{max(used) + 1:03d}"
 
 
+def reserve_run_id(prefix: str, out_dir: Path, *dirs: Path) -> str:
+    """Next free run id, reserved atomically (a marker folder in ``out_dir/.run_ids``).
+
+    A run's first model folder only appears at its first checkpoint, so two runs started
+    together (parallel queue, T64) would otherwise get the same id. ``mkdir`` either creates
+    the marker or fails, so exactly one process gets each id. Markers stay (ids are never reused).
+    """
+    markers = out_dir / ".run_ids"
+    markers.mkdir(parents=True, exist_ok=True)
+    while True:
+        run_id = next_run_id(prefix, *dirs, markers)
+        try:
+            (markers / f"{run_id}_reserved").mkdir()
+            return run_id
+        except FileExistsError:
+            continue
+
+
 def make_env(config: dict[str, Any], rank: int, seed: int):
     """Top-level factory (picklable for SubprocVecEnv on Windows)."""
     import torch
@@ -182,7 +200,7 @@ def main() -> int:
             ap.error(f"parent {parent_id} has a different policy network ({parent_snap['train']['policy']})")
 
     out_dir = SCRATCH_DIR if args.scratch else MODELS_DIR
-    run_id = next_run_id("S" if args.scratch else "R", out_dir, RUNS_DIR if not args.scratch else SCRATCH_DIR)
+    run_id = reserve_run_id("S" if args.scratch else "R", out_dir, out_dir, RUNS_DIR if not args.scratch else SCRATCH_DIR)
     run_name = f"{run_id}_{args.tag}"
     tb_dir = (SCRATCH_DIR / "tb") if args.scratch else RUNS_DIR
     seed = int(train_cfg["seed"])

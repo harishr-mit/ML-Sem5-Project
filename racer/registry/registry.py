@@ -2,7 +2,7 @@
 
 The CSVs are the source of truth (``registry.xlsx`` is generated from them). Rows are
 upserted by id with an atomic rewrite, because evaluation updates rows that training
-created. Scratch runs (``train.py --scratch``) use their own registry in
+created; every write holds a lock file, so parallel runs never lose each other's rows. Scratch runs (``train.py --scratch``) use their own registry in
 ``outputs/scratch/registry/`` so smoke tests never touch the real one.
 """
 from __future__ import annotations
@@ -13,8 +13,9 @@ import json
 import os
 import re
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Iterator, Mapping
 
 from racer.config import PROJECT_ROOT, load_yaml
 
@@ -66,11 +67,46 @@ def typed(v: str) -> Any:
         return v
 
 
+@contextmanager
+def file_lock(path: Path, timeout_s: float = 300.0, stale_s: float = 600.0) -> Iterator[None]:
+    """Cross-process lock: an exclusively created lock file (works on Windows; T64).
+
+    Parallel training runs read-modify-write the same CSVs, so every write holds this lock.
+    A lock older than ``stale_s`` (a crashed writer) is broken.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    t0 = time.monotonic()
+    while True:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - path.stat().st_mtime > stale_s:
+                    path.unlink(missing_ok=True)
+                    continue
+            except FileNotFoundError:
+                continue
+            if time.monotonic() - t0 > timeout_s:
+                raise TimeoutError(f"{path} is held by another process (delete it if no run is active)")
+            time.sleep(0.05)
+    try:
+        yield
+    finally:
+        path.unlink(missing_ok=True)
+
+
 class Registry:
     def __init__(self, root: Path | str = REGISTRY_DIR) -> None:
         self.root = Path(root)
         self.runs_path = self.root / "runs.csv"
         self.models_path = self.root / "models.csv"
+
+    def lock(self):
+        """Hold while reading-modifying-writing this registry (parallel runs, T64)."""
+        return file_lock(self.root / "registry.lock")
 
     # ----------------------------------------------------------- reading
     @staticmethod
@@ -126,16 +162,20 @@ class Registry:
         self._write(path, columns, rows)
 
     def upsert_run(self, row: Mapping[str, Any]) -> None:
-        self._upsert(self.runs_path, RUN_COLUMNS, "run_id", row)
+        with self.lock():
+            self._upsert(self.runs_path, RUN_COLUMNS, "run_id", row)
 
     def upsert_model(self, row: Mapping[str, Any]) -> None:
-        self._upsert(self.models_path, MODEL_COLUMNS, "model_id", row)
+        with self.lock():
+            self._upsert(self.models_path, MODEL_COLUMNS, "model_id", row)
 
     def set_best(self, run_id: str) -> str | None:
         """Mark the best evaluated checkpoint of a run (D9 ranking); returns its id."""
-        from racer.agents.evaluation import rank_key
+        with self.lock():
+            return self._set_best(run_id)
 
-        from racer.agents.evaluation import protocol_version
+    def _set_best(self, run_id: str) -> str | None:
+        from racer.agents.evaluation import protocol_version, rank_key
 
         rows = self.models()
         cands = [r for r in rows if r["run_id"] == run_id and r.get("eval_date")]

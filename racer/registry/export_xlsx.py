@@ -62,6 +62,12 @@ def _thumb_prefix(m: dict) -> str:
 
 
 def export(reg: Registry, out: Path | None = None) -> Path:
+    """Regenerate the workbook (under the registry lock: parallel runs export too, T64)."""
+    with reg.lock():
+        return _export(reg, out)
+
+
+def _export(reg: Registry, out: Path | None) -> Path:
     out = Path(out) if out else reg.root / "registry.xlsx"
     runs = [{k: typed(v) for k, v in r.items()} for r in reg.runs()]
     models = [{k: typed(v) for k, v in r.items()} for r in reg.models()]

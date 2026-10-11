@@ -16,7 +16,7 @@ class Algorithm:
     name: str
     sb3_class: str              # attribute of stable_baselines3
     description: str
-    build: Callable[..., Any]   # (train_cfg, venv, tb_dir, seed) -> model
+    build: Callable[..., Any]   # (train_cfg, venv, tb_dir, seed, device="cpu") -> model
     update_steps: Callable[[Mapping[str, Any]], int]   # env steps (all envs) between policy updates
 
 
@@ -30,7 +30,7 @@ def _lr(value: float, schedule: str):
     return (lambda frac: v * frac) if schedule == "linear" else v
 
 
-def _build_ppo(train_cfg, venv, tb_dir, seed):
+def _build_ppo(train_cfg, venv, tb_dir, seed, device="cpu"):
     from stable_baselines3 import PPO
 
     p = train_cfg["ppo"]
@@ -41,11 +41,11 @@ def _build_ppo(train_cfg, venv, tb_dir, seed):
         clip_range=p["clip_range"], ent_coef=p["ent_coef"], vf_coef=p["vf_coef"], max_grad_norm=p["max_grad_norm"],
         policy_kwargs={"net_arch": {"pi": list(pol["net_arch"]), "vf": list(pol["net_arch"])},
                        "activation_fn": _activation(pol["activation"])},
-        tensorboard_log=str(tb_dir), seed=seed, device="cpu", verbose=0,
+        tensorboard_log=str(tb_dir) if tb_dir else None, seed=seed, device=device, verbose=0,
     )
 
 
-def _build_sac(train_cfg, venv, tb_dir, seed):
+def _build_sac(train_cfg, venv, tb_dir, seed, device="cpu"):
     from stable_baselines3 import SAC
 
     s = train_cfg["sac"]
@@ -56,7 +56,7 @@ def _build_sac(train_cfg, venv, tb_dir, seed):
         train_freq=s["train_freq"], gradient_steps=s["gradient_steps"], ent_coef=s["ent_coef"],
         policy_kwargs={"net_arch": {"pi": list(pol["net_arch"]), "qf": list(pol["net_arch"])},
                        "activation_fn": _activation(pol["activation"])},
-        tensorboard_log=str(tb_dir), seed=seed, device="cpu", verbose=0,
+        tensorboard_log=str(tb_dir) if tb_dir else None, seed=seed, device=device, verbose=0,
     )
 
 

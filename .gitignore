@@ -1,6 +1,8 @@
 # --- Dependencies / environments (never tracked) ---
 # (venv/ and env/ are anchored to the root so racer/env/ and configs/env/ stay tracked)
 .venv/
+# CUDA build of torch for the GPU benchmark / GPU training (T62, T63)
+.venv-gpu/
 /venv/
 /env/
 *.whl

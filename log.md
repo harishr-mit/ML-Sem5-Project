@@ -100,7 +100,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [ ] T62: **GPU benchmark (owner, 2026-10-11).** Measure before switching: the GTX 1650 (4 GB, driver 610.60, already installed) only speeds up the PPO update (≈ 60 % of training time, §8); env stepping stays on the CPU. Install the CUDA build of the **same** torch version (2.14.1) into a separate `.venv-gpu` (project-local, git-ignored; the main `.venv` and `requirements.txt` stay untouched), then time 200k steps of `ppo_default` on CPU vs GPU, also with larger minibatches (512, 1024) where a GPU helps most. Check that a GPU-trained model loads and drives identically on the CPU (demo and evaluation stay on the CPU). **Also measure parallel runs (owner):** total steps/s of 1 run × 6 envs vs 2 runs × 3 envs vs 3 runs × 2 envs, on CPU and with updates on the GPU, plus RAM per run (≈ 1.5 GB for 6 env workers today). Today a single run's env workers sit idle during its PPO update (single-threaded), so overlapping runs may raise total throughput even without the GPU. **Done when:** steps/s for each setting are logged here with a recommendation (device, runs in parallel, envs per run).
 * [ ] T64: **Parallel queue (only if T62 shows a higher total throughput).** `queue_overnight.py --parallel N` runs up to N queue entries at once (each with its own log; `state.json` stays the single source of progress; evaluation after training limited so N runs don't each start 6 eval workers); `n_envs` per run from the queue entry or T62's recommendation. Run ids stay unique when two runs start together (`next_run_id` must reserve its id, e.g. by creating the folder/lock atomically). **Done when:** a 2-slot scratch queue with 3 short entries finishes with distinct run ids and correct state, and total throughput matches T62.
 * [ ] T63: **Train on the GPU (only if T62 shows ≥ 1.3× faster training).** `device: cpu|cuda` in the train presets (default `cpu`, so old configs mean the same), `train.py --device`, recorded in the snapshot; models are always saved for and loaded on the CPU; `requirements-gpu.txt` with the CUDA torch pin; README setup section; queue entries may use `--device cuda`. Requirements stay as they are: CPU-only machines still train and run everything, saved models load anywhere. **Done when:** a GPU run and a CPU run of the same config give comparable results, and every existing model still loads in the CPU `.venv`.
-* [ ] T61: Re-evaluate the best checkpoint of every run with protocol v2 (`evaluate.py --model <best ids>`), so all models are comparable on the map library (≈ 1 min per model). Optional: every checkpoint overnight (≈ 430 checkpoints ≈ 1 h on 6 workers).
+* [x] T61: Re-evaluate the best checkpoint of every run with protocol v2 (`evaluate.py --model <best ids>`), so all models are comparable on the map library (≈ 1 min per model). Optional: every checkpoint overnight (≈ 430 checkpoints ≈ 1 h on 6 workers).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -117,6 +117,24 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T61: Best checkpoints on protocol v2
+
+* **Status:** DONE (best checkpoint of each run; 14 models in 92 s on 6 workers). Registry rows of these checkpoints now hold v2 metrics (`eval_protocol` = v2); the other checkpoints keep v1. Scoring every checkpoint stays optional (overnight).
+* **Results (v2; seen = 7 training maps, unseen = 2 test maps + 10 generated held-out):**
+
+  | best checkpoint | seen | test | held-out | unseen | lap ratio |
+  |---|---|---|---|---|---|
+  | BASE_pid | 100 % | 100 % | 100 % | 100 % | 1.00 |
+  | R003 mix_scratch@900k | 57 % | 0 % | 80 % | 50 % | 1.19 |
+  | R004 / R010 e1_main (rays5) | 43 % / 43 % | 0 / 0 | 80 / 60 % | 50 / 38 % | 1.16 / 1.18 |
+  | R007 / R013 e4_short | 29 / 43 % | 0 / 0 | 100 / 90 % | 63 / 56 % | 1.26 / 1.18 |
+  | **R008 / R014 e4_rays9** | 43 / **64 %** | 0 / **17 %** | 100 / 100 % | 63 / **69 %** | 0.97 / 1.03 |
+  | R006 / R012 e5_single (TG only) | 14 / 14 % | 0 / 0 | 0 / 0 | 0 / 0 | 0.92 / 0.91 |
+  | R005 / R011 e2_nogrip | 100 % | 100 % | 100 % | 100 % | 0.40 (physics without a grip limit: not comparable) |
+
+* **Reading:** with real grip, no model handles the tight corners of the new maps (their training never had them); 9 rays (with ±10° / ±30° rays) generalise best. This supports T50's plan: train on `maps7` with shallow rays.
+* **Files (edited):** `registry/models.csv`; **created:** `outputs/eval/<14 best ids>/eval_v2.json` + `thumb_v2_*.png` (also added to each `models/<id>/` folder, D10)
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T51: Arena frame rate (spread decisions)
 

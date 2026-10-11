@@ -109,8 +109,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T69: **S3** Compare page (2–4 models: config diff with glossary notes, shapes, metrics within one protocol, overlaid curves, thumbnails, *Launch these*). **Done when:** R004 vs R008 vs R015 shows the expected differences; mixed protocols give a warning.
 * [x] T70: **S4** Launch page + `racer/sandbox/procs.py` (psutil; pid + creation time) + `launcher.py` + `demo.py --title`. **Done when:** two game windows run at once from the sandbox; *Stop* closes one and leaves the other; incompatible models can't be picked; instances survive a sandbox restart in the list.
 * *Owner check-in during T71 (2026-10-11): the end-to-end queue test also queues the R015 reliability runs through the sandbox form: R015's setup with seed 2 (5M) and seed 1 for 8M steps, plus a short trial run, 2 at a time (≈ 2–2.5 h). The sandbox server is stopped at the end (not left running).*
-* [~] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
-* [ ] T72: **S6** Overview page (counts, leaderboard, queue status, running games), polish, README + PROJECT_CONTEXT, full tests. **Done when:** the owner can do all 4 goals without the terminal.
+* [x] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
+* [~] T72: **S6** Overview page (counts, leaderboard, queue status, running games), polish, README + PROJECT_CONTEXT, full tests. **Done when:** the owner can do all 4 goals without the terminal.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -130,7 +130,16 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T71: Sandbox S5 (Build & Queue)
 
-* **Status:** WORKING. Code done and committed; the end-to-end run through the queue is next (trial + R015 reliability runs, owner). Full suite: **170 passed**.
+* **Status:** DONE. Full suite: **170 passed**.
+* **End-to-end check:**
+  * I drove the real Build & Queue page headless (AppTest) to add 3 runs to `configs/queue/sandbox.yaml`, then pressed *Start queue*. The runner opened in its own console window, 2 at a time.
+    * `sbtest_trial_s1`: trial, 100k steps.
+    * `rel_narrow7_s2`: R015's setup with seed 2, 5M steps.
+    * `rel_narrow7_8m_s1`: R015's setup with seed 1, 8M steps.
+  * The generated commands match R015's original setup (`--trackset maps7 --env rays7_narrow`, no `--set`), plus the form's `--notes` and `--curriculum "AI Sandbox (from R015_t50_narrow7_s1@4600k)"`.
+  * The trial (S001) trained, was evaluated (v2) and was marked best within 2 min. The Explorer showed it with its notes, without errors. I then deleted `outputs/scratch/` (it held only this trial).
+  * The real runs started as **R018_rel_narrow7_s2** (11:00) and **R019_rel_narrow7_8m_s1** (11:01). The 8M run started only after the tree was confirmed clean (D12).
+  * The `sbtest_trial_s1` entry stays in the git-ignored queue file as `done`.
 * **What was built:**
   * `racer/sandbox/builder.py`:
     * `Plan`, created from a model's snapshot or from presets.

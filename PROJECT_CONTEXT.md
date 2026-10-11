@@ -133,6 +133,7 @@ ML Sem5 Project/
 │   ├── physics_sanity.py     # skidpad / braking / coast-down tests
 │   ├── drive.py              # debug window: keyboard / baseline / model driving
 │   ├── preview_tracks.py  generate_tracks.py  make_maps.py  bench_env.py
+│   ├── bench_train.py        # training throughput: CPU vs GPU, minibatch, parallel runs (T62)
 │   ├── sandbox.py            # AI Sandbox (Streamlit, §10.5; planned)
 ├── tests/                    # pytest unit tests (spline, field, progress, physics, env)
 ├── tracks/
@@ -374,6 +375,7 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
 
   Each stage either fine-tunes from the previous model (recorded as the `parent` in the registry) or uses mixed sampling.
   **Chosen (D8):** a chain of separate runs linked by `train.py --parent <model_id>` (policy and VecNormalize statistics carried over, lower learning rate via `ppo_finetune`), so each stage is evaluated and registered on its own: R001 (Training Ground) → R002 (generated wide) → R003 (final mix). R004 trains on the final mix from scratch for comparison.
+  **What happened (2026-10-10/11):** the chain stopped after stage 2. R002 (fine-tuned from R001@1200k on generated wide tracks) **did not generalise** (10 % held-out; the agent still left the road), so stage 3 was dropped and R003 trained on `final_mix` **from scratch** instead (100 % showcase / 80 % held-out within ~1M steps). Training from scratch on mixed tracks has been the method since: the overnight ablations (R004–R014) and the T50 runs on `maps7` (R015, R016). Fine-tuning a good model on the same tracks (R017 from R015) didn't help either. `--parent` stays available; R002 is the documented negative result for the report.
 - **Track sets (D7, `configs/trackset/*.yaml`):** which tracks a run samples: named tracks with weights, folders of tracks, and a generated pool (training seed stream 0, a seed range, generator overrides such as a width range). Generated fields cost 3–14 MB and ~65 ms each, so each worker keeps a small rotating pool of generated tracks instead of a new one per episode. Held-out tracks are never sampled. The final mix may include showcase tracks and any other added tracks (owner, §6), so showcase lap times are on seen tracks; generalisation is measured on held-out and user-drawn tracks only.
 - **Checkpoints:** every 100k steps. Every checkpoint is registered (see §9) and evaluated after training, and the best is marked `is_best` (D9: highest completion over all evaluation episodes, ties broken by mean showcase lap time relative to the baseline). Evolution races and comparisons can be built from any step.
 - **Reproducibility (D12):** real (`R`) runs refuse to start on a dirty git tree unless `--allow-dirty`, so the `git_commit` in every snapshot points at real code.
@@ -523,6 +525,26 @@ The sandbox only reads the registry and model folders and writes queue files; it
 | E8 | RL vs hand-coded baseline (a PID controller that follows the centreline at a fixed safe speed) | RL is faster because it uses the track width and brakes at the right time |
 | E9 (optional) | Downforce on vs off | A different racing line on fast corners |
 
+**Runs so far (registry ids; best checkpoint by D9, evaluated with protocol v2: seen = 7 training maps, unseen = 2 test maps + 10 generated held-out tracks; lap ratio vs the PID baseline over the maps the model laps):**
+
+| Run(s) | Experiment | Setting | Seen | Unseen | Lap ratio | Note |
+|---|---|---|---|---|---|---|
+| BASE_pid | E8 | hand-coded centreline + speed plan (sees the map) | 100 % | 100 % | 1.00 | reference |
+| R001 | M1 | rays5, Training Ground only | 29 % | 19 % | 0.94 | fast on its own track only |
+| R002 | D8 stage 2 | fine-tune of R001 on generated wide tracks | 21 % | 6 % | 1.11 | negative result |
+| R003 | D8 | rays5, `final_mix`, from scratch | 57 % | 50 % | 1.19 | reliable on v1, slow |
+| R004 / R010 | E1 reference (seeds 1/2) | rays5, `final_mix`, 3M | 43 / 43 % | 50 / 38 % | 1.16 / 1.18 | |
+| R005 / R011 | E2 | no grip limit | 100 % | 100 % | 0.40 | other physics: not comparable |
+| R006 / R012 | E5 | Training Ground only | 14 / 14 % | 0 / 0 % | 0.92 / 0.91 | overfits its one track |
+| R007 / R013 | E4 short | forward ray 60 m | 29 / 43 % | 63 / 56 % | 1.26 / 1.18 | slowest: brakes late, drives slowly |
+| R008 / R014 | E4 rays9 | 9 rays (±10°, ±30°, ±60°, ±90°) | 43 / 64 % | 63 / 69 % | 0.97 / 1.03 | best of the overnight runs |
+| R009 | E3 | naive speed reward | 36 % | 63 % | 1.14 | reward-hacking demo |
+| **R015** | T50 | **rays7_narrow, `maps7`, 5M** | **64 %** | **88 %** (@4800k 94 %) | **0.97** | **meets T50; faster than the baseline on the test maps** |
+| R016 | T50 | rays9, `maps7`, 5M | 50 % | 75 % | 0.99 | |
+| R017 | T50 follow-up | fine-tune of R015@4600k on `maps7` | 57 % | 88 % | 0.97 | no gain over its parent |
+
+Results are one seed per setting unless two are listed; with real grip, only the narrow-ray layout trained on the map library passes the test maps reliably.
+
 **Plots (`make_plots.py`):**
 - reward and lap time against training steps (mean ± std over seeds where possible)
 - completion rate on held-out tracks
@@ -667,6 +689,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-10 | Week 2 decisions (owner-approved, `log.md` T36 D7–D18): **D7** track sets in `configs/trackset/` with per-worker rotating generated pools; **D8** curriculum as a `--parent` chain R001 → R002 → R003, plus R004 from scratch; any non-held-out tracks may be mixed into training; **D9** eval protocol v1 + `is_best` rule + `BASE_pid`; **D10** evaluation adds `eval.json`/thumbnails to model folders (the three model files never change) and copies them to `outputs/eval/`; **D11** registry upsert, scratch registry, xlsx git-ignored; **D12** no real runs on a dirty tree; **D13** ablations config-only, no new required keys in existing schemas without a snapshot migration; **D14** arena: grid, countdown, N laps, respawn + crash count; **D15** `racer/env/race.py` + `render/world.py`/`camera.py`; **D16** basic in-window model picker; **D17** ablation tags; **D18** overnight queue runs without a Claude session. |
 | 2026-10-10 | **Tracks (owner):** the track library stays open; tracks can be added at any time and mixed into training. The final showcase is a track drawn by faculty, converted into a track and driven live (§6). |
 | 2026-10-11 | Owner decisions (`log.md` T52–T59): **D19** map library of 9+ hand-designed maps: 7 for training (3 showcase + 4 in `tracks/train/`), 2 for testing in `tracks/test/` (never trained on), the 10 generated held-out tracks kept (§6); **D20** track set `maps7` and evaluation protocol v2 with `test_completion` / `unseen_completion`, v1 frozen (§8); **D21** `obs_spec` v2 built from named features, so inputs can be added or removed (§7.1); **D22** versioned action layouts, `steer_gas` default (§7.2); **D23** upgradable engine: physics version, algorithm registry, model manifest (inputs, outputs, parameter count) and a compatibility check, so every model either runs or says what it needs (§5.2, §9); **D24** AI Sandbox: a standalone Streamlit app to understand, compare, configure, queue and launch models, built first in Week 3 (§10.5). Work done on branch `feat/maps-modular-sandbox` while the `night1` queue finished on `main`. |
+| 2026-10-11 | **M2 reached** (T07: T37–T48 done): any registered model loads and 20 of them race at a steady 60 FPS; the night1 ablations are registered (§11 "Runs so far"). The D8 curriculum chain was replaced by training from scratch on mixed tracks after R002's negative result (§8). |
 | 2026-10-11 | **Results (owner-approved runs):** 7 narrow rays (`rays7_narrow`) on `maps7` (R015) meet the new T50 target (v2 lap ratio < 1.0, unseen completion ≥ 80 %): R015@4600k is faster than the PID baseline on the unseen test maps; earlier models had 0 % on them. 9 rays on `maps7` (R016) and fine-tuning R015 (R017) did worse. The arena spreads model decisions over substeps (steady 60 FPS with 20 different models, T51). **Training stays on the CPU** (the GPU was slower, T62); parallel runs on the CPU are next (T64). |
 
 **Open questions:**

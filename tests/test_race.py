@@ -63,6 +63,18 @@ def test_baseline_race_finishes_with_times_and_gaps():
     assert race.gap(a) == 0.0 and race.gap(b) == pytest.approx(b.finished_t - a.finished_t)
 
 
+def test_twenty_car_race_finishes():
+    """T47 done-when: a headless 20-car race runs to the finish (grid of 10 rows, gaps, results)."""
+    race = Race("training_ground", [baseline_entry(f"B{i:02d}") for i in range(20)], RULES)
+    while not race.over:
+        race.tick()
+        assert race.t < 300
+    order = race.standings()
+    assert len(order) == 20 and all(c.finished_t is not None for c in order)
+    assert [c.finished_t for c in order] == sorted(c.finished_t for c in order)
+    assert race.gap(order[0]) == 0.0 and all(race.gap(c) >= 0.0 for c in order)
+
+
 def test_spread_decisions_same_result_less_peak_work():
     """T51: stepping cars up to one agent step early spreads the work but changes no result."""
     def run(spread):

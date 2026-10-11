@@ -8,7 +8,7 @@ A 2D top-down racing game written from scratch, where a car learns to drive a ra
 
 The demo (pygame-ce) loads any trained model from a registry and races up to 20 of them as ghost cars (Model Arena). Week 3 adds the evolution race, draw-a-track mode and human vs AI.
 
-> **Status:** Week 2 (milestone M2). Track sets with generated tracks, a curriculum (`--parent` fine-tuning), the evaluation protocol, the model registry (CSV → xlsx), an overnight experiment queue and the Model Arena are in place. Week 1's model `R001` laps Training Ground faster than the hand-coded baseline (42.7 s vs 46.6 s).
+> **Status:** milestone M2 (Week 2) done. Track sets with generated tracks, fine-tuning (`--parent`), the evaluation protocol, the model registry (CSV → xlsx), an overnight experiment queue and the Model Arena (20 different models at a steady 60 FPS) are in place. The best model so far, `R015_t50_narrow7_s1@4600k` (7 narrow rays, trained on the map library), is faster than the hand-coded baseline and completes 88 % of the runs on maps it has never seen. Experiment results so far: [PROJECT_CONTEXT.md §11](PROJECT_CONTEXT.md).
 > **New (2026-10-11):** a map library of 9 hand-designed maps (7 for training, 2 test maps never trained on), evaluation protocol v2, and an upgradable model design: inputs are built from named features, the outputs follow a versioned action layout, and PPO and SAC are both supported. Any model the engine can run races in the arena. The AI Sandbox app is planned next: [docs/SANDBOX_PLAN.md](docs/SANDBOX_PLAN.md).
 > Full design, plan and timeline: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). Progress and change log: [log.md](log.md).
 

@@ -21,7 +21,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-11 (Claude Opus 5.5): T52–T62 done, all on `main` (merged, committed locally, not pushed; 117 tests pass). 9-map library (7 train, 2 test), evaluation protocol v2, upgradable engine (obs_spec v2 features, action layouts, physics versions, PPO/SAC, manifest, compatibility check), AI Sandbox plan (`docs/SANDBOX_PLAN.md`). **T50 done:** `R015_t50_narrow7_s1@4600k` (7 narrow rays on `maps7`) is faster than the baseline (v2 lap ratio 0.969) with 87.5 % unseen completion (@4800k: 93.8 %), but still fails Fast Flow / Technical; R016 (rays9) and R017 (fine-tune) were worse. **T51 done:** arena steady 60 FPS with 20 distinct models. **T62 done:** the GPU trains slower than the CPU (0.64×) → training stays on the CPU (T63 not needed); 2 parallel CPU runs give 1.62×. **M2 closed (T07, T46–T48). T64 done:** `queue_overnight.py --parallel 2` runs two trainings at once (≈ 1.6× per night; run ids reserved atomically, registry writes locked). **Next: the AI Sandbox (owner to decide its 3 open points in `docs/SANDBOX_PLAN.md` §7); optionally reliability runs for R015's setup (second seed, longer training), now 2 at a time.**
+* **Last updated:** 2026-10-11 (Claude Opus 5.5): T52–T62 done, all on `main` (merged, committed locally, not pushed; 117 tests pass). 9-map library (7 train, 2 test), evaluation protocol v2, upgradable engine (obs_spec v2 features, action layouts, physics versions, PPO/SAC, manifest, compatibility check), AI Sandbox plan (`docs/SANDBOX_PLAN.md`). **T50 done:** `R015_t50_narrow7_s1@4600k` (7 narrow rays on `maps7`) is faster than the baseline (v2 lap ratio 0.969) with 87.5 % unseen completion (@4800k: 93.8 %), but still fails Fast Flow / Technical; R016 (rays9) and R017 (fine-tune) were worse. **T51 done:** arena steady 60 FPS with 20 distinct models. **T62 done:** the GPU trains slower than the CPU (0.64×) → training stays on the CPU (T63 not needed); 2 parallel CPU runs give 1.62×. **M2 closed (T07, T46–T48). T64 done:** `queue_overnight.py --parallel 2` runs two trainings at once (≈ 1.6× per night; run ids reserved atomically, registry writes locked). **T65 done:** sandbox plan v2 with the owner's decisions (Streamlit 1.65.0, localhost only, may start the queue, `registry/run_notes.yaml`). **Next: build the AI Sandbox, T66 (S0) → T72 (S6), per `docs/SANDBOX_PLAN.md` §5; optionally reliability runs for R015's setup (second seed, longer training), now 2 at a time.**
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
 * **Plan:** `PROJECT_CONTEXT.md` is the single source of truth: design, physics, env, training, registry, demo, timeline (§12) and setup (§14). `CLAUDE.md` holds the agent rules.
 * **Architecture:** a headless simulation (`racer/physics`, `racer/track`, `racer/env`, with no pygame) used by the training scripts (`scripts/train.py`, `evaluate.py`) and by the pygame-ce demo (`scripts/demo.py`, `racer/render`).
@@ -101,6 +101,15 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T64: **NEXT. Condition met by T62: 2 runs × 6 envs on the CPU give 1.62× the total throughput (2754 vs 1704 steps/s).** **Parallel queue (only if T62 shows a higher total throughput).** `queue_overnight.py --parallel N` runs up to N queue entries at once (each with its own log; `state.json` stays the single source of progress; evaluation after training limited so N runs don't each start 6 eval workers); `n_envs` per run from the queue entry or T62's recommendation. Run ids stay unique when two runs start together (`next_run_id` must reserve its id, e.g. by creating the folder/lock atomically). **Done when:** a 2-slot scratch queue with 3 short entries finishes with distinct run ids and correct state, and total throughput matches T62.
 * [x] T63: *Decided by T62: not done. The GPU trains at 0.64–0.90× the CPU's speed, so the ≥ 1.3× condition is not met; training stays on the CPU.* **Train on the GPU (only if T62 shows ≥ 1.3× faster training).** `device: cpu|cuda` in the train presets (default `cpu`, so old configs mean the same), `train.py --device`, recorded in the snapshot; models are always saved for and loaded on the CPU; `requirements-gpu.txt` with the CUDA torch pin; README setup section; queue entries may use `--device cuda`. Requirements stay as they are: CPU-only machines still train and run everything, saved models load anywhere. **Done when:** a GPU run and a CPU run of the same config give comparable results, and every existing model still loads in the CPU `.venv`.
 * [x] T61: Re-evaluate the best checkpoint of every run with protocol v2 (`evaluate.py --model <best ids>`), so all models are comparable on the map library (≈ 1 min per model). Optional: every checkpoint overnight (≈ 430 checkpoints ≈ 1 h on 6 workers).
+* *T65–T72 (2026-10-11): the AI Sandbox (D24), built in the steps S0–S6 of `docs/SANDBOX_PLAN.md` §5. Owner decisions (T65): Streamlit 1.65.0; the sandbox may start the queue in its own console; localhost only; retroactive run notes in `registry/run_notes.yaml`.*
+* [x] T65: Sandbox implementation plan v2: owner's 4 decisions recorded (PROJECT_CONTEXT §10.5, §16), plan refined against the code (data sources checked, build steps with "done when"), tasks T66–T72.
+* [ ] T66: **S0** Install Streamlit 1.65.0 into `.venv` (dry run: +26 packages, no pin changes); pin it and psutil 7.2.2 (already in `.venv`, never recorded); `.gitignore`; `scripts/sandbox.py` launcher (localhost, headless, no usage stats, no files written to the user profile) + empty pages. **Done when:** the app opens on `localhost:8501` with every page listed; `pip check` clean; no `~/.streamlit/` created; the server stops cleanly.
+* [ ] T67: **S1** `racer/sandbox/data.py`, `explain.py`, `glossary.yaml`, `registry/run_notes.yaml` (why + outcome for R001–R017, from PROJECT_CONTEXT §11). **Done when:** tests pass, including: every key of every preset in `configs/{physics,reward,train,env,trackset}` and of every snapshot in `models/` has a glossary entry; the diff of R004 vs R008 is only the ray list (+ tag/seed/ids).
+* [ ] T68: **S2** Model Explorer + `diagrams.py` (ray diagram on a straight and on a real map with the real sensor code; network diagram) + `curves.py` (TensorBoard). **Done when:** R001 (v1), R015 (v2 obs) and a 3-output scratch model display correctly; the ray-diagram hit distances match the sensor within 0.1 m (test).
+* [ ] T69: **S3** Compare page (2–4 models: config diff with glossary notes, shapes, metrics within one protocol, overlaid curves, thumbnails, *Launch these*). **Done when:** R004 vs R008 vs R015 shows the expected differences; mixed protocols give a warning.
+* [ ] T70: **S4** Launch page + `racer/sandbox/procs.py` (psutil; pid + creation time) + `launcher.py` + `demo.py --title`. **Done when:** two game windows run at once from the sandbox; *Stop* closes one and leaves the other; incompatible models can't be picked; instances survive a sandbox restart in the list.
+* [ ] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
+* [ ] T72: **S6** Overview page (counts, leaderboard, queue status, running games), polish, README + PROJECT_CONTEXT, full tests. **Done when:** the owner can do all 4 goals without the terminal.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -117,6 +126,39 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T65: AI Sandbox plan v2
+
+* **Task:** owner asked to plan the sandbox's implementation and to ask any critical decisions.
+* **Status:** DONE (plan only; no code, no installs).
+* **Owner decisions:**
+  * Streamlit 1.65.0.
+  * The sandbox may start the queue in its own console.
+  * Localhost only.
+  * Retroactive "why" and outcome notes go in `registry/run_notes.yaml`.
+* **Checked against the code before planning:**
+  * `pip install --dry-run streamlit` in `.venv` gives 1.65.0 plus 26 new packages and changes no existing pin (numpy, pandas and protobuf stay). Nothing was installed.
+  * The glossary has to cover about 135 config keys: physics 32, reward 8, train 41 (including the baseline keys), env 27, trackset 8, plus snapshot-only keys.
+  * TensorBoard logs have 21 scalar tags per run (`rollout/ep_rew_mean`, `race/lap_time`, `race/progress_m`, `end/*`, `train/*`), with about 800 points for R015.
+  * `describe_features()` already provides the feature descriptions.
+  * Only R015–R017 have a real "why" note; R004–R014 have none. This is the reason for `run_notes.yaml`.
+  * There is no v1 → v2 obs conversion yet; the builder needs one.
+  * `queue_overnight.py` `state.json` has no PIDs, so S5 adds them.
+  * The queue already re-reads its file (T64), so that item was removed from the plan.
+* **Found:** `psutil 7.2.2` is installed in `.venv` but missing from `requirements.txt`, and no log entry records installing it. T66 pins it; the sandbox uses it for process checks.
+* **Plan changes v1 → v2:**
+  * `scripts/sandbox.py` launches itself headless with every setting on the command line, so nothing is written to `~/.streamlit/`.
+  * Ray diagram on a real map, using the model's own sensor code.
+  * Actor and critic both shown in the network diagram.
+  * The sandbox queue file is git-ignored, so it never makes the tree dirty (D12).
+  * New env presets stay untracked (D12 ignores untracked files).
+  * Queue args are written as YAML lists.
+  * Game windows are matched by PID + creation time and stopped gracefully.
+  * Demo output goes to log files instead of console windows.
+  * A trial-run (`--scratch`) toggle.
+  * Page tests with `streamlit.testing.v1.AppTest`.
+  * Build tasks T66–T72 with "done when" checks.
+* **Files (edited):** `docs/SANDBOX_PLAN.md` (rewritten as v2), `PROJECT_CONTEXT.md` (§4 layout, §10.5 decisions, §16), `log.md` (T65–T72, Current Status, this entry)
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T64: Parallel queue
 

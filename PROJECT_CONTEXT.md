@@ -123,6 +123,8 @@ ML Sem5 Project/
 │   │             evaluation.py (eval protocol, metrics, thumbnails, eval files),
 │   │             algorithms.py (PPO/SAC registry), compat.py (manifest + engine check)
 │   ├── registry/ registry.py, export_xlsx.py, record.py (evaluate + record)
+│   ├── sandbox/  data, explain, diagrams, curves, builder, queue, procs, launcher, glossary.yaml,
+│   │             pages/ (AI Sandbox, §10.5; planned)
 │   └── render/   debug_view.py (Week 1 debug window), world.py, camera.py, cars.py (tinted sprites),
 │                 effects.py, hud.py, brain_panel.py,
 │                 minimap.py, ui.py (menus/model picker), editor.py,
@@ -148,7 +150,7 @@ ML Sem5 Project/
 │   ├── sprites/cars/  sprites/props/  textures/ground/  fonts/  sounds/  licenses/
 │   └── _source/              # original downloads (git-ignored), for re-cutting
 ├── models/<model_id>/        # self-contained model folders (see §9); local only, git-ignored
-├── registry/  runs.csv  models.csv  registry.xlsx
+├── registry/  runs.csv  models.csv  registry.xlsx  run_notes.yaml (why + outcome per run; planned)
 ├── runs/                     # TensorBoard logs
 └── outputs/   videos/  plots/  frames/  eval/ (copies of every model's eval files)
                scratch/ (smoke runs, git-ignored)  queue_logs/ (git-ignored)
@@ -509,6 +511,13 @@ A **standalone** local web app (Streamlit, `scripts/sandbox.py`), separate from 
 - **Launch:** pick models from the trained list and press *Launch* to open a game window (`demo.py`) racing them. Several game windows can run at once, each a separate process.
 The sandbox only reads the registry and model folders and writes queue files; it never edits a model.
 
+**Owner decisions (2026-10-11, T65):**
+- Streamlit 1.65.0. It needs no change to the existing pins.
+- **Localhost only**, with no telemetry and nothing written to the user profile. Run it with `.venv\Scripts\python scripts\sandbox.py`.
+- The sandbox **may start the queue**: *Start queue* opens `queue_overnight.py` in its own console. It is refused while another queue or training is running.
+- The "why" and outcome of each run live in a tracked `registry/run_notes.yaml`. Snapshots can't change, so old runs are filled in from §11. New runs get their "why" through `train.py --notes`.
+- Build steps S0–S6 are tasks T66–T72.
+
 ---
 
 ## 11. Experiments and analysis (for the report and slides)
@@ -691,6 +700,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-11 | Owner decisions (`log.md` T52–T59): **D19** map library of 9+ hand-designed maps: 7 for training (3 showcase + 4 in `tracks/train/`), 2 for testing in `tracks/test/` (never trained on), the 10 generated held-out tracks kept (§6); **D20** track set `maps7` and evaluation protocol v2 with `test_completion` / `unseen_completion`, v1 frozen (§8); **D21** `obs_spec` v2 built from named features, so inputs can be added or removed (§7.1); **D22** versioned action layouts, `steer_gas` default (§7.2); **D23** upgradable engine: physics version, algorithm registry, model manifest (inputs, outputs, parameter count) and a compatibility check, so every model either runs or says what it needs (§5.2, §9); **D24** AI Sandbox: a standalone Streamlit app to understand, compare, configure, queue and launch models, built first in Week 3 (§10.5). Work done on branch `feat/maps-modular-sandbox` while the `night1` queue finished on `main`. |
 | 2026-10-11 | **M2 reached** (T07: T37–T48 done): any registered model loads and 20 of them race at a steady 60 FPS; the night1 ablations are registered (§11 "Runs so far"). The D8 curriculum chain was replaced by training from scratch on mixed tracks after R002's negative result (§8). |
 | 2026-10-11 | **Results (owner-approved runs):** 7 narrow rays (`rays7_narrow`) on `maps7` (R015) meet the new T50 target (v2 lap ratio < 1.0, unseen completion ≥ 80 %): R015@4600k is faster than the PID baseline on the unseen test maps; earlier models had 0 % on them. 9 rays on `maps7` (R016) and fine-tuning R015 (R017) did worse. The arena spreads model decisions over substeps (steady 60 FPS with 20 different models, T51). **Training stays on the CPU** (the GPU was slower, T62); parallel runs on the CPU are next (T64). |
+| 2026-10-11 | **AI Sandbox decisions (owner, T65):** Streamlit 1.65.0 (no pin changes), local only (localhost), the sandbox may start the queue in its own console, run "why" and outcome notes in `registry/run_notes.yaml`. Plan v2 in `docs/SANDBOX_PLAN.md`; build tasks T66–T72 (§10.5). |
 
 **Open questions:**
 - `final_mix` trains on every track in `tracks/user/`, so a track drawn and saved in the demo becomes training data for later `final_mix` runs. `maps7` leaves `user/` out. Should `final_mix` stay as it is (its meaning is frozen in old snapshots either way), and should faculty-drawn tracks be saved to `tracks/test/` instead? Currently: unchanged; use `maps7` for new runs.

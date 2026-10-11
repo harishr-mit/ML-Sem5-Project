@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -18,6 +19,8 @@ from typing import Any, Callable
 import yaml
 
 from racer.config import PROJECT_ROOT
+
+FOLDER_TTL_S = 30.0       # how long a model folder's existence is remembered
 
 NOTES_HEADER = """\
 # Why each run was made and what it showed (AI Sandbox, T67; owner decision T65).
@@ -78,6 +81,7 @@ class Store:
         self.trial = Source("trial", scratch / "registry", scratch, scratch / "eval", scratch / "tb")
         self.notes_path = self.root / "registry" / "run_notes.yaml"
         self.track_previews = self.root / "outputs" / "plots" / "tracks"
+        self._folders: dict[str, tuple[float, Path | None]] = {}
 
     # ------------------------------------------------------------ registry rows
     def sources(self, trials: bool = False) -> list[Source]:
@@ -139,12 +143,19 @@ class Store:
         return _cached(path, "index", lambda p: {str(r["model_id"]): r for r in _read_csv(p)})
 
     def folder(self, model_id: str) -> Path | None:
-        """The model's folder (registry path first, then by id), or None if it is gone."""
+        """The model's folder (registry path first, then by id), or None if it is gone.
+        Remembered for ``FOLDER_TTL_S`` (hundreds of checkpoints are checked on every page)."""
+        now = time.monotonic()
+        hit = self._folders.get(model_id)
+        if hit and now - hit[0] < FOLDER_TTL_S:
+            return hit[1]
         src = self.source_of(model_id)
         row = self._model_index(src).get(model_id)
         cands = [self.root / str(row["path"])] if row and row.get("path") else []
         cands.append(src.models / model_id)
-        return next((c for c in cands if (c / "config.yaml").is_file()), None)
+        found = next((c for c in cands if (c / "config.yaml").is_file()), None)
+        self._folders[model_id] = (now, found)
+        return found
 
     def snapshot(self, model_id: str) -> dict[str, Any]:
         folder = self.folder(model_id)

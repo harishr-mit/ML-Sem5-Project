@@ -53,13 +53,15 @@ def test_app_with_navigation_renders_home():
 # ---------------------------------------------------------------- fixtures: a tiny project
 
 def make_snapshot(run_id: str, model_id: str, steps: int, env: str = "rays5", parent: str | None = None,
-                  tag: str = "t", features: list | None = None) -> dict:
+                  tag: str = "t", features: list | None = None, layout: str | None = None) -> dict:
     """A config.yaml snapshot like train.py writes (manifest included)."""
     from racer.agents.compat import build_manifest
     from racer.config import load_preset
     env_cfg = load_preset("env", env)
     if features is not None:
         env_cfg["obs_spec"] = {"version": 2, "name": "custom", "features": features}
+    if layout:
+        env_cfg["action_spec"] = {"layout": layout}
     train = load_preset("train", "ppo_default")
     env_config = {"presets": {"physics": "default", "env": env, "reward": "progress", "track": "default",
                               "trackset": "tg"},
@@ -255,6 +257,68 @@ def test_real_diff_r004_vs_r008_is_only_the_rays():
     assert changed == {"presets.env", "env.obs_spec.name", "env.obs_spec.rays"}
 
 
+# ---------------------------------------------------------------- diagrams (T68)
+
+RAYS7 = [{"angle_deg": a, "range_m": r} for a, r in
+         ((-60, 60), (-20, 120), (-7, 150), (0, 150), (7, 150), (20, 120), (60, 60))]
+
+
+@pytest.mark.parametrize("offset", [0.0, 2.0, -3.5])
+def test_straight_hits_match_the_sensor(offset):
+    """The straight-road diagram agrees with the real ray sensor within 0.1 m."""
+    import numpy as np
+
+    from racer.config import load_preset
+    from racer.env.sensors import cast_rays, pack_raycast_params
+    from racer.sandbox.diagrams import straight_hits
+    from racer.track.io import spec_from_dict
+    from racer.track.track import Track
+    # a stadium: long straights at y = 0 and y = 200 (x 0..600), 12 m wide
+    pts = [[x, 0] for x in range(0, 601, 100)] + [[700, 100]] + [[x, 200] for x in range(600, -1, -100)] + [[-100, 100]]
+    tr = Track(spec_from_dict({"name": "stadium", "control_points": pts, "width_m": 12.0, "runoff_m": 15.0,
+                               "kerb_m": 1.2, "direction": "ccw"}))
+    raycast = load_preset("env", "rays5")["raycast"]
+    out = np.empty(len(RAYS7))
+    f = tr.field
+    cast_rays(f.dist, f.idx, f.geom, 300.0, offset, 0.0, np.radians([r["angle_deg"] for r in RAYS7]),
+              np.array([float(r["range_m"]) for r in RAYS7]), pack_raycast_params(raycast), out)
+    expected = straight_hits(RAYS7, 12.0, offset)
+    assert np.allclose(out, expected, atol=0.1), (out, expected)
+
+
+def test_straight_hits_geometry():
+    from racer.sandbox.diagrams import straight_hits
+    d = straight_hits([{"angle_deg": 90, "range_m": 60}, {"angle_deg": -30, "range_m": 60},
+                       {"angle_deg": 0, "range_m": 200}, {"angle_deg": 7, "range_m": 20}], 12.0)
+    assert d[0] == pytest.approx(6.0) and d[1] == pytest.approx(12.0)
+    assert d[2] == 200 and d[3] == 20                            # capped at the range
+
+
+def test_layer_table_adds_up_to_the_manifest_count():
+    from racer.agents.compat import count_params
+    from racer.sandbox.diagrams import layer_table
+    for algo in ("ppo", "sac"):
+        for obs, act, arch in ((13, 2, [256, 256]), (15, 3, [64, 64, 64]), (9, 2, [32])):
+            rows = layer_table(algo, obs, act, arch)
+            want = count_params(algo, obs, act, arch)
+            assert sum(r["params"] for r in rows if r["network"] == "actor") == want["policy"]
+            assert sum(r["params"] for r in rows) == want["total"]
+
+
+def test_diagrams_render():
+    from racer.sandbox import diagrams as D
+    for fig in (D.ray_diagram_straight([("a", RAYS7), ("b", RAYS7[:3])], offset_m=1.0),
+                D.ray_diagram_map("training_ground", 100.0, 0.0, [("a", RAYS7, _raycast())]),
+                D.network_diagram([f"in{i}" for i in range(30)], [256, 256], ["steer", "gas"])):
+        assert D.png(fig)[:4] == b"\x89PNG"
+    assert D.rays_of([{"feature": "v_long", "params": {}}]) == []
+
+
+def _raycast() -> dict:
+    from racer.config import load_preset
+    return load_preset("env", "rays5")["raycast"]
+
+
 # ---------------------------------------------------------------- pages (headless)
 
 @pytest.mark.parametrize("key", PAGE_KEYS)
@@ -263,6 +327,42 @@ def test_page_renders(key):
     at = AppTest.from_function(_run_page, args=(key,), default_timeout=120)
     at.run()
     assert not at.exception, [e.value for e in at.exception]
+
+
+@pytest.mark.parametrize("run", ["R001", "R015"])
+def test_explorer_shows_real_models(run):
+    """R001: v1 inputs, old snapshot (no manifest, track list); R015: v2 features."""
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.data import STORE
+    best = STORE.best(run)
+    if not best:
+        pytest.skip(f"{run} not available locally")
+    at = AppTest.from_function(_run_page, args=("explorer",), default_timeout=180)
+    at.session_state["explorer_model"] = best["model_id"]
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.subheader[0].value == best["model_id"]
+    text = " ".join(m.value for m in at.markdown)
+    assert "mass_kg" in text and "gamma" in text and "progress" in text
+
+
+def test_explorer_three_output_trial_model(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.data import Store
+    from racer.sandbox.pages import _ui
+    feats = [{"feature": "rays", "rays": RAYS7}, {"feature": "v_long", "scale": 70.0}, {"feature": "prev_action"}]
+    add_model(tmp_path, make_snapshot("S001", "S001_tb@20k", 20_000, features=feats, layout="steer_throttle_brake"),
+              trial=True)
+    monkeypatch.setattr(_ui, "STORE", Store(tmp_path))
+    at = AppTest.from_function(_run_page, args=("explorer",), default_timeout=180)
+    at.session_state["explorer_model"] = "S001_tb@20k"
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.subheader[0].value == "S001_tb@20k"
+    text = " ".join(m.value for m in at.markdown)
+    assert "`throttle`" in text and "`brake`" in text and "prev_throttle" in text
 
 
 def test_glossary_search():

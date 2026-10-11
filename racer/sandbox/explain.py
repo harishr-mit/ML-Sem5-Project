@@ -166,6 +166,34 @@ def _plain(v: Any) -> Any:
     return v
 
 
+# ------------------------------------------------------------------ sections
+def section(rows: Mapping[str, Any], prefix: str, reference: Mapping[str, Any] | None = None,
+            exclude: Iterable[str] = ()) -> list[dict[str, Any]]:
+    """Rows under ``prefix.`` with their value, the reference (default preset) value, whether
+    it differs, and the glossary entry."""
+    skip = set(exclude)
+    out = []
+    for k, v in rows.items():
+        if not k.startswith(prefix + ".") or k in skip:
+            continue
+        ref = reference.get(k, _MISSING) if reference is not None else _MISSING
+        e = lookup(k) or {}
+        out.append({"key": k, "name": k[len(prefix) + 1:], "value": v, "default": None if ref is _MISSING else ref,
+                    "changed": reference is not None and _canon(v) != _canon(ref),
+                    "short": e.get("short", ""), "affects": e.get("affects", ""), "range": e.get("range", ""),
+                    "related": e.get("related", "")})
+    return out
+
+
+def reference_rows(kind: str, name: str) -> dict[str, Any]:
+    """A preset's values as glossary-namespace rows ({} if it doesn't exist)."""
+    from racer.config import ConfigError, load_preset
+    try:
+        return preset_rows(kind, load_preset(kind, name))
+    except (ConfigError, FileNotFoundError):
+        return {}
+
+
 # ------------------------------------------------------------------ display
 def fmt(v: Any) -> str:
     """Compact human-readable value (ray lists as angles and ranges)."""

@@ -12,6 +12,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PAGE_KEYS = ["overview", "explorer", "compare", "build", "launch", "glossary"]
 
 
+@pytest.fixture(autouse=True)
+def _restore_main_module():
+    """AppTest runs pages as ``__main__`` and leaves it replaced; Windows' spawn-based process
+    pools in later tests (test_queue.py) would then re-run that script in their workers."""
+    main = sys.modules.get("__main__")
+    yield
+    if main is not None:
+        sys.modules["__main__"] = main
+
+
 def _run_page(key: str) -> None:            # executed by AppTest as a script
     import importlib
     importlib.import_module(f"racer.sandbox.pages.{key}").render()
@@ -428,6 +438,193 @@ def test_launch_page_launches_and_stops(fake_launcher, monkeypatch):
     assert not fake_launcher.running()
 
 
+# ---------------------------------------------------------------- builder (T71)
+
+def test_v1_to_v2_gives_the_identical_observation():
+    import numpy as np
+
+    from racer.env.racing_env import RacingEnv, make_env_config
+    from racer.sandbox.builder import v1_to_v2
+    v1 = make_env_config(["technical"], env="rays9")
+    v2 = make_env_config(["technical"], env="rays9")
+    v2["env"]["obs_spec"] = {"version": 2, "name": "x", "features": v1_to_v2(v1["env"]["obs_spec"])}
+    actions = np.random.default_rng(0).uniform(-1, 1, size=(150, 2)).astype(np.float32)
+    outs = []
+    for cfg in (v1, v2):
+        env = RacingEnv(cfg)
+        obs = [env.reset(seed=3)[0]]
+        for a in actions:
+            o, _, term, trunc, _ = env.step(a)
+            obs.append(o)
+            if term or trunc:
+                break
+        outs.append(np.array(obs))
+    assert np.array_equal(outs[0], outs[1])
+
+
+def test_plan_from_presets_reuses_the_preset():
+    from racer.sandbox import builder as B
+    p = B.plan_from_presets("rays7_narrow")
+    p.tag, p.why = "narrow_again", "repeat R015 with a second seed to see how much is luck"
+    assert B.matching_env_preset(p) == "rays7_narrow"
+    assert B.train_sets(p) == []
+    man = B.preview(p)
+    assert man["obs_dim"] == 15 and man["n_params"] == 70404
+    v1 = B.plan_from_presets("rays5")
+    assert B.matching_env_preset(v1) == "rays5"           # a converted v1 spec still matches its preset
+
+
+def test_plan_changes_become_sets_and_a_new_preset(tmp_path):
+    import importlib.util
+
+    import yaml
+
+    from racer.env.obs_spec import build_observer
+    from racer.sandbox import builder as B
+    p = B.plan_from_presets("rays7_narrow")
+    p.tag, p.why, p.seeds = "narrow9", "two more shallow rays: does seeing further help on Fast Flow?", [1, 2]
+    p.features[0]["rays"] += [{"angle_deg": 3.0, "range_m": 200.0}, {"angle_deg": -3.0, "range_m": 200.0}]
+    p.features.append({"feature": "steer_angle", "scale_deg": 30.0})
+    p.hparams["ent_coef"] = 3e-05
+    p.net_arch = [128, 128]
+    assert B.matching_env_preset(p) is None
+    sets = B.train_sets(p)
+    assert sets == ["ppo.ent_coef=3.0e-05", "policy.net_arch=[128,128]"]
+    spec = importlib.util.spec_from_file_location("train_script", PROJECT_ROOT / "scripts" / "train.py")
+    train = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(train)
+    cfg = train.apply_sets(B.load_preset("train", "ppo_default"), sets)        # exactly as train.py reads them
+    assert cfg["ppo"]["ent_coef"] == 3e-05 and cfg["policy"]["net_arch"] == [128, 128]
+    (tmp_path / "proj" / "configs" / "env").mkdir(parents=True)
+    path = B.write_env_preset(p, tmp_path / "proj")
+    body = yaml.safe_load(path.read_text(encoding="utf-8"))
+    obs = build_observer(body["obs_spec"], body["raycast"])
+    assert path.name == "sb_narrow9.yaml" and obs.dim == 18                    # 9 rays + 8 + steer angle
+    assert [f["feature"] for f in body["obs_spec"]["features"]][-2:] == ["onroad_frac", "prev_action"]
+    assert B.write_env_preset(p, tmp_path / "proj") == path                     # same content: fine
+    p2 = p.copy()
+    p2.features = p2.features[:1]
+    with pytest.raises(FileExistsError):
+        B.write_env_preset(p2, tmp_path / "proj")
+    entries = B.queue_entries(p, "sb_narrow9")
+    assert [e["name"] for e in entries] == ["narrow9_s1", "narrow9_s2"]
+    a = entries[1]["args"]
+    assert a[a.index("--seed") + 1] == "2" and a[a.index("--env") + 1] == "sb_narrow9"
+    assert a[a.index("--notes") + 1].startswith("two more") and "--scratch" not in a
+    assert B.preview(p)["obs_dim"] == 18
+
+
+def test_plan_validation():
+    from racer.sandbox import builder as B
+    p = B.plan_from_presets("rays7_narrow")
+    errs = " ".join(B.validate(p))
+    assert "Tag" in errs and "Why" in errs
+    p.tag, p.why = "Bad Tag", "a reason long enough"
+    assert any("Tag" in e for e in B.validate(p))
+    p.tag, p.steps = "fine", 50_000
+    assert any("Steps" in e for e in B.validate(p))
+    p.steps = 1_000_000
+    assert B.validate(p) == []
+    assert any("already used" in e for e in B.validate(p, taken_tags={"fine_s1"}))
+    p.tag = "fine_s3"
+    p.seeds = [3]
+    assert B.run_tags(p) == [("fine_s3", 3)]
+    p.features = [f for f in p.features if f["feature"] != "rays"]
+    assert any("No rays" in w for w in B.warnings(p))
+
+
+def test_plan_from_a_real_snapshot():
+    from racer.sandbox import builder as B
+    from racer.sandbox.data import STORE
+    for run, preset in (("R015", "rays7_narrow"), ("R004", "rays5")):
+        best = STORE.best(run)
+        if not best:
+            pytest.skip(f"{run} not available locally")
+        p = B.plan_from_snapshot(STORE.snapshot(best["model_id"]))
+        assert B.matching_env_preset(p) == preset and B.train_sets(p) == []
+        assert p.started_from == best["model_id"]
+
+
+def test_time_estimate():
+    from racer.sandbox.builder import estimate_minutes
+    cfg = {"queue": {"minutes_per_million_alone": 10.0, "minutes_per_million_parallel": 13.0,
+                     "eval_minutes_per_checkpoint": 0.0}}
+    assert estimate_minutes(2_000_000, 1, 1, cfg) == {"run": 20.0, "queue": 20.0}
+    assert estimate_minutes(2_000_000, 4, 2, cfg) == {"run": 26.0, "queue": 52.0}
+
+
+# ---------------------------------------------------------------- queue (T71)
+
+def test_queue_file_round_trip(tmp_path):
+    import importlib.util
+
+    from racer.sandbox.queue import QueueControl, steps_of
+    qc = QueueControl(root=tmp_path, file="configs/queue/sandbox.yaml")
+    assert qc.load() == {"parallel": 2, "runs": []}
+    notes = 'Goal: test "quotes" and: colons'
+    qc.add([{"name": "a_s1", "args": ["--tag", "a_s1", "--steps", "20000", "--notes", notes]},
+            {"name": "b_s1", "args": ["--tag", "b_s1"]}])
+    with pytest.raises(ValueError):
+        qc.add([{"name": "a_s1", "args": []}])
+    spec = importlib.util.spec_from_file_location("qo", PROJECT_ROOT / "scripts" / "queue_overnight.py")
+    qo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(qo)
+    runs, parallel = qo.load_queue(qc.path)                 # the runner reads exactly what was written
+    assert parallel == 2 and runs[0]["argv"][-1] == notes
+    assert [e["status"] for e in qc.entries()] == ["waiting", "waiting"]
+    assert qc.entries()[0]["steps"] == 20000 and steps_of(["--steps", "x"]) is None
+    qc.remove("b_s1")
+    assert qc.names() == {"a_s1"}
+    qc.log_dir.mkdir(parents=True)
+    (qc.log_dir / "state.json").write_text('{"a_s1": {"status": "running", "pid": 1}}', encoding="utf-8")
+    assert qc.entries()[0]["status"] == "interrupted"       # no live runner
+    (qc.log_dir / "state.json").write_text('{"a_s1": {"status": "done"}}', encoding="utf-8")
+    with pytest.raises(ValueError):
+        qc.remove("a_s1")                                      # finished entries stay
+    assert not qc.request_stop()
+
+
+SLOW = "import sys, time\nprint('slow', sys.argv[1:], flush=True)\ntime.sleep(120)\n"
+
+
+def test_stop_request_interrupts_a_running_queue(tmp_path):
+    """The sandbox's Stop queue: the runner stops its runs (whole process tree) and marks them interrupted."""
+    import shutil
+    import subprocess
+    import sys
+    import time
+    import uuid
+
+    from racer.sandbox import procs
+    from racer.sandbox.queue import QueueControl
+    stem = f"pytest_stop_{uuid.uuid4().hex[:8]}"
+    (tmp_path / "slow.py").write_text(SLOW, encoding="utf-8")
+    queue = tmp_path / f"{stem}.yaml"
+    queue.write_text("parallel: 2\nruns:\n  - {name: one, args: [x]}\n  - {name: two, args: [y]}\n", encoding="utf-8")
+    qc = QueueControl(file=str(queue))
+    runner = subprocess.Popen([sys.executable, str(PROJECT_ROOT / "scripts" / "queue_overnight.py"), str(queue),
+                               "--script", str(tmp_path / "slow.py"), "--poll", "0.2"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(100):
+            if [e["status"] for e in qc.entries()] == ["running", "running"]:
+                break
+            time.sleep(0.2)
+        assert qc.runner() is not None
+        assert [e["status"] for e in qc.entries()] == ["running", "running"]
+        pids = [qc.state()[n]["pid"] for n in ("one", "two")]
+        assert any("a queue is running" in r for r in qc.busy())
+        assert qc.request_stop()
+        assert runner.wait(timeout=30) == 130
+        assert [e["status"] for e in qc.entries()] == ["interrupted", "interrupted"]
+        assert qc.runner() is None and not (qc.log_dir / "runner.json").exists()
+        assert not any(procs.alive(p, None) for p in pids)
+    finally:
+        if runner.poll() is None:
+            runner.kill()
+        shutil.rmtree(qc.log_dir, ignore_errors=True)
+
+
 # ---------------------------------------------------------------- pages (headless)
 
 @pytest.mark.parametrize("key", PAGE_KEYS)
@@ -505,6 +702,33 @@ def test_compare_without_a_common_protocol_warns(tmp_path, monkeypatch):
     at.run()
     assert not at.exception, [e.value for e in at.exception]
     assert any("no evaluation protocol in common" in w.value for w in at.warning)
+
+
+def test_build_page_adds_a_run_to_the_queue(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.pages import build
+    from racer.sandbox.queue import QueueControl
+    qc = QueueControl(root=tmp_path, file="configs/queue/sandbox.yaml")
+    monkeypatch.setattr(build, "_qc", lambda: qc)
+    at = AppTest.from_function(_run_page, args=("build",), default_timeout=180)
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.button(key="bq_add").disabled                     # no tag / reason yet
+    at.text_input(key="bq_tag_0").input("sbtest")
+    at.text_area(key="bq_why_0").input("check that the form queues a run with the right arguments")
+    at.text_input(key="bq_seeds_0").input("1, 2")
+    at.run()
+    assert not at.button(key="bq_add").disabled, [e.value for e in at.error]
+    at.button(key="bq_add").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert qc.names() == {"sbtest_s1", "sbtest_s2"}
+    args = qc.load()["runs"][1]["args"]
+    assert args[args.index("--env") + 1] == "rays7_narrow" and args[args.index("--seed") + 1] == "2"
+    assert "--scratch" not in args                              # real run by default (owner)
+    assert any("Added sbtest_s1, sbtest_s2" in m.value for m in at.success)
+    at.button(key="bq_rm_sbtest_s2").click().run()
+    assert qc.names() == {"sbtest_s1"}
 
 
 def test_glossary_search():

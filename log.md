@@ -108,7 +108,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T68: **S2** Model Explorer + `diagrams.py` (ray diagram on a straight and on a real map with the real sensor code; network diagram) + `curves.py` (TensorBoard). **Done when:** R001 (v1), R015 (v2 obs) and a 3-output scratch model display correctly; the ray-diagram hit distances match the sensor within 0.1 m (test).
 * [x] T69: **S3** Compare page (2–4 models: config diff with glossary notes, shapes, metrics within one protocol, overlaid curves, thumbnails, *Launch these*). **Done when:** R004 vs R008 vs R015 shows the expected differences; mixed protocols give a warning.
 * [x] T70: **S4** Launch page + `racer/sandbox/procs.py` (psutil; pid + creation time) + `launcher.py` + `demo.py --title`. **Done when:** two game windows run at once from the sandbox; *Stop* closes one and leaves the other; incompatible models can't be picked; instances survive a sandbox restart in the list.
-* [ ] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
+* *Owner check-in during T71 (2026-10-11): the end-to-end queue test also queues the R015 reliability runs through the sandbox form: R015's setup with seed 2 (5M) and seed 1 for 8M steps, plus a short trial run, 2 at a time (≈ 2–2.5 h). The sandbox server is stopped at the end (not left running).*
+* [~] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
 * [ ] T72: **S6** Overview page (counts, leaderboard, queue status, running games), polish, README + PROJECT_CONTEXT, full tests. **Done when:** the owner can do all 4 goals without the terminal.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
@@ -126,6 +127,40 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T71: Sandbox S5 (Build & Queue)
+
+* **Status:** WORKING. Code done and committed; the end-to-end run through the queue is next (trial + R015 reliability runs, owner). Full suite: **170 passed**.
+* **What was built:**
+  * `racer/sandbox/builder.py`:
+    * `Plan`, created from a model's snapshot or from presets.
+    * `v1_to_v2` (test: identical observations to `rays9` over a 150-step rollout).
+    * Reuses an existing env preset when inputs, outputs, ray marching and episode rules all match; otherwise writes a standalone v2 `configs/env/sb_<tag>.yaml` (never overwrites one with different settings).
+    * Hyperparameter and network changes become `--set` against `<algo>_default`. Floats are written so YAML reads them back as numbers (`3.0e-05`, not `3e-05`); a test checks this through train.py's own `apply_sets`.
+    * One entry per seed (`<tag>_s<seed>`).
+    * Validation with train.py's code (tag, why, unique tag, steps ≥ one checkpoint, presets exist, `build_manifest`), plus warnings and time estimates.
+  * `racer/sandbox/queue.py`:
+    * Reads, adds to and removes from `configs/queue/sandbox.yaml`, atomically, with args as lists. A `--notes` with `: ` and quotes round-trips through `queue_overnight.load_queue`.
+    * Per-entry status, with a `running` left by a dead runner shown as `interrupted`.
+    * Checks whether the runner is alive (`runner.json` + its command line).
+    * `busy()` (process scan), `start()` (own console window, refused while anything trains), `request_stop()`.
+  * `scripts/queue_overnight.py`:
+    * Writes `runner.json` while it runs and each entry's `pid` to `state.json`.
+    * `stop.request` acts like Ctrl+C.
+    * Stopping now kills each run's whole process tree (psutil): a venv's `python.exe` is a launcher, so `terminate()` alone left `train.py` and its env workers running when no console Ctrl+C reached them.
+    * Real test: 2 running stand-in entries, a stop request, exit 130, both `interrupted`, the processes gone, `runner.json` removed.
+  * **Build & Queue page:**
+    * Start from a model's setup or from presets.
+    * Tabs: Inputs (ray table editor with a live diagram, the other features with their parameters and descriptions), Outputs & network (layout, layers, activation, live parameter count), Algorithm (each hyperparameter with its glossary note, typical range and default), Car / reward / tracks (preset differences, map previews and shares), Budget & why (1/2/3/5M or custom, seeds, *Trial* checkbox: off = real run, tag, required why).
+    * Summary with sizes and time estimates, errors and warnings, and the exact train.py commands.
+    * Queue: status per entry, *Remove* (waiting), *Explore* (done), log tails, runs at a time, *Start queue* (with the reason when it's refused), *Stop queue* behind a confirmation checkbox.
+  * **Tests:** `tests/test_sandbox.py` restores `sys.modules["__main__"]` after each test. AppTest replaces it, and Windows' spawn-based process pools in `test_queue.py` then re-ran the AppTest script (`NameError: __args`).
+* **Notes:**
+  * The first process scan in a process takes ~8 s on this machine (psutil); later scans take ~0.25 s, and the page caches the result for 10 s.
+  * The "20k-step trial" in the done-when check becomes 100k: checkpoints are saved every 100k, so a 20k run has nothing to show in the Explorer.
+* **Files:**
+  * Created: `racer/sandbox/{builder,queue}.py`.
+  * Edited: `racer/sandbox/pages/build.py`, `scripts/queue_overnight.py`, `tests/test_sandbox.py`, `log.md`.
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T70: Sandbox S4 (Launch)
 

@@ -16,7 +16,11 @@ evaluates every checkpoint itself. The queue
   (finished entries are skipped; failed ones are re-run only with ``--retry-failed``);
 * keeps going when a run fails;
 * keeps Windows awake only while it runs (``SetThreadExecutionState``; no power-plan
-  changes). Keep the laptop plugged in; closing the lid may still sleep it.
+  changes). Keep the laptop plugged in; closing the lid may still sleep it;
+* writes ``runner.json`` (its PID) while it runs, and each running entry's PID to
+  ``state.json``, so the AI Sandbox can tell a live queue from a stale one (T71);
+* stops like Ctrl+C when a ``stop.request`` file appears next to ``state.json`` (the
+  sandbox's *Stop queue*): running entries become ``interrupted`` and run again on the next start.
 
 Queue file::
 
@@ -30,6 +34,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -82,6 +87,23 @@ def launch_argv(argv: list[str], n_slots: int) -> list[str]:
     return list(argv)
 
 
+def stop_tree(proc: subprocess.Popen) -> None:
+    """Stop a run and everything it started (on Windows a venv's python.exe is a launcher whose
+    child runs train.py, which runs the env workers)."""
+    try:
+        import psutil
+        procs = [psutil.Process(proc.pid), *psutil.Process(proc.pid).children(recursive=True)]
+    except Exception:            # psutil missing or the process already gone
+        procs = []
+    proc.terminate()
+    for p in procs:
+        try:
+            p.kill()
+        except Exception:
+            pass
+    proc.wait()
+
+
 def pending(runs: list[dict], state: dict, retry_failed: bool, started: set[str]) -> list[dict]:
     """Entries still to run: not done, not failed (unless retrying), not started by this queue run."""
     return [r for r in runs if r["name"] not in started and state.get(r["name"], {}).get("status") != "done"
@@ -124,18 +146,23 @@ def main() -> int:
     keep_awake(True)
     t_queue = time.perf_counter()
     running: dict[str, tuple[subprocess.Popen, float, Any]] = {}   # name → (process, start time, log file)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    stop_path = log_dir / "stop.request"
+    stop_path.unlink(missing_ok=True)                              # a stale request from an earlier run
+    runner_path = log_dir / "runner.json"
+    runner_path.write_text(json.dumps({"pid": os.getpid(), "queue": str(args.queue.resolve()), "started": now(),
+                                       "parallel": n_slots}), encoding="utf-8")
 
     def start(r: dict) -> None:
         log_path = log_dir / f"{r['name']}.log"
-        log_dir.mkdir(parents=True, exist_ok=True)
         cmd = [sys.executable, str(PROJECT_ROOT / args.script), *launch_argv(r["argv"], n_slots)]
-        state[r["name"]] = {"status": "running", "started": now(), "log": str(log_path)}
-        save_state()
         print(f"[queue] {now()} start {r['name']} ({len(running) + 1}/{n_slots} slots)", flush=True)
         log = log_path.open("a", encoding="utf-8")
         log.write(f"=== {now()} {' '.join(cmd)}\n")
         log.flush()
         proc = subprocess.Popen(cmd, cwd=PROJECT_ROOT, stdout=log, stderr=subprocess.STDOUT)
+        state[r["name"]] = {"status": "running", "started": now(), "log": str(log_path), "pid": proc.pid}
+        save_state()
         running[r["name"]] = (proc, time.perf_counter(), log)
         started.add(r["name"])
 
@@ -164,14 +191,17 @@ def main() -> int:
             if not running:
                 break
             time.sleep(args.poll)
+            if stop_path.exists():                     # the sandbox's "Stop queue" (T71)
+                stop_path.unlink(missing_ok=True)
+                print(f"[queue] {now()} stop requested", flush=True)
+                raise KeyboardInterrupt
             for name, (proc, _, _) in list(running.items()):
                 code = proc.poll()
                 if code is not None:
                     finish(name, code)
     except KeyboardInterrupt:
         for name, (proc, _, log) in list(running.items()):
-            proc.terminate()
-            proc.wait()
+            stop_tree(proc)
             log.close()
             state[name] = {"status": "interrupted", "finished": now()}
         save_state()
@@ -180,6 +210,7 @@ def main() -> int:
         return 130
     finally:
         keep_awake(False)
+        runner_path.unlink(missing_ok=True)
 
     lines = [f"queue {args.queue.name} finished {now()} after {(time.perf_counter() - t_queue) / 60:.0f} min"]
     for r in runs:

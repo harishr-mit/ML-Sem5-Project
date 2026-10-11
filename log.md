@@ -118,6 +118,18 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Notes / Errors:** anything the next agent needs to know
 -->
 
+### 2026-10-11 — Claude Code (Opus 5.5) — T50: R016 (9 rays on maps7) result, follow-up started
+
+* **R016_t50_rays9_s1** (5M steps, v2): clearly weaker than R015. Best @2600k: seen 50 %, test 50 %, held-out 90 %, unseen 75 %, overall 63 %, lap ratio 0.987; no checkpoint reaches 80 % unseen. **The 7 narrow rays (R015) win** on the same tracks and budget (one seed each).
+* **Follow-up (owner-approved budget, "a clear fix"):** R015's best checkpoints were its last ones, so continue `R015_t50_narrow7_s1@4600k` for 3M steps on `maps7` with `ppo_finetune` (LR 1e-4, linear decay) → R017.
+* **Files:** `registry/*.csv`, `outputs/eval/R015_*`, `outputs/eval/R016_*` (v2 eval copies), `log.md`
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T50: R015 (7 narrow rays on maps7) result
+
+* **R015_t50_narrow7_s1** (5M steps, 50 checkpoints, v2 evaluation 300 s). **The T50 target is met** (v2 `lap_ratio` < 1.0 and `unseen_completion` ≥ 80 %) by @4600k (best by D9: overall 77 %; seen 64 %, test 67 %, held-out 100 %, unseen 87.5 %, lap ratio 0.969), @4800k (unseen **93.8 %**, test 83 %, lap ratio 0.973), @4300k and @4400k. Every earlier model had 0 % on the test maps (best was R014, 17 %).
+* **Faster than the PID baseline on the unseen test maps:** Alpine 75.35 s (@4800k) vs 78.95 s, Coastline 61.45 s vs 61.8 s; on seen maps e.g. Esses 67.05 vs 70.35, City Blocks 66.6 vs 69.05, Oval Infield 71.25 vs 74.2, Hairpin Valley 60.7 vs 63.15 s.
+* **Not yet reliable:** @4600k fails Fast Flow (2/2 off-road at speed), Technical (2/2) and 1 of 2 Hairpin Valley starts; Alpine 1 of 3. `lap_ratio` only covers maps it laps. The best checkpoints are the latest ones (4.3–4.9M), so training was still improving.
+
 ### 2026-10-11 — Claude Code (Opus 5.5) — T50 started, T62 prepared
 
 * **T50:** queue `configs/queue/t50.yaml` running in the background (R015 `t50_narrow7_s1`: 15 inputs, 70,404 policy parameters; then `t50_rays9_s1`). The first start failed before training: unquoted `: ` in the run notes broke the YAML; fixed with block scalars (no run was created).

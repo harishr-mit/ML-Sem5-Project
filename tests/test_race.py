@@ -63,6 +63,30 @@ def test_baseline_race_finishes_with_times_and_gaps():
     assert race.gap(a) == 0.0 and race.gap(b) == pytest.approx(b.finished_t - a.finished_t)
 
 
+def test_spread_decisions_same_result_less_peak_work():
+    """T51: stepping cars up to one agent step early spreads the work but changes no result."""
+    def run(spread):
+        per_tick = [0]
+        entries = [baseline_entry(f"B{i}") for i in range(6)] + [flat_out_entry(f"F{i}") for i in range(3)]
+        for e in entries:
+            act = e.act_batch
+            e.act_batch = lambda obs, envs, act=act: (per_tick.__setitem__(0, per_tick[0] + len(obs)), act(obs, envs))[1]
+        race = Race("technical", entries, RULES, spread_decisions=spread)
+        peak = []
+        while not race.over:
+            per_tick[0] = 0
+            race.tick()
+            if race.t > 1.0:            # after the grid start (where every car steps at once)
+                peak.append(per_tick[0])
+            assert race.t < 300
+        return [(c.label, c.lap_times, c.finished_t, c.crashes) for c in race.cars], max(peak)
+
+    plain, peak_plain = run(False)
+    spread, peak_spread = run(True)
+    assert spread == plain
+    assert peak_spread <= 3 < peak_plain          # 9 cars, 3 substeps per decision → 3 per tick
+
+
 @pytest.mark.skipif(not (MODEL / "model.zip").is_file(), reason="R001 not on this machine")
 def test_models_race_batched():
     from racer.agents.loader import LoadedModel

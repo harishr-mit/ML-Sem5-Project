@@ -194,6 +194,7 @@ def run_race(screen, clock, sel, models, acfg, dcfg, colours, fonts, args) -> st
     rows: list = []
     acc = 0.0
     frame = 0
+    frame_ms: list[float] = []
     x, y, _ = race.cars[0].pose
     cam.snap(x, y)
     fit_w = size[0] - int(acfg["leaderboard_width"]) - 24
@@ -302,9 +303,14 @@ def run_race(screen, clock, sel, models, acfg, dcfg, colours, fonts, args) -> st
             out = Path(args.screenshot)
             out.parent.mkdir(parents=True, exist_ok=True)
             pygame.image.save(screen, str(out))
-            print(f"saved {out}  (race t = {race.t:.1f} s, {len(race.cars)} cars, fps {clock.get_fps():.0f})")
+            ms = np.asarray(frame_ms[1:] or [0.0])
+            print(f"saved {out}  (race t = {race.t:.1f} s, {len(race.cars)} cars, fps {clock.get_fps():.0f}; "
+                  f"racing frames {len(ms)}: mean {1000 / max(ms.mean(), 1e-9):.0f} fps, "
+                  f"1% low {1000 / max(np.percentile(ms, 99), 1e-9):.0f} fps, worst frame {ms.max():.1f} ms)")
             result = "quit"
-        clock.tick(dcfg["fps"] if not args.screenshot else 0)
+        dt_ms = clock.tick(dcfg["fps"] if not args.screenshot else 0)
+        if args.screenshot and race.started and not paused:
+            frame_ms.append(dt_ms)       # headless: uncapped frame times while racing (T51)
     return result
 
 

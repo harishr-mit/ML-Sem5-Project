@@ -86,9 +86,10 @@ class RaceCar:
 
 class Race:
     def __init__(self, track: str | Track, entries: Sequence[Entry], rules: Mapping[str, Any] | RaceRules,
-                 physics_override: Mapping[str, Any] | None = None) -> None:
+                 physics_override: Mapping[str, Any] | None = None, spread_decisions: bool = True) -> None:
         if not entries:
             raise ValueError("a race needs at least one car")
+        self.spread_decisions = spread_decisions
         self.rules = rules if isinstance(rules, RaceRules) else from_dict(RaceRules, rules, where="arena race rules")
         self.cars: list[RaceCar] = []
         hz = set()
@@ -153,8 +154,18 @@ class Race:
                 self._place(car, car.respawn_s, 0.0, car.dist)
                 car.state = "finished" if car.finished_t is not None else "racing"
                 car.t_state = self.t
-        # Cars that need a new action now, batched per policy.
-        need = [c for c in self.cars if c.state in ("racing", "finished") and not c.poses]
+        # Cars that need a new action, batched per policy. A car with nothing left to show must
+        # step now; with ``spread_decisions`` other cars may step up to one agent step early
+        # (their poses are played back later), so each tick handles ~1/substeps of the cars
+        # instead of all of them landing on the same frame (T51). Cars don't interact and
+        # timing uses each car's own simulated time, so results are the same either way.
+        active = [c for c in self.cars if c.state in ("racing", "finished")]
+        need = [c for c in active if not c.poses]
+        if self.spread_decisions:
+            budget = math.ceil(sum(1.0 / c.env.substeps for c in active))
+            early = sorted((c for c in active if c.poses and len(c.poses) <= c.env.substeps),
+                           key=lambda c: len(c.poses))
+            need += early[:max(budget - len(need), 0)]
         groups: dict[Any, list[RaceCar]] = {}
         for c in need:
             groups.setdefault(c.entry.key if c.entry.key is not None else id(c.entry), []).append(c)
@@ -196,10 +207,9 @@ class Race:
         # Earliest time each metre was reached (for gaps).
         lo, hi = max(int(math.floor(d_prev)) + 1, 0), min(int(math.floor(d_new)), len(self._first_t) - 1)
         if hi >= lo:
+            # Keep the minimum: with spread decisions a later car may be stepped before an earlier one.
             seg = self._first_t[lo:hi + 1]
-            empty = np.isnan(seg)
-            if empty.any():
-                seg[empty] = [frac(d) for d in np.arange(lo, hi + 1)[empty]]
+            np.fmin(seg, [frac(d) for d in np.arange(lo, hi + 1)], out=seg)
         # Lap completions (line crossings at multiples of the track length).
         if car.finished_t is None:
             k = len(car.lap_times) + 1

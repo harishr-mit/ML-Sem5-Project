@@ -8,46 +8,12 @@ import streamlit as st
 
 from racer.sandbox import curves, diagrams, explain
 from racer.sandbox.data import experiment_group
-from racer.sandbox.pages._ui import md_table, model_label, num, pct, store
+from racer.sandbox.pages._ui import (freeze as _freeze, map_png as _map_png, md_table, network_png as _network_png,
+                                     num, pct, store, straight_png as _straight_png, track_length as _track_length,
+                                     track_names as _track_names)
 
 TABS = ["Summary & why", "What it senses", "Its brain", "The car", "Reward", "Where it trained",
         "How it trained", "Episode rules", "Results", "Learning curves"]
-
-
-# ------------------------------------------------------------------ cached figures
-@st.cache_data(show_spinner=False, max_entries=64)
-def _straight_png(key: str, rays_sets: tuple, width: float, offset: float) -> bytes:
-    return diagrams.png(diagrams.ray_diagram_straight([(lbl, [dict(r) for r in rays]) for lbl, rays in rays_sets],
-                                                      width, offset))
-
-
-@st.cache_data(show_spinner=False, max_entries=64)
-def _map_png(key: str, track: str, s: float, lateral: float, heading: float, sets: tuple) -> bytes:
-    return diagrams.png(diagrams.ray_diagram_map(
-        track, s, lateral, [(lbl, [dict(r) for r in rays], dict(rc)) for lbl, rays, rc in sets], heading))
-
-
-@st.cache_data(show_spinner=False, max_entries=32)
-def _network_png(labels: tuple, arch: tuple, actions: tuple, activation: str) -> bytes:
-    return diagrams.png(diagrams.network_diagram(list(labels), list(arch), list(actions), activation))
-
-
-@st.cache_data(show_spinner=False)
-def _track_names() -> list[str]:
-    from racer.track.io import track_folders
-    names: list[str] = []
-    for folder in track_folders():
-        names += [p.stem for p in sorted(folder.glob("*.json")) if p.stem not in names]
-    return names
-
-
-@st.cache_data(show_spinner=False)
-def _track_length(name: str) -> float:
-    return diagrams.track_length(name)
-
-
-def _freeze(rays) -> tuple:
-    return tuple(tuple(sorted(r.items())) for r in rays)
 
 
 # ------------------------------------------------------------------ helpers

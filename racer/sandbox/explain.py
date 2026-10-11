@@ -102,6 +102,10 @@ def snapshot_rows(snapshot: Mapping[str, Any], manifest: Mapping[str, Any] | Non
             continue
         else:
             rows.update(flatten(v, f"run.{k}") if isinstance(v, Mapping) else {f"run.{k}": v})
+    env = (snapshot.get("env_config") or {}).get("env")
+    if isinstance(env, Mapping) and "env.action_spec.layout" not in rows:
+        from racer.env.actions import action_spec_of
+        rows["env.action_spec.layout"] = action_spec_of(env).get("layout")   # no action_spec = steer_gas (D22)
     man = manifest if manifest is not None else snapshot.get("manifest")
     if man:
         rows.update(flatten(dict(man), "manifest"))

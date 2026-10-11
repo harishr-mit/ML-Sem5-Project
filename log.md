@@ -106,7 +106,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T66: **S0** Install Streamlit 1.65.0 into `.venv` (dry run: +26 packages, no pin changes); pin it and psutil 7.2.2 (already in `.venv`, never recorded); `.gitignore`; `scripts/sandbox.py` launcher (localhost, headless, no usage stats, no files written to the user profile) + empty pages. **Done when:** the app opens on `localhost:8501` with every page listed; `pip check` clean; no `~/.streamlit/` created; the server stops cleanly.
 * [x] T67: **S1** `racer/sandbox/data.py`, `explain.py`, `glossary.yaml`, `registry/run_notes.yaml` (why + outcome for R001–R017, from PROJECT_CONTEXT §11). **Done when:** tests pass, including: every key of every preset in `configs/{physics,reward,train,env,trackset}` and of every snapshot in `models/` has a glossary entry; the diff of R004 vs R008 is only the ray list (+ tag/seed/ids).
 * [x] T68: **S2** Model Explorer + `diagrams.py` (ray diagram on a straight and on a real map with the real sensor code; network diagram) + `curves.py` (TensorBoard). **Done when:** R001 (v1), R015 (v2 obs) and a 3-output scratch model display correctly; the ray-diagram hit distances match the sensor within 0.1 m (test).
-* [ ] T69: **S3** Compare page (2–4 models: config diff with glossary notes, shapes, metrics within one protocol, overlaid curves, thumbnails, *Launch these*). **Done when:** R004 vs R008 vs R015 shows the expected differences; mixed protocols give a warning.
+* [x] T69: **S3** Compare page (2–4 models: config diff with glossary notes, shapes, metrics within one protocol, overlaid curves, thumbnails, *Launch these*). **Done when:** R004 vs R008 vs R015 shows the expected differences; mixed protocols give a warning.
 * [ ] T70: **S4** Launch page + `racer/sandbox/procs.py` (psutil; pid + creation time) + `launcher.py` + `demo.py --title`. **Done when:** two game windows run at once from the sandbox; *Stop* closes one and leaves the other; incompatible models can't be picked; instances survive a sandbox restart in the list.
 * [ ] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
 * [ ] T72: **S6** Overview page (counts, leaderboard, queue status, running games), polish, README + PROJECT_CONTEXT, full tests. **Done when:** the owner can do all 4 goals without the terminal.
@@ -126,6 +126,21 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T69: Sandbox S3 (Compare)
+
+* **Status:** DONE. 32 sandbox tests pass.
+  * R004 vs R008 vs R015 (real data) shows exactly the config differences that changed: total steps, env preset, track set and its fixed maps, obs spec version/name/rays/features. Shared settings (e.g. `physics.mass_kg`) are hidden by default.
+  * Two models without a common protocol give a warning instead of numbers.
+* **Compare page:**
+  * Pick 2–4 models: best checkpoints by default, or any checkpoint or trial runs via toggles. The Explorer's *Compare with others* button pre-fills the selection.
+  * **Launch these in a race** button.
+  * **What is different:** only config rows that differ, each with its glossary note. Toggles show unchanged settings (with differences in bold) and identity / derived rows.
+  * **Shape:** algorithm, inputs, outputs, hidden layers, parameters, presets, steps and engine support, plus rays overlaid on a straight road and on any map.
+  * **Results:** only protocols every model has. Metric table, grouped bar chart, best lap per map (★ = fastest, with the baseline) and driven lines side by side.
+  * **Learning curves:** overlaid per run, with smoothing.
+* **Also:** `explain.snapshot_rows` fills in `env.action_spec.layout` for snapshots from before D22 (no `action_spec` means `steer_gas`), so old and new models don't show a false difference. The cached figure helpers moved to `pages/_ui.py` so both pages share them.
+* **Files:** edited `racer/sandbox/pages/{compare,explorer,_ui}.py`, `racer/sandbox/explain.py`, `tests/test_sandbox.py`, `log.md`.
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T68: Sandbox S2 (Model Explorer)
 

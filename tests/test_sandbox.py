@@ -365,6 +365,39 @@ def test_explorer_three_output_trial_model(tmp_path, monkeypatch):
     assert "`throttle`" in text and "`brake`" in text and "prev_throttle" in text
 
 
+def test_compare_real_models():
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.data import STORE
+    best = [STORE.best(r) for r in ("R004", "R008", "R015")]
+    if not all(best):
+        pytest.skip("R004 / R008 / R015 not available locally")
+    at = AppTest.from_function(_run_page, args=("compare",), default_timeout=180)
+    at.session_state["compare_models"] = [b["model_id"] for b in best]
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    text = " ".join(m.value for m in at.markdown)
+    assert "`env.obs_spec.rays`" in text and "`presets.trackset`" in text
+    assert "`physics.mass_kg`" not in text                 # same in all three: hidden by default
+    assert "`env.action_spec.layout`" not in text          # old snapshots mean steer_gas (D22)
+
+
+def test_compare_without_a_common_protocol_warns(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.data import Store
+    from racer.sandbox.pages import _ui
+    add_model(tmp_path, make_snapshot("R001", "R001_a@100k", 100_000), {"overall_completion": 0.5}, ("v1",))
+    add_model(tmp_path, make_snapshot("R002", "R002_b@100k", 100_000, env="rays9"), {"overall_completion": 0.5},
+              ("v2",))
+    monkeypatch.setattr(_ui, "STORE", Store(tmp_path))
+    at = AppTest.from_function(_run_page, args=("compare",), default_timeout=120)
+    at.session_state["compare_models"] = ["R001_a@100k", "R002_b@100k"]
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("no evaluation protocol in common" in w.value for w in at.warning)
+
+
 def test_glossary_search():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_function(_run_page, args=("glossary",), default_timeout=60)

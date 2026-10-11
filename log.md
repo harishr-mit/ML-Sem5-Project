@@ -107,7 +107,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T67: **S1** `racer/sandbox/data.py`, `explain.py`, `glossary.yaml`, `registry/run_notes.yaml` (why + outcome for R001–R017, from PROJECT_CONTEXT §11). **Done when:** tests pass, including: every key of every preset in `configs/{physics,reward,train,env,trackset}` and of every snapshot in `models/` has a glossary entry; the diff of R004 vs R008 is only the ray list (+ tag/seed/ids).
 * [x] T68: **S2** Model Explorer + `diagrams.py` (ray diagram on a straight and on a real map with the real sensor code; network diagram) + `curves.py` (TensorBoard). **Done when:** R001 (v1), R015 (v2 obs) and a 3-output scratch model display correctly; the ray-diagram hit distances match the sensor within 0.1 m (test).
 * [x] T69: **S3** Compare page (2–4 models: config diff with glossary notes, shapes, metrics within one protocol, overlaid curves, thumbnails, *Launch these*). **Done when:** R004 vs R008 vs R015 shows the expected differences; mixed protocols give a warning.
-* [ ] T70: **S4** Launch page + `racer/sandbox/procs.py` (psutil; pid + creation time) + `launcher.py` + `demo.py --title`. **Done when:** two game windows run at once from the sandbox; *Stop* closes one and leaves the other; incompatible models can't be picked; instances survive a sandbox restart in the list.
+* [x] T70: **S4** Launch page + `racer/sandbox/procs.py` (psutil; pid + creation time) + `launcher.py` + `demo.py --title`. **Done when:** two game windows run at once from the sandbox; *Stop* closes one and leaves the other; incompatible models can't be picked; instances survive a sandbox restart in the list.
 * [ ] T71: **S5** Build & Queue + `builder.py` (v1 → v2 obs conversion, new `configs/env/sb_<tag>.yaml`, `--set` for hyperparameters, live obs/param count, time estimate) + `queue.py` (git-ignored `configs/queue/sandbox.yaml`, atomic writes, *Start queue* in its own console) + `pid` in the queue's `state.json`. **Done when:** a 20k-step trial entry built in the form trains through the queue and shows in the Explorer; *Start queue* is refused while a queue or training runs.
 * [ ] T72: **S6** Overview page (counts, leaderboard, queue status, running games), polish, README + PROJECT_CONTEXT, full tests. **Done when:** the owner can do all 4 goals without the terminal.
 
@@ -126,6 +126,41 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-11 — Claude Code (Opus 5.5) — T70: Sandbox S4 (Launch)
+
+* **Status:** DONE. 38 sandbox tests pass, and no processes are left over.
+* **Real check:** through the sandbox's launcher code, I opened two real game windows at once: 3 cars on Technical, and R004 on Alpine. Each had its own title (`AI Sandbox #1 · technical · R015@4600k, R008@1400k + baseline`). *Stop* on one closed only that window; the other kept running until it was stopped too.
+* **How stopping works:**
+  * During a race, *Stop* closes the window gracefully (`WM_CLOSE` → pygame QUIT).
+  * While a window is still loading models it doesn't handle events, so it is force-stopped after `stop_grace_s` (3 s).
+  * I removed the probe windows' state (`outputs/sandbox/`) afterwards.
+* **Tests:**
+  * The launcher with a stand-in game script: start 2, the list survives a sandbox restart, stopping one leaves the other running, game output goes to the log.
+  * A PID with a different creation time is never treated as ours.
+  * `demo_argv`.
+  * The Launch page, headless: *Launch* then *Stop*.
+  * Explorer *Launch in a race* → the Launch page with the model pre-selected.
+* **What was built:**
+  * `racer/sandbox/procs.py` (psutil):
+    * Processes are identified by PID + creation time.
+    * Finds running `train.py` / `queue_overnight.py` (a venv launcher and its child count once).
+    * Stops gracefully: `WM_CLOSE` to the process tree's windows, then kills the tree.
+  * `racer/sandbox/launcher.py`:
+    * `demo.py` runs with no console (`CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP`, so Ctrl+C on the sandbox doesn't reach it). Output goes to `outputs/sandbox/logs/game_NNN.log`.
+    * Windows open in a cascade (`SDL_VIDEO_WINDOW_POS`).
+    * Instances are kept in `outputs/sandbox/instances.json`.
+  * **Launch page:**
+    * Model multi-select (best checkpoints, or any checkpoint or trial runs via toggles). Models the engine can't run are hidden and listed with the reason. Up to 20 cars.
+    * Map with preview, laps, baseline car, same physics for all.
+    * Evolution race: every N-th checkpoint of a run, always ending with the last one.
+    * Open windows with *Stop* / *Stop all*; closed windows with their log tail.
+  * `scripts/demo.py --title`.
+  * `configs/sandbox/default.yaml`: window cascade, stop grace time, queue settings and the measured minutes per million steps. Tunable numbers stay in configs.
+  * Page switching (`pages.goto`) now records the target and switches on the next run (`st.switch_page` isn't safe inside button callbacks).
+* **Files:**
+  * Created: `racer/sandbox/{procs,launcher}.py`, `configs/sandbox/default.yaml`.
+  * Edited: `racer/sandbox/pages/{launch,__init__}.py`, `scripts/demo.py`, `tests/test_sandbox.py`, `log.md`.
 
 ### 2026-10-11 — Claude Code (Opus 5.5) — T69: Sandbox S3 (Compare)
 

@@ -18,8 +18,9 @@ _pages: dict[str, st.Page] = {}
 
 
 def goto(key: str) -> None:
-    """Switch to another page (state to hand over goes in ``st.session_state`` first)."""
-    st.switch_page(_pages[key])
+    """Open another page on the next run (safe inside button callbacks); state to hand over
+    goes in ``st.session_state`` first."""
+    st.session_state["_goto"] = key
 
 
 def run_app() -> None:
@@ -28,4 +29,8 @@ def run_app() -> None:
     _pages.clear()
     for i, (key, module, title, icon) in enumerate(PAGES):
         _pages[key] = st.Page(module.render, title=title, icon=f":material/{icon}:", url_path=key, default=i == 0)
-    st.navigation(list(_pages.values())).run()
+    nav = st.navigation(list(_pages.values()))
+    target = st.session_state.pop("_goto", None)
+    if target in _pages and _pages[target] is not nav:
+        st.switch_page(_pages[target])
+    nav.run()

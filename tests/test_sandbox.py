@@ -50,6 +50,35 @@ def test_app_with_navigation_renders_home():
     assert at.title and at.title[0].value == "Overview"
 
 
+def test_goto_switches_page_on_the_next_run():
+    """Buttons hand a selection to another page (e.g. Explorer → Launch)."""
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_function(_run_app, default_timeout=120)
+    at.run()
+    at.session_state["_goto"] = "glossary"
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.title[0].value == "Glossary"
+
+
+def test_explorer_launch_button_preselects_the_model():
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.data import STORE
+    best = STORE.best("R015")
+    if not best:
+        pytest.skip("R015 not available locally")
+    at = AppTest.from_function(_run_app, default_timeout=180)
+    at.session_state["_goto"] = "explorer"
+    at.session_state["explorer_model"] = best["model_id"]
+    at.run()
+    assert at.title[0].value == "Model Explorer"
+    at.button(key="ex_launch").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.title[0].value == "Launch"
+    assert at.multiselect(key="ln_models").value == [best["model_id"]]
+
+
 # ---------------------------------------------------------------- fixtures: a tiny project
 
 def make_snapshot(run_id: str, model_id: str, steps: int, env: str = "rays5", parent: str | None = None,
@@ -317,6 +346,86 @@ def test_diagrams_render():
 def _raycast() -> dict:
     from racer.config import load_preset
     return load_preset("env", "rays5")["raycast"]
+
+
+# ---------------------------------------------------------------- launcher (T70)
+
+FAKE_DEMO = "import sys, time\nprint('fake demo', sys.argv[1:], flush=True)\ntime.sleep(120)\n"
+
+
+@pytest.fixture()
+def fake_launcher(tmp_path):
+    from racer.sandbox.launcher import Launcher
+    (tmp_path / "fake_demo.py").write_text(FAKE_DEMO, encoding="utf-8")
+    launcher = Launcher(root=tmp_path, script="fake_demo.py")
+    yield launcher
+    launcher.stop_all()
+
+
+def test_demo_argv():
+    from racer.sandbox.launcher import demo_argv
+    assert demo_argv("technical", ["A", "B"], laps=2, baseline=True, fair=True, title="T") == [
+        "--track", "technical", "--models", "A", "B", "--laps", "2", "--baseline", "--fair", "--title", "T"]
+    assert demo_argv("x", run="R001", every=3) == ["--track", "x", "--run", "R001", "--every", "3"]
+    assert demo_argv("x", baseline=True) == ["--track", "x", "--baseline"]
+    with pytest.raises(ValueError):
+        demo_argv("x")
+    with pytest.raises(ValueError):
+        demo_argv("x", ["A"], run="R001")
+
+
+def test_launch_list_and_stop(fake_launcher):
+    from racer.sandbox import procs
+    from racer.sandbox.launcher import Launcher
+    a = fake_launcher.launch("technical", ["R001_a@100k"], laps=1)
+    b = fake_launcher.launch("alpine", ["R002_b@100k", "R003_c@100k"], baseline=True)
+    assert a["id"] == 1 and b["id"] == 2 and "#2 · alpine" in b["title"]
+    assert [i["id"] for i in fake_launcher.running()] == [1, 2]
+    again = Launcher(root=fake_launcher.root, script="fake_demo.py")       # e.g. the sandbox restarted
+    assert [i["id"] for i in again.running()] == [1, 2]
+    assert again.stop(1) in ("closed", "killed")
+    assert not procs.alive(a["pid"], a["created"])
+    assert procs.alive(b["pid"], b["created"])                             # the other window keeps running
+    assert [(i["id"], i["running"]) for i in fake_launcher.instances()] == [(1, False), (2, True)]
+    import time
+    for _ in range(50):                                                    # the game's output goes to its log
+        if "fake demo" in Launcher.log_tail(b):
+            break
+        time.sleep(0.1)
+    assert "fake demo" in Launcher.log_tail(b) and "--title" in Launcher.log_tail(b)
+    assert again.stop(1) == "not running"
+
+
+def test_recycled_pid_is_not_ours():
+    import os
+
+    from racer.sandbox import procs
+    me = os.getpid()
+    assert procs.alive(me, procs.created(me))
+    assert not procs.alive(me, procs.created(me) - 100.0)                 # same PID, other creation time
+    assert procs.stop(me, procs.created(me) - 100.0) == "not running"
+
+
+def test_launch_page_launches_and_stops(fake_launcher, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.data import STORE
+    from racer.sandbox.pages import launch
+    best = STORE.best("R015")
+    if not best:
+        pytest.skip("R015 not available locally")
+    monkeypatch.setattr(launch, "_launcher", lambda: fake_launcher)
+    at = AppTest.from_function(_run_page, args=("launch",), default_timeout=120)
+    at.session_state["launch_models"] = [best["model_id"]]
+    at.run()
+    assert at.multiselect(key="ln_models").value == [best["model_id"]]
+    at.button(key="ln_go").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Opened game window #1" in m.value for m in at.success)
+    item = fake_launcher.running()[0]
+    assert item["models"] == [best["model_id"]] and "--title" in item["argv"]
+    at.button(key="stop_1").click().run()
+    assert not fake_launcher.running()
 
 
 # ---------------------------------------------------------------- pages (headless)

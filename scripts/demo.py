@@ -6,6 +6,7 @@
     .venv\\Scripts\\python scripts\\demo.py --track fast_flow --run R002 [--every 5]   a run's checkpoints
     .venv\\Scripts\\python scripts\\demo.py --track technical --best                   every run's best checkpoint
         [--sim-speed 1] [--screenshot out.png --frames 600]                         headless capture
+        [--title "window caption"]                                                  (AI Sandbox)
 
 Race keys: Tab / Shift+Tab or click a leaderboard row: follow a car · F overview · R rays ·
 T trails of all cars · L labels · Space pause · +/− sim speed ×0.25–×4 · mouse wheel zoom ·
@@ -67,6 +68,7 @@ def main() -> int:
     ap.add_argument("--sim-speed", type=float, default=1.0)
     ap.add_argument("--screenshot", default=None, help="run headless and save a PNG after --frames frames")
     ap.add_argument("--frames", type=int, default=600)
+    ap.add_argument("--title", default=None, help="window caption (the AI Sandbox names each game window)")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if args.screenshot:
@@ -101,7 +103,7 @@ def main() -> int:
     pygame.init()
     size = tuple(dcfg["window"])
     screen = pygame.display.set_mode(size)
-    pygame.display.set_caption("RL Racing Line — Model Arena")
+    pygame.display.set_caption(args.title or "RL Racing Line — Model Arena")
     clock = pygame.time.Clock()
     font = load_font(dcfg["font"], int(dcfg["font_size"]))
     font_big = load_font(dcfg["font"], int(dcfg["font_size"] * 3))

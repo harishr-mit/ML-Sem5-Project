@@ -1,0 +1,17 @@
+# AI Sandbox settings (PROJECT_CONTEXT §10.5, docs/SANDBOX_PLAN.md).
+
+launch:
+  window_origin_px: [60, 40]    # where the first game window opens (screen pixels)
+  window_cascade_px: 40         # each further window opens this much lower-right
+  cascade_slots: 8              # then the cascade starts again at the origin
+  stop_grace_s: 3.0             # time a game window gets to close before it is force-stopped
+  keep_finished: 20             # finished instances kept in the list (with their log)
+
+queue:
+  file: configs/queue/sandbox.yaml   # git-ignored: it changes all the time (D12)
+  parallel: 2                   # runs at once (T62: 2 is fastest)
+  # Measured training time per million steps (T62/T64, 6 envs): one run alone, and each of
+  # two runs in parallel. Used for the time estimates only.
+  minutes_per_million_alone: 10.0
+  minutes_per_million_parallel: 13.0
+  eval_minutes_per_checkpoint: 0.15  # protocol v2 on shared workers, after training

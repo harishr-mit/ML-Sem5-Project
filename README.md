@@ -124,6 +124,7 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Rebuild the hand-designed maps | `scripts\make_maps.py [--check] [names…]` (outlines are defined in the script) |
 | Regenerate held-out tracks | `scripts\generate_tracks.py --heldout` (`--stats 200` for the acceptance rate) |
 | Env speed + baseline laps | `scripts\bench_env.py [--trackset final_mix]` |
+| Training speed (CPU vs GPU, parallel runs) | `scripts\bench_train.py --steps 200000 [--n-envs 6] [--batch-size 256] [--runs 2] [--device cuda]` (GPU needs a CUDA build of torch; measured slower than the CPU) |
 
 **Debug window keys:** arrows/WASD drive · `1` human · `2` baseline · `3` model · `R` rays · `T` trail · `F` overview · `+/−` or mouse wheel zoom · `[ ]` sim speed · `Space` pause · `Enter` reset at the start line · `Backspace` random start · `N` next track · `K` ABS on/off · `H` help · `Esc` quit.
 

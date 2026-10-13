@@ -133,6 +133,23 @@ def main() -> int:
     return 0
 
 
+def arena_keys(quit_on_esc: bool) -> list[tuple[str, str]]:
+    """The race's key list (T82); must match the key handling in :func:`run_race`."""
+    return [
+        ("Tab / Shift+Tab", "follow next / previous car"),
+        ("click a row", "follow that car"),
+        ("F", "overview / follow"),
+        ("R", "rays of the followed car"),
+        ("T", "trails of all cars"),
+        ("L", "car labels"),
+        ("Space", "pause"),
+        ("+ / −", "sim speed"),
+        ("mouse wheel", "zoom"),
+        ("H", "hide / show this list"),
+        ("Esc", "quit" if quit_on_esc else "back to the picker"),
+    ]
+
+
 def run_race(screen, clock, sel, models, acfg, dcfg, colours, fonts, args) -> str:
     """Run one race until Esc ("back") or the window closes ("quit")."""
     import pygame
@@ -193,6 +210,8 @@ def run_race(screen, clock, sel, models, acfg, dcfg, colours, fonts, args) -> st
     speed_i = speeds.index(args.sim_speed) if args.sim_speed in speeds else speeds.index(1.0)
     selected = 0
     show_rays, all_trails, show_labels, paused = True, False, True, False
+    show_keys = bool(acfg["show_keys_at_start"])
+    key_items = arena_keys(quit_on_esc=bool(args.models or args.run or args.best or args.baseline))
     rows: list = []
     acc = 0.0
     frame = 0
@@ -228,6 +247,8 @@ def run_race(screen, clock, sel, models, acfg, dcfg, colours, fonts, args) -> st
                     all_trails = not all_trails
                 elif k == pygame.K_l:
                     show_labels = not show_labels
+                elif k == pygame.K_h:
+                    show_keys = not show_keys
                 elif k == pygame.K_SPACE:
                     paused = not paused
                 elif k in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
@@ -296,6 +317,7 @@ def run_race(screen, clock, sel, models, acfg, dcfg, colours, fonts, args) -> st
             rows = hud.leaderboard(screen, race, sprites.colour, selected, title)
             hud.countdown(screen, race)
         hud.car_readout(screen, race, sc, sprites.colour(selected))
+        hud.keys(screen, key_items, show_keys)
         fps = labels.get(f"fps {clock.get_fps():3.0f}", colours["hud_dim"])
         screen.blit(fps, (12, 12))
 

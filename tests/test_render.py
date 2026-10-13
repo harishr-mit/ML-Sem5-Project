@@ -65,3 +65,36 @@ def test_model_picker_selects_and_starts():
     pk.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="\r", mod=0))
     assert pk.done is not None and pk.done.models == ["R002_x@100k", "R002_x@200k", "R002_x@300k"]
     pygame.quit()
+
+
+def test_arena_key_list_matches_the_key_handling():
+    """Every key run_race handles is in the on-screen key list, and the panel draws (T82)."""
+    import importlib
+    import os
+    import re
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    from racer.config import load_preset
+    from racer.render.hud import RaceHud
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        demo = importlib.import_module("demo")
+    finally:
+        sys.path.pop(0)
+    src = (ROOT / "scripts" / "demo.py").read_text(encoding="utf-8")
+    body = src[src.index("def run_race("):]
+    handled = set(re.findall(r"pygame\.K_([A-Za-z0-9_]+)", body))
+    listed = " ".join(k for k, _ in demo.arena_keys(False)).lower()
+    names = {"ESCAPE": "esc", "TAB": "tab", "SPACE": "space", "PLUS": "+", "EQUALS": "+", "KP_PLUS": "+",
+             "MINUS": "−", "KP_MINUS": "−"}
+    missing = [k for k in handled if names.get(k, k.lower()) not in listed]
+    assert not missing, f"keys handled but not listed: {missing}"
+    assert demo.arena_keys(True)[-1] == ("Esc", "quit")
+
+    pygame.init()
+    screen = pygame.display.set_mode((1280, 800))
+    colours = {k: tuple(v) for k, v in load_preset("demo", "render")["debug"]["colours"].items()}
+    hud = RaceHud(pygame.font.Font(None, 20), pygame.font.Font(None, 40), colours, 460)
+    hud.keys(screen, demo.arena_keys(False), True)
+    hud.keys(screen, demo.arena_keys(False), False)

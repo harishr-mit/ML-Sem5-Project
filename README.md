@@ -133,7 +133,7 @@ Tracks: `training_ground`, `technical`, `fast_flow` (showcase); `city_blocks`, `
 
 - **Picker:** pick a track on the left and up to 20 models on the right (click rows; click a column header to sort; type to filter; `Tab` best checkpoints only; `Shift+B` adds the PID baseline; `Shift+P` fair physics; `+/−` laps), then `Enter`.
 - **Race:** ghost cars start from a grid after a countdown. A crashed car restarts where it crashed after 1 s, and its crashes are counted.
-- **Keys:** `Tab` (or click a leaderboard row) follows the next car · `F` overview · `R` rays · `T` all trails · `L` labels · `Space` pause · `+/−` sim speed · mouse wheel zoom · `Esc` back to the picker.
+- **Keys:** `Tab` (or click a leaderboard row) follows the next car · `F` overview · `R` rays · `T` all trails · `L` labels · `Space` pause · `+/−` sim speed · mouse wheel zoom · `H` hides or shows the on-screen key list (bottom right) · `Esc` back to the picker (or quits, when started with `--models`, `--run` or `--best`). The same keys work in the Evolution Race (`--run`).
 - **Physics:** each car uses the physics it was trained with; `--fair` (or `Shift+P`) puts every car on the default physics.
 - **Any model:** each car uses its own inputs and outputs, so models with different sensors, action layouts or algorithms race together. A model the engine can't run yet is shown dimmed in the picker with the reason.
 
@@ -174,6 +174,7 @@ This opens the sandbox in its own window (a small built-in browser, Edge WebView
 - Start it yourself from a normal terminal; it needs no Claude session. It runs the queue's training runs, logs each to `outputs\queue_logs\`, keeps going if one fails, and resumes where it left off if you start it again.
 - **Two at a time:** add `--parallel 2` (or `parallel: 2` at the top of the queue file). Two runs at once get about 1.6× more training done per night than one after another; each run takes about 20 % longer. Entries added to the queue file while it runs are picked up.
 - It keeps Windows awake while it runs. Keep the laptop plugged in, with the lid open.
+- **When it has finished,** back up the new models: `.venv\Scripts\python scripts\backup_models.py` (see [Back up the models](#back-up-the-models-after-every-run)).
 
 ### Replay a trained model
 
@@ -195,6 +196,19 @@ This opens the sandbox in its own window (a small built-in browser, Edge WebView
 - Evaluation files are also added to each model folder and copied to `outputs\eval\`: protocol v1 writes `eval.json` and `thumb_<track>.png`, and v2 writes `eval_v2.json` and `thumb_v2_<track>.png`. A registry row shows the newest protocol a model was evaluated with (`eval_protocol`), so compare models evaluated with the same protocol. Re-evaluate older models with `scripts\evaluate.py --run R003`.
 - `runs.csv` also records each run's input count, action layout and parameter count. `scripts\registry.py describe` fills these in for runs from before they existed.
 
+### Back up the models (after every run)
+
+`models\` is not in git, so the backup folder is the only second copy of the trained models. **After every completed run** (training and evaluation finished, or a whole overnight queue), run:
+
+```bat
+.venv\Scripts\python scripts\backup_models.py
+```
+
+- It copies the model folders and files that are missing from `C:\Users\Jack\ML_Sem5_models_backup\` (set in `configs\backup\default.yaml`). This includes eval files added to older models.
+- It never overwrites or deletes anything in the backup. A file whose size differs is reported as `CONFLICT` and left alone.
+- It refuses to run while a training, queue or evaluation is still running (they are still writing model folders).
+- `--dry-run` lists what it would copy; `--run R015` backs up one run only.
+
 ## Commands
 
 Run everything with the project interpreter, `.venv\Scripts\python`.
@@ -205,6 +219,7 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Train | `scripts\train.py --tag … (--tracks … or --trackset maps7) [--parent <model_id>] [--train ppo_default\|ppo_finetune\|sac_default] [--physics …] [--env rays5\|rays7_narrow\|…] [--action-layout steer_gas\|steer_throttle_brake] [--reward …] [--steps N] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval] [--protocol v2]` |
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |
+| Back up models (after every run) | `scripts\backup_models.py [--run R015] [--dry-run] [--dest <folder>]` (copies what's missing; never overwrites or deletes) |
 | Model Arena | `scripts\demo.py [--track …] [--models … or --run R002 [--every N] or --best] [--baseline] [--laps 3] [--fair] [--title "caption"]` |
 | AI Sandbox | `scripts\sandbox.py [--port 8501] [--browser \| --no-browser]` (localhost only) |
 | Overnight queue | `scripts\queue_overnight.py configs\queue\<queue>.yaml [--parallel 2] [--dry-run] [--retry-failed]` (a `stop.request` file next to its `state.json` stops it like Ctrl+C) |

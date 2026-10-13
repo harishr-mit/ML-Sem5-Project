@@ -141,6 +141,27 @@ class RaceHud:
                 screen.blit(t.get(s, self.c["hud_text"]), (cx, y))
             y += lh
 
+    def keys(self, screen: pygame.Surface, items: Sequence[tuple[str, str]], shown: bool) -> None:
+        """Key list (bottom right): ``(key, action)`` rows, or just a hint when hidden (T82)."""
+        lh = self.font.get_linesize()
+        t = self.text
+        if not shown:
+            hint = t.get("H  keys", self.c["hud_dim"])
+            r = hint.get_rect(bottomright=(screen.get_width() - 16, screen.get_height() - 12))
+            panel(screen, r.inflate(16, 8), self.c["hud_bg"])
+            screen.blit(hint, r)
+            return
+        key_w = max(t.get(k, self.c["hud_text"]).get_width() for k, _ in items) + 16
+        act_w = max(t.get(a, self.c["hud_text"]).get_width() for _, a in items)
+        w, h = key_w + act_w + 20, lh * (len(items) + 1) + 12
+        x0, y0 = screen.get_width() - w - 12, screen.get_height() - h - 12
+        panel(screen, pygame.Rect(x0, y0, w, h), self.c["hud_bg"])
+        screen.blit(t.get("KEYS   (H hides)", self.c["hud_dim"]), (x0 + 10, y0 + 6))
+        for k, (key, action) in enumerate(items, 1):
+            y = y0 + 6 + k * lh
+            screen.blit(t.get(key, self.c["hud_good"]), (x0 + 10, y))
+            screen.blit(t.get(action, self.c["hud_text"]), (x0 + 10 + key_w, y))
+
     def _centre(self, screen: pygame.Surface, s: str, colour) -> None:
         img = self.big.get(s, colour)
         rect = img.get_rect(center=(screen.get_width() // 2, screen.get_height() // 3))

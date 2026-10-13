@@ -1,0 +1,5 @@
+# Model backups (T81; PROJECT_CONTEXT §9). models/ is git-ignored, so this copy is the only
+# second copy of the trained models. Run scripts/backup_models.py after every completed run.
+
+dest: C:/Users/Jack/ML_Sem5_models_backup   # outside the project, so git never touches it
+busy_scripts: [train.py, queue_overnight.py, evaluate.py]   # these write model folders: wait for them

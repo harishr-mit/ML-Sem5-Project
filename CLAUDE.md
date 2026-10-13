@@ -29,6 +29,9 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 - **Never let the prompt cache go cold.** The cache expires after 60 min, so keep every gap between check-ins under 60 min (aim for at most 55) to avoid paying to re-cache the context.
 - **Read only what each check-in needs:** the process's status file and the tail of its current log (e.g. `outputs/queue_logs/<queue>/state.json`). `log.md` and `CLAUDE.md` are the only exceptions. Don't re-read other files or earlier output, and keep command output short.
 
+## After a training run or queue completes
+- **Back up the models** once the run is trained and evaluated (or the whole queue has finished): `.venv\Scripts\python scripts\backup_models.py`. It copies only what is missing to the backup folder (`configs/backup/default.yaml`), never overwrites or deletes, and refuses while a training, queue or evaluation is running. Also run it after evaluating older models (it adds their new eval files). Log the result (files copied, any CONFLICT lines) in `log.md`.
+
 ## End of a run (before the final summary)
 - **Stop everything you started:** training runs, the demo window, TensorBoard and any other servers. Leave something running only if the user explicitly asked for that.
 - **Clean up:** confirm there are 0 background tasks and 0 open sockets left.

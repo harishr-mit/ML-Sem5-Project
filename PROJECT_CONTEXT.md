@@ -112,6 +112,7 @@ ML Sem5 Project/
 │   ├── eval/     v1.yaml, v2.yaml (evaluation protocols, §8)
 │   ├── queue/    *.yaml (experiment lists for queue_overnight.py; sandbox.yaml is the sandbox's, git-ignored)
 │   ├── sandbox/  default.yaml (AI Sandbox: game-window cascade, stop grace, queue time estimates)
+│   ├── backup/   default.yaml (model backup folder, T81)
 │   └── demo/     render.yaml (texture scales, colours; `debug:` window), audio.yaml (volumes, gearbox)
 ├── racer/config.py           # YAML preset loader (strict keys, deep-merged overrides)
 ├── racer/
@@ -136,6 +137,7 @@ ML Sem5 Project/
 │   ├── physics_sanity.py     # skidpad / braking / coast-down tests
 │   ├── drive.py              # debug window: keyboard / baseline / model driving
 │   ├── preview_tracks.py  generate_tracks.py  make_maps.py  bench_env.py
+│   ├── backup_models.py      # copy new model folders/files to the backup (after every run, T81)
 │   ├── bench_train.py        # training throughput: CPU vs GPU, minibatch, parallel runs (T62)
 │   ├── sandbox.py            # AI Sandbox (Streamlit in its own window, §10.5): understand, compare, build/queue, launch
 ├── tests/                    # pytest unit tests (spline, field, progress, physics, env, …; test_integrity.py: registry ↔ model folders ↔ eval copies ↔ docs ↔ pins)
@@ -414,7 +416,7 @@ models/R015_t50_narrow7_s1@4600k/
 └── thumb_<track>.png    # trajectory coloured by speed
 ```
 
-- **What "immutable" means (D10, owner):** `model.zip`, `vecnormalize.pkl` and `config.yaml` are never changed after saving. `evaluate.py` **adds** `eval.json` and `thumb_<track>.png` once per protocol version (a later protocol writes `eval_v2.json`; nothing is overwritten), and copies them to `outputs/eval/<model_id>/`. Models stay local (git-ignored); the copies in `outputs/eval/` and the registry CSVs are tracked.
+- **What "immutable" means (D10, owner):** `model.zip`, `vecnormalize.pkl` and `config.yaml` are never changed after saving. `evaluate.py` **adds** `eval.json` and `thumb_<track>.png` once per protocol version (a later protocol writes `eval_v2.json`; nothing is overwritten), and copies them to `outputs/eval/<model_id>/`. Models stay local (git-ignored); the copies in `outputs/eval/` and the registry CSVs are tracked. **Backups (T81):** after every completed run (or queue), `scripts/backup_models.py` copies whatever is missing to the backup folder in `configs/backup/default.yaml`; it never overwrites or deletes, so the backup is as immutable as the model folders.
 - **Model ID:** `R{run:03d}_{short_tag}@{steps}k` (e.g. `R015_t50_narrow7_s1@4600k`). Ablation runs carry the experiment in the tag (D17, e.g. `R005_e2_nogrip_s1@3000k`).
 - **Observation specs are versioned** (`obs_spec: {version: 1, rays: [...], extras: [...]}`). Never change what an existing version means; add a new version instead. The loader builds each car's sensor from that car's own spec.
 - **Upgradable engine (D23).** Everything that defines a model is versioned and looked up in a registry: obs spec version and features (§7.1), action layout (§7.2), physics version (§5.2) and algorithm (`racer/agents/algorithms.py`: PPO, SAC). New snapshots carry a **manifest** (`obs_dim`, `action_dim`, `n_params`, `net_arch`, the versions above, input labels); for older snapshots the loader derives it. Before loading, the engine checks the manifest against what it supports: a model that needs something the engine doesn't have yet (e.g. an unknown feature) is listed with the reason and greyed out in the picker, instead of crashing the demo. To support it, register the missing piece; existing models are never touched.
@@ -475,7 +477,9 @@ models/R015_t50_narrow7_s1@4600k/
 **Performance target:** 60 FPS with 20 cars. Inference is batched per model and runs every third frame (20 Hz), so it costs almost nothing.
 
 ### 10.3 Controls (summary)
-`Tab` cycle car · `R` rays · `T` trails · `L` racing line · `B` brain panel · `M` minimap · `F` follow/overview · `S` sound on/off · `Space` pause · `+/−` speed ×0.25–×4 · `Esc` menu
+`Tab` cycle car · `R` rays · `T` trails · `L` racing line · `B` brain panel · `M` minimap · `F` follow/overview · `S` sound on/off · `Space` pause · `+/−` speed ×0.25–×4 · `H` key list · `Esc` menu
+
+Every game mode shows its keys on screen (bottom right, toggled with `H`; T82), so the demo never depends on remembering them. The arena list is built next to its key handling, and a test checks that they match.
 
 ### 10.4 Audio (`racer/render/audio.py`, `configs/demo/audio.yaml`)
 
@@ -730,6 +734,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-11 | **AI Sandbox decisions (owner, T65):** Streamlit 1.65.0 (no pin changes), local only (localhost), the sandbox may start the queue in its own console, run "why" and outcome notes in `registry/run_notes.yaml`. Plan v2 in `docs/SANDBOX_PLAN.md`; build tasks T66–T72 (§10.5). |
 | 2026-10-11 | **AI Sandbox built (T66–T72).** Owner decisions taken during the build: the Build form defaults to real runs; the sandbox may stop a running queue (after a confirmation step); outcome notes can be edited; critical issues are skipped and logged while the owner is away (none came up). The queue runner gained `runner.json`, per-entry PIDs, `stop.request` and process-tree stopping (§8). `demo.py --title`. **Reliability runs for R015's setup (owner)**, queued through the sandbox: R018 (seed 2, 5M) and R019 (seed 1, 8M). |
 | 2026-10-11 | **R015 doesn't reproduce reliably (T73).** R018 (seed 2): seen 64 %, held-out 100 %, test maps 0 %, lap ratio 1.00. R019 (8M): stuck early, best overall 7 %. The T50 target was met by one lucky run, not by a robust setting (§11). **Open question for the owner:** what to do about the variance, e.g. more seeds per setting, keeping exploration up (entropy), or the curriculum. |
+| 2026-10-11 | **Model backups after every run (owner, T81).** The backup had stopped at R001. `scripts/backup_models.py` (additive: copies what is missing, never overwrites or deletes, refuses while training/queue/evaluation runs) is run after every completed run or queue; the rule is in `CLAUDE.md` and the README. Backup brought up to date: R001–R019, 690 folders (§9). The variance question is task T83 for a later session. |
 | 2026-10-11 | **D25 (owner): the AI Sandbox opens in its own desktop window** (pywebview 6.2.1 on Edge WebView2, a "mini browser") instead of a browser tab. Streamlit stays the app, so pages and tests are unchanged; `scripts/sandbox.py --browser` keeps the browser tab as a fallback. WebView2 data stays in `outputs/sandbox/webview/` (git-ignored), nothing in the user profile (§10.5, T74–T75). |
 
 **Open questions:**

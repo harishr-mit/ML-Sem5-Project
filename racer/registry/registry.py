@@ -82,13 +82,17 @@ def file_lock(path: Path, timeout_s: float = 300.0, stale_s: float = 600.0) -> I
             os.write(fd, str(os.getpid()).encode())
             os.close(fd)
             break
-        except FileExistsError:
+        except (FileExistsError, PermissionError):
+            # Windows raises PermissionError (not FileExistsError) while the previous holder's
+            # lock file is still being deleted (T76): it is held, so wait like for a live lock.
             try:
                 if time.time() - path.stat().st_mtime > stale_s:
                     path.unlink(missing_ok=True)
                     continue
             except FileNotFoundError:
                 continue
+            except PermissionError:
+                pass
             if time.monotonic() - t0 > timeout_s:
                 raise TimeoutError(f"{path} is held by another process (delete it if no run is active)")
             time.sleep(0.05)

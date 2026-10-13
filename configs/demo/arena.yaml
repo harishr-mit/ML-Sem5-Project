@@ -39,3 +39,4 @@ label_offset_m: 4.0           # car label drawn this far above the car
 leaderboard_width: 460
 trail_length: 240             # substeps of trail per car (4 s)
 selected_trail_length: 900    # longer trail for the followed car
+show_keys_at_start: true      # key list (bottom right) shown when a race starts; H hides/shows it (T82)

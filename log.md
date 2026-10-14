@@ -134,7 +134,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T91: Owner confirmed the remaining proposals (50 cars, validation settings, 200 s cap, lineage + checkpoint every 100 generations; no full-weight record, disk space). Plan finalised as the implementation contract; build tasks added; pre-implementation commit.
 * *T92–T98: build steps S1–S7 of `docs/NEUROEVOLUTION_PLAN.md` ("done when" checks are there). Uncertain decisions (dropped inputs, one map per generation, σ) are revised if results show them to be poor.*
 * [x] T92: S1 env: optional track-limits termination (car centre over the road edge, off by default); obs preset `rays7_lean` (7 rays incl. 0°, heading sin/cos, forward speed).
-* [ ] T93: S2 `racer/agents/neuroevolution.py`: weights, numpy forward, fitness, selection + mutation from seeds, lineage rebuild.
+* [x] T93: S2 `racer/agents/neuroevolution.py`: weights, numpy forward, fitness, selection + mutation from seeds, lineage rebuild.
 * [ ] T94: S3 export to a model folder (SB3 PPO zip + identity `vecnormalize.pkl`), `ga` algorithm entry, compat.
 * [ ] T95: S4 evolution loop: workers, validation + stopping, checkpoints + registry, TensorBoard, lineage SQLite, pause/resume, `ga_default.yaml`, `train.py` dispatch, glossary, `.gitignore`, backup of the lineage.
 * [ ] T96: S5 σ test (0.02 vs 0.05, 200 generations each).
@@ -158,6 +158,12 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-15 — Claude Code (Opus 5.5) — T93: GA core (S2)
+
+* **Status:** DONE. 14 tests in `tests/test_neuroevolution.py` pass; the full suite passed (215) before the review fixes. Reviewer (atomic-reviewer, Opus 5.5): CHANGES_REQUESTED (0 critical), fixed: wrong-length scores now raise (a lost worker result would otherwise silently drop cars from selection); the tie test now uses a population-sized case that fails without the stable sort; separate `NO_NOISE` marker for elites; keyword-only `fitness`; a test that pins the torch (out, in) layout.
+* **Design:** flat float32 weights in SB3 actor order; tanh hidden, linear clipped output; init W ~ N(0, 1/fan_in), b = 0 (generation 0 drives in varied ways instead of stalling); child = parent + σ × N(0, 1) from its own seed; ranking is stable (elites, which sit first, win ties). Per-generation randomness will come from `default_rng([seed, generation])`, so the pause state needs no RNG state (plan updated).
+* **Files:** Created `racer/agents/neuroevolution.py`, `tests/test_neuroevolution.py`. Edited `docs/NEUROEVOLUTION_PLAN.md` (state line), `log.md`.
 
 ### 2026-10-15 — Claude Code (Opus 5.5) — T92: Track-limits rule, rays7_lean (S1)
 

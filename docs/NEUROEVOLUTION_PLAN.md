@@ -7,8 +7,8 @@
 ```
 generation g:  draw 1 of the 7 training maps at random (may repeat) and a start point
                50 networks drive one lap each from that start, in parallel ──▶ 50 fitness scores
-               keep the top 12 unchanged (elites); they are the parents
-               the other 38 = a random elite + σ × Gaussian noise on every weight
+               rank all 50; the top 12 (25 %) go to g+1 unchanged (elites)
+               the other 38 = one of those same 12, picked at random, + σ × Gaussian noise on every weight
                ──▶ generation g+1
 every 25 generations: the best car drives 5 validation tracks (stop after 500 generations without a 1 % gain)
 every 100 generations: the best car is saved as a registered checkpoint
@@ -25,7 +25,7 @@ every 100 generations: the best car is saved as a registered checkpoint
 | Map | **one of the 7 training maps per generation**, at random (may repeat); the same map and start for every car; a new start each generation | Owner choice; more maps are added over time. Deterministic physics and policy make the ranking within a generation exact |
 | End of a try | one lap, or a failure (barrier, track limits, stuck, wrong way), or 200 s of simulated time (the env's existing 4000 steps) | The cap only stops a crawler; 2.5× the baseline's slowest lap (81.6 s) |
 | Fitness | did not finish: fraction of the lap covered (0–1); finished: 1 + mean speed ÷ 70 m/s | A finisher always beats a non-finisher, a faster lap beats a slower one |
-| Selection | 50 cars; the top 25 % (12) kept unchanged and driven again; 38 children, each = a random elite + σ × N(0, 1) per weight | Elitism: the best car is never lost |
+| Selection | 50 cars ranked by fitness (previous elites included, they drove again); the top 25 % (12) go to the next generation unchanged; the same 12 are the only parents of the other 38: each child = one of them, picked at random, + σ × N(0, 1) per weight (owner, T100) | Elitism: the best car is never lost |
 | σ | two 200-generation scratch runs, 0.02 and 0.05; keep the faster learner | No known value for this net |
 | Stopping | every 25 generations the best car drives 5 validation tracks (generated, own seed range; never trained on; not the test maps or held-out set); stop when that score hasn't improved by 1 % for 500 generations, or on pause. No generation cap by default; optional `max_generations` for queue entries | Stops when it stops getting better at driving, not at memorising |
 | CPU | 5 worker processes (≈ 60–70 % CPU), below-normal priority; changeable on resume, never changes results | Owner target 60 % |
@@ -63,7 +63,7 @@ Worst case = every car survives a 60 s lap; early generations crash within secon
 ## Fits into what exists
 
 - **Model folder:** an SB3 PPO `model.zip` with the evolved weights in the actor (the value net is unused; check whether `vf: []` keeps the zip small), the identity `vecnormalize.pkl`, and a full `config.yaml` snapshot (`algorithm: ga`, the GA settings, generation, the manifest). Loader, demo, Evolution Race, `evaluate.py`, registry, backup and sandbox then work unchanged.
-- **Model id:** `R0xx_ga_<tag>_s<seed>@<steps>k`, steps = env steps used so far (E10's shared x-axis).
+- **Model id:** `R0xx_GA_<tag>@<steps>k` (owner, T100: `GA_` is added by `train.py`, so the id shows the genetic algorithm; the tag stays lowercase and carries the seed, e.g. `R020_GA_main_s1@96000k`), steps = env steps used so far (E10's shared x-axis).
 - **Algorithm registry:** a `ga` entry in `racer/agents/algorithms.py` loading through SB3's PPO class; `racer/agents/compat.py` must accept it.
 - **Entry point:** `train.py` dispatches to the evolution loop when the train preset's `algorithm` is `ga`, so `queue_overnight.py` and the sandbox's Build & Queue page run it unchanged.
 - **Config:** `configs/train/ga_default.yaml` (population, elite fraction, σ, training maps, validation tracks / interval / patience / margin, optional `max_generations`, checkpoint interval, state-save interval, workers). No number in code (§15).

@@ -11,6 +11,7 @@ The demo (pygame-ce) loads any trained model from a registry and races up to 20 
 > **Status:** milestone M2 (Week 2) done. Track sets with generated tracks, fine-tuning (`--parent`), the evaluation protocol, the model registry (CSV → xlsx), an overnight experiment queue and the Model Arena (20 different models at a steady 60 FPS) are in place. The best model so far, `R015_t50_narrow7_s1@4600k` (7 narrow rays, trained on the map library), is faster than the hand-coded baseline and completes 88 % of the runs on maps it has never seen. A second seed and a longer run of the same setup didn't reproduce that (R018, R019), so results vary a lot between runs. Experiment results so far: [PROJECT_CONTEXT.md §11](PROJECT_CONTEXT.md).
 > **New (2026-10-11):** a map library of 9 hand-designed maps (7 for training, 2 test maps never trained on), evaluation protocol v2, and an upgradable model design: inputs are built from named features, the outputs follow a versioned action layout, and PPO and SAC are both supported. Any model the engine can run races in the arena.
 > **New: the AI Sandbox** (`scripts\sandbox.py`, a local app in its own window). It explains every trained model (what it senses, its network, what it was trained with and why), compares models, builds and queues new training runs, and launches races in separate game windows. See [AI Sandbox](#understand-compare-build-and-race-models-ai-sandbox) below.
+> **Planned (D26, not built yet):** neuroevolution, a genetic algorithm that trains the same kind of driving network without gradients, to compare with PPO (experiment E10). 50 cars per generation, the top 12 kept and mutated, one random training map per generation; it can be paused at any moment and resumed by rerunning the command. Plan and build steps: [docs/NEUROEVOLUTION_PLAN.md](docs/NEUROEVOLUTION_PLAN.md). Its commands will be added here when it is built.
 > Full design, plan and timeline: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). Progress and change log: [log.md](log.md).
 
 ## Setup (Windows)
@@ -245,7 +246,7 @@ In human mode (`1`) the walls are solid and nothing resets the car; baseline and
 | `scripts/` | train, evaluate, registry, demo (Model Arena), sandbox (AI Sandbox), queue_overnight, drive (debug window), physics sanity, track previews / generation, env benchmark; later record video, plots |
 | `tests/` | pytest unit tests; `test_integrity.py` checks that the registry, model folders, eval copies, run notes, docs and pinned packages agree |
 | `tracks/` | `showcase/` and `train/` (the 7 training maps), `test/` (2 test maps) and `heldout/` (generated), both never used in training, `user/` (drawn in the editor). Any other folder works too: a track JSON added at any time is found by name |
-| `docs/` | `SANDBOX_PLAN.md`: design and build plan of the AI Sandbox app |
+| `docs/` | `SANDBOX_PLAN.md`: design and build plan of the AI Sandbox app; `NEUROEVOLUTION_PLAN.md`: plan for the genetic-algorithm trainer (D26, not built yet) |
 | `models/` | self-contained, immutable model folders; **local only** (git-ignored), back them up by copying the folder |
 | `registry/` | `runs.csv`, `models.csv` → `registry.xlsx`; `run_notes.yaml` (why each run was made and what it showed) |
 | `assets/` | sprites, textures, fonts, sounds; see [assets/LICENSES.md](assets/LICENSES.md) |

@@ -14,7 +14,7 @@
 
 ## 1. Summary
 
-A 2D top-down racing game written from scratch, with a car that learns to drive with **reinforcement learning (PPO)**.
+A 2D top-down racing game written from scratch, with a car that learns to drive with **reinforcement learning (PPO)**. A genetic algorithm (neuroevolution, D26) is planned as a comparison (E10).
 - **What the car senses:** 5 distance rays to the edge of the road, its heading relative to the track, its speed, and a few physics readings. It does not see the map.
 - **What it outputs:** steering in [−1, 1] and gas in [−1, 1], where a negative value means brake.
 - **What makes a racing line appear:** the physics has mass, momentum, gravity and a grip limit that depends on the surface. Taking a corner too fast makes the car slide, so the agent has to learn to brake before corners, take the apex, use the full track width and accelerate out.
@@ -106,7 +106,7 @@ ML Sem5 Project/
 │   ├── physics/  default.yaml, no_grip_limit.yaml, downforce.yaml
 │   ├── env/      rays5.yaml, rays9.yaml, rays5_curvature.yaml
 │   ├── reward/   progress.yaml, speed_naive.yaml (for the reward-hacking demo)
-│   ├── train/    ppo_default.yaml, sac_default.yaml, baseline.yaml (hand-coded driver)
+│   ├── train/    ppo_default.yaml, sac_default.yaml, baseline.yaml (hand-coded driver), ga_default.yaml (neuroevolution, D26, planned)
 │   ├── track/    default.yaml (kerb threshold, field cell size, generator ranges, clearances)
 │   ├── trackset/ tg.yaml, gen_wide.yaml, final_mix.yaml, maps7.yaml … (which tracks training samples, §8)
 │   ├── eval/     v1.yaml, v2.yaml (evaluation protocols, §8)
@@ -123,7 +123,8 @@ ML Sem5 Project/
 │   │             features.py (obs v2 feature registry), actions.py (action layouts)
 │   ├── agents/   loader.py (registry → policy + normaliser + configs), baseline.py,
 │   │             evaluation.py (eval protocol, metrics, thumbnails, eval files),
-│   │             algorithms.py (PPO/SAC registry), compat.py (manifest + engine check)
+│   │             algorithms.py (PPO/SAC registry, `ga` planned), compat.py (manifest + engine check),
+│   │             neuroevolution.py (genetic algorithm, D26, planned)
 │   ├── registry/ registry.py, export_xlsx.py, record.py (evaluate + record)
 │   ├── sandbox/  data, explain, diagrams, curves, builder, queue, procs, launcher, glossary.yaml,
 │   │             pages/ (AI Sandbox, §10.5; Streamlit is imported only in pages/)
@@ -157,6 +158,7 @@ ML Sem5 Project/
 ├── runs/                     # TensorBoard logs
 └── outputs/   videos/  plots/  frames/  eval/ (copies of every model's eval files)
                scratch/ (smoke runs, git-ignored)  queue_logs/ (git-ignored)
+               evolve/<run_id>/ (neuroevolution state.npz + lineage.sqlite, git-ignored, D26)
 ```
 
 ---
@@ -359,6 +361,7 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
   - all 4 wheels are off the road for more than 1.0 s
   - the car makes less than 2 m of progress in 3 s
   - the car points the wrong way (heading error over 110°) for more than 1 s
+  - **optional, off by default (D26):** the car's centre crosses the road edge (`track_limits`); only the neuroevolution preset turns it on, so every existing preset and model is unchanged
 - **Truncate** after 2 laps or 4000 agent steps.
 - Random track per episode during multi-track training (curriculum, see §8).
 
@@ -399,12 +402,12 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
   - The protocol is versioned in `configs/eval/v1.yaml` (standing starts on the centreline, evenly spaced). The hand-coded baseline is registered as pseudo-model `BASE_pid` (E8 reference).
   - **Protocol v2 (D20)** (`configs/eval/v2.yaml`) uses the map library: 7 training maps × 2 starts, 2 test maps × 3 starts, and the 10 generated held-out tracks × 1 start (30 episodes, about 50 s per model). New metrics: `test_completion` (test maps), `unseen_completion` (test maps + generated held-out; the generalisation number that matters for the faculty-drawn track), and best laps on every map. v1 stays frozen and keeps its numbers. New runs evaluate with v2; older models can be re-evaluated with v2 at any time (`evaluate.py --protocol v2`), which adds `eval_v2.json` next to `eval.json`.
 - **Track set `maps7` (D20):** the 7 training maps (weight 1 each) + a generated pool with mixed widths (weight 7). It deliberately leaves out `tracks/user/`, so tracks drawn in the demo stay unseen.
-- **Neuroevolution (D26, owner; plan in `docs/NEUROEVOLUTION_PLAN.md`):** a genetic algorithm as a second way to train the same network, with no gradients. Same inputs, outputs and 256×256 actor as PPO (`rays7_narrow`), saved as an SB3 policy so the loader, demo, evaluation and registry work unchanged. Compared with PPO as E10.
+- **Neuroevolution (D26, owner; plan in `docs/NEUROEVOLUTION_PLAN.md`):** a genetic algorithm as a second way to train the same network, with no gradients. Same outputs and 256×256 hidden layers as PPO's R015, but its own 10-input preset (below), saved as an SB3 policy so the loader, demo, evaluation and registry work unchanged. Compared with PPO as E10.
   - **Inputs (owner, T88–T90): 10.** 7 rays at 0° (200 m), ±5.5° (200 m), ±17° (120 m), ±55° (60 m); car direction vs track direction (sin, cos); forward speed. Yaw rate, on-road fraction, previous action and sideways speed are dropped (to be revisited if driving is worse). The 0° ray is needed for braking: top speed → the tightest corner takes 191 m, and the ±5.5° rays see only 52–83 m on a straight (T89). Obs preset `rays7_lean`. A new obs preset; PPO models are unaffected. E10 therefore compares inputs as well as methods unless a PPO run uses the same preset.
   - **Track limits (owner, T88):** a try **fails when the car's centre crosses the road edge** (half the car over the line; kerbs count as road, D1). No grass shortcuts, and the car never sees the off-road ray meaning (D2). An optional episode setting, off for every existing preset, so old models are unchanged.
   - **Generation:** every car drives the same map from the same start: **one of the 7 training maps, drawn at random each generation** (it may repeat). A try ends when the car completes **one lap or fails** (any training termination, the track-limits rule, or a time cap of simulated time: the env's existing 4000 steps = 200 s, 2.5× the baseline's slowest lap of 81.6 s on Technical).
   - **Fitness:** the fraction of the lap covered if it failed; 1 + mean speed ÷ 70 m/s if it finished (a finisher always beats a non-finisher, a faster lap beats a slower one).
-  - **Selection:** the top 25 % are kept unchanged (elitism) and are the parents; the rest are mutated copies (every weight + σ × Gaussian noise).
+  - **Selection (owner, T100):** all 50 cars of the generation (including the previous elites, which drove again) are ranked by fitness. The top 25 % (12) go to the next generation unchanged. The same 12 are the only parents of the other 38: each child is one of them, picked at random, with σ × Gaussian noise added to every weight.
   - **Population:** sized to a run budget, not a fixed count: **50 cars, 12 elites** (≈ 1.8 s per generation on 5 processes, worst case, measured T87–T88).
   - **CPU (owner):** about 60 % CPU load, leaving room for other programs: 5 worker processes by default (measured 64–73 %; 4 = 52 %, 8 = 96 % for only ≈ 13 % more speed, because the CPU has 4 cores / 8 threads). Workers run at below-normal priority. The count is a setting and can be changed when resuming; it never changes the results.
   - **Stopping:** every 25 generations the best car drives 5 validation tracks (generated from their own seed range, never trained on, not the test or held-out sets); the run stops when that score hasn't improved by 1 % for 500 generations, or when the owner pauses it. No generation cap by default (owner: pausing makes it unnecessary); an optional cap exists for unattended queue entries.
@@ -429,9 +432,9 @@ models/R015_t50_narrow7_s1@4600k/
 ```
 
 - **What "immutable" means (D10, owner):** `model.zip`, `vecnormalize.pkl` and `config.yaml` are never changed after saving. `evaluate.py` **adds** `eval.json` and `thumb_<track>.png` once per protocol version (a later protocol writes `eval_v2.json`; nothing is overwritten), and copies them to `outputs/eval/<model_id>/`. Models stay local (git-ignored); the copies in `outputs/eval/` and the registry CSVs are tracked. **Backups (T81):** after every completed run (or queue), `scripts/backup_models.py` copies whatever is missing to the backup folder in `configs/backup/default.yaml`; it never overwrites or deletes, so the backup is as immutable as the model folders.
-- **Model ID:** `R{run:03d}_{short_tag}@{steps}k` (e.g. `R015_t50_narrow7_s1@4600k`). Ablation runs carry the experiment in the tag (D17, e.g. `R005_e2_nogrip_s1@3000k`).
+- **Model ID:** `R{run:03d}_{short_tag}@{steps}k` (e.g. `R015_t50_narrow7_s1@4600k`). Ablation runs carry the experiment in the tag (D17, e.g. `R005_e2_nogrip_s1@3000k`). Neuroevolution runs get `GA_` before the tag (owner, T100: `R{run:03d}_GA_{short_tag}@{steps}k`, e.g. `R020_GA_main_s1@96000k`), so the id itself shows the genetic algorithm; steps = env steps used so far.
 - **Observation specs are versioned** (`obs_spec: {version: 1, rays: [...], extras: [...]}`). Never change what an existing version means; add a new version instead. The loader builds each car's sensor from that car's own spec.
-- **Upgradable engine (D23).** Everything that defines a model is versioned and looked up in a registry: obs spec version and features (§7.1), action layout (§7.2), physics version (§5.2) and algorithm (`racer/agents/algorithms.py`: PPO, SAC). New snapshots carry a **manifest** (`obs_dim`, `action_dim`, `n_params`, `net_arch`, the versions above, input labels); for older snapshots the loader derives it. Before loading, the engine checks the manifest against what it supports: a model that needs something the engine doesn't have yet (e.g. an unknown feature) is listed with the reason and greyed out in the picker, instead of crashing the demo. To support it, register the missing piece; existing models are never touched.
+- **Upgradable engine (D23).** Everything that defines a model is versioned and looked up in a registry: obs spec version and features (§7.1), action layout (§7.2), physics version (§5.2) and algorithm (`racer/agents/algorithms.py`: PPO, SAC; `ga` for neuroevolution once built, D26). New snapshots carry a **manifest** (`obs_dim`, `action_dim`, `n_params`, `net_arch`, the versions above, input labels); for older snapshots the loader derives it. Before loading, the engine checks the manifest against what it supports: a model that needs something the engine doesn't have yet (e.g. an unknown feature) is listed with the reason and greyed out in the picker, instead of crashing the demo. To support it, register the missing piece; existing models are never touched.
 - **Comparing models:** the registry row of a model holds the metrics of the newest protocol it was evaluated with (`eval_protocol` column); compare models only within one protocol. `runs.csv` also records `obs_dim`, `action_layout` and `n_params`, so input count and network size can be compared directly.
 
 **`registry/runs.csv`:** one row per training run
@@ -618,7 +621,7 @@ Results are one seed per setting unless two are listed. **R015's result doesn't 
 **Priorities (MoSCoW):**
 - **Must:** grip physics env, PPO training, registry (CSV and xlsx), load any model, multi-car arena (10–20), rays, trails, HUD, learning curves, showcase tracks, held-out evaluation, map library with a test split (D19), AI Sandbox (D24)
 - **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, highlight video, engine and tyre audio (§10.4)
-- **Could:** brain panel, swarm view, SAC (E7), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
+- **Could:** brain panel, swarm view, SAC (E7), neuroevolution (E10, D26; planned in `docs/NEUROEVOLUTION_PLAN.md`), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
 - **Won't (this time):** car-to-car collisions, multi-agent competitive training, pixel/CNN observations, 3D
 
 ---
@@ -754,6 +757,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-13 | **D26, maps per generation (owner, T88):** **one random map per generation**, from the 7 training maps, instead of K maps: 3× more generations for the same time, noisier selection (the population can chase the current map); a slower plateau is accepted because training is pausable. Generated tracks are used only for validation. **CPU:** 5 worker processes by default (≈ 60–70 % CPU load; owner target 60 %), below-normal priority, changeable on resume. **Inputs:** 10 (6 rays at ±5.5°/±17°/±55°, heading sin/cos, forward and sideways speed); yaw rate, on-road fraction and previous action dropped, to be revisited if driving is worse. **Track limits:** the try fails when the car's centre crosses the road edge (optional episode setting, off for existing presets). More maps will be added over time. |
 | 2026-10-13 | **D26 inputs final (owner, T89–T90):** a 0° ray at 200 m added (braking from top speed to the tightest corner needs 191 m; ±5.5° rays see 52–83 m on a straight, ±5° only 10 % more); sideways speed dropped, so the inputs are 7 rays, heading sin/cos and forward speed (10). Every car of every generation is to be recorded in a lineage database (proposal, `docs/NEUROEVOLUTION_PLAN.md`). |
 | 2026-10-13 | **D26 ready to implement (owner, T91):** 50 cars (12 elites); validation = 5 generated tracks every 25 generations, stop after 500 generations without a 1 % gain; 200 s simulated time cap per try; lineage database + a checkpoint every 100 generations, no full-weight record of the run (disk space). Decisions that were uncertain (dropped inputs, one map per generation, σ) are revised if results show them to be poor. Build steps S1–S7 are tasks T92–T98. |
+| 2026-10-15 | **D26 selection and model id (owner, T100):** all 50 cars are ranked; the top 25 % (12) go to the next generation unchanged, and the same 12 are the only parents of the other 38 (each child = one of them at random + σ × noise). Neuroevolution model ids carry `GA_` before the tag (`R020_GA_main_s1@96000k`). Implementation starts (T92). |
 
 **Open questions:**
 - `final_mix` trains on every track in `tracks/user/`, so a track drawn and saved in the demo becomes training data for later `final_mix` runs. `maps7` leaves `user/` out. Should `final_mix` stay as it is (its meaning is frozen in old snapshots either way), and should faculty-drawn tracks be saved to `tracks/test/` instead? Currently: unchanged; use `maps7` for new runs.

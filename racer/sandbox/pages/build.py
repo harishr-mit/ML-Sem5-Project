@@ -201,7 +201,7 @@ def _network(base: B.Plan, v: int, plan: B.Plan) -> tuple[str, list[int], str]:
 
 def _algorithm(base: B.Plan, v: int) -> tuple[str, dict[str, Any], list[str]]:
     from racer.agents.algorithms import ALGORITHMS
-    algos = list(ALGORITHMS)
+    algos = [a for a in ALGORITHMS if a in B.BUILDABLE]
     algo = st.radio("Algorithm", algos, index=algos.index(base.algorithm) if base.algorithm in algos else 0,
                     key=f"bq_algo_{v}", horizontal=True, captions=[ALGORITHMS[a].description for a in algos])
     default = load_preset("train", B.train_preset_name(algo))[algo]

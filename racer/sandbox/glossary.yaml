@@ -235,10 +235,10 @@ episode:
 
 training:
   title: How it trained (hyperparameters)
-  intro: "Settings of the learning algorithm and the network (PROJECT_CONTEXT §8). PPO and SAC descriptions come from racer/agents/algorithms.py."
+  intro: "Settings of the learning algorithm and the network (PROJECT_CONTEXT §8). Algorithm descriptions (PPO, SAC, GA) come from racer/agents/algorithms.py."
   keys:
     train.algorithm:
-      short: "Learning algorithm (ppo or sac)."
+      short: "Learning algorithm (ppo, sac or ga = neuroevolution)."
       affects: "How the policy is improved from experience (E7)."
       related: E7
     train.seed:
@@ -246,7 +246,7 @@ training:
       affects: "Starting weights and random starts. Two seeds of the same setting show how much results vary by luck."
     train.total_steps:
       short: "Environment steps of training, all envs together (decisions)."
-      affects: "Training time: ≈ 10 min per million steps alone, ≈ 13 min with 2 runs in parallel. The best checkpoint may come earlier."
+      affects: "Training time: ≈ 10 min per million steps alone, ≈ 13 min with 2 runs in parallel. The best checkpoint may come earlier. GA: an optional budget; empty = run until validation stops improving or the run is paused."
       range: "1M–5M"
     train.n_envs:
       short: "Environments simulated in parallel processes."
@@ -329,6 +329,47 @@ training:
     train.sac.ent_coef:
       short: "(SAC) Entropy weight (auto = tuned to a target)."
       affects: "Exploration."
+    train.ga.population:
+      short: "(GA) Cars per generation; all drive the same map from the same start."
+      affects: "More cars explore more variations per generation, but each generation takes longer."
+      range: "50"
+    train.ga.elite_frac:
+      short: "(GA) Share of the best cars that go to the next generation unchanged; they are also the only parents."
+      affects: "Higher = safer (good cars kept), lower = more new variations per generation."
+      range: "0.25"
+    train.ga.sigma:
+      short: "(GA) Mutation size: the spread of the random noise added to every weight of a child."
+      affects: "Too small = slow progress; too large = children lose what their parent could do."
+      range: "0.02–0.05"
+    train.ga.speed_scale:
+      short: "(GA) m/s; a finished lap scores 1 + mean speed / speed_scale, a failed try its lap fraction (0–1)."
+      affects: "Only the scale of the fitness: any finisher beats any non-finisher, a faster lap beats a slower one."
+    train.ga.workers:
+      short: "(GA) Processes that drive the cars of a generation in parallel."
+      affects: "Speed and CPU load only (5 ≈ 60–70 % CPU); results are identical for any number."
+      range: "4–8"
+    train.ga.checkpoint_every:
+      short: "(GA) Generations between saved checkpoints (the best car of that generation)."
+      affects: "How finely you can pick the best moment of a run."
+    train.ga.state_every:
+      short: "(GA) Generations between saves of the pause state, against crashes (a pause always saves)."
+      affects: "How much is lost if the PC crashes."
+    train.ga.validation.every:
+      short: "(GA) Generations between validation drives of the best car."
+      affects: "How quickly the run notices it has stopped improving."
+    train.ga.validation.tracks:
+      short: "(GA) Number of generated validation tracks; never trained on, not the test or held-out tracks."
+      affects: "More = a steadier stopping signal, slower validation."
+    train.ga.validation.stream:
+      short: "(GA) Generator seed stream of the validation tracks (0 = training pool, 1 = held-out set)."
+      affects: "Keeps validation tracks separate from every other set."
+    train.ga.validation.patience:
+      short: "(GA) Generations without a validation gain before the run stops."
+      affects: "Longer = more chance of a late improvement, longer runs."
+      range: "500"
+    train.ga.validation.min_gain:
+      short: "(GA) Relative validation gain that counts as an improvement (0.01 = 1 %)."
+      affects: "Stops runs that only creep forward."
     train.policy.net_arch:
       short: "Hidden layer widths of the network (the critic has the same shape)."
       affects: "Capacity: bigger can learn more complex driving but trains slower and needs more data."

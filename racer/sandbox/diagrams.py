@@ -235,6 +235,8 @@ def layer_table(algorithm: str, obs_dim: int, act_dim: int, net_arch: Sequence[i
                      "params": h * act_dim + act_dim})
         for q in ("critic 1", "critic 2"):
             stack(q, obs_dim + act_dim, 1, "Q value")
+    elif algorithm == "ga":
+        stack("actor", obs_dim, act_dim, "outputs (action)")
     else:
         raise ValueError(f"no layer table for algorithm {algorithm!r}")
     return rows

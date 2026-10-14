@@ -135,7 +135,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * *T92–T98: build steps S1–S7 of `docs/NEUROEVOLUTION_PLAN.md` ("done when" checks are there). Uncertain decisions (dropped inputs, one map per generation, σ) are revised if results show them to be poor.*
 * [x] T92: S1 env: optional track-limits termination (car centre over the road edge, off by default); obs preset `rays7_lean` (7 rays incl. 0°, heading sin/cos, forward speed).
 * [x] T93: S2 `racer/agents/neuroevolution.py`: weights, numpy forward, fitness, selection + mutation from seeds, lineage rebuild.
-* [ ] T94: S3 export to a model folder (SB3 PPO zip + identity `vecnormalize.pkl`), `ga` algorithm entry, compat.
+* [x] T94: S3 export to a model folder (SB3 PPO zip + identity `vecnormalize.pkl`), `ga` algorithm entry, compat.
 * [ ] T95: S4 evolution loop: workers, validation + stopping, checkpoints + registry, TensorBoard, lineage SQLite, pause/resume, `ga_default.yaml`, `train.py` dispatch, glossary, `.gitignore`, backup of the lineage.
 * [ ] T96: S5 σ test (0.02 vs 0.05, 200 generations each).
 * [ ] T97: S6 control run (Training Ground) and main run (7 maps); evaluate; back up.
@@ -158,6 +158,13 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-15 — Claude Code (Opus 5.5) — T94: GA model folders, `ga` algorithm (S3)
+
+* **Status:** DONE. Full suite 223 passed. Reviewer (atomic-reviewer, Opus 5.5): CHANGES_REQUESTED, 1 critical fixed: registering `ga` put it on the sandbox Build page, where picking it crashed (`KeyError: checkpoint_every`). The page now lists only `builder.BUILDABLE` (ppo, sac; GA is added in T95), with a test that every listed algorithm validates. Other fixes: `update_steps` is `None` for GA (no gradient updates); `export_model` derives the layer sizes itself; `hparams_json` in runs.csv keeps the `ga:` section; the Explorer caption says GA weights are evolved, not trained; the GA layer table joined the existing count test.
+* **Export:** `racer/agents/evolve.py:export_model` copies the weights into an SB3 PPO actor (`vf: []`), saves `model.zip` (≈ 0.3 MB) and an identity `vecnormalize.pkl`. `LoadedModel.act_batch` matches the numpy forward pass (atol 1e-5, inputs inside and outside the input range).
+* **Config:** `configs/train/ga_default.yaml` (all GA settings, glossary entries for each). The GA's maps are the run's own tracks; new track set `train7` = the 7 training maps without a generated pool. Plan change: the optional cap is an env-step budget (`total_steps` / `--steps`, the same unit as PPO and the sandbox queue) instead of `max_generations`.
+* **Files:** Created `racer/agents/evolve.py`, `configs/train/ga_default.yaml`, `configs/trackset/train7.yaml`, `tests/test_evolve.py`. Edited `racer/agents/algorithms.py`, `racer/agents/compat.py`, `racer/sandbox/diagrams.py`, `racer/sandbox/builder.py`, `racer/sandbox/pages/build.py`, `racer/sandbox/pages/explorer.py`, `racer/sandbox/glossary.yaml`, `racer/registry/registry.py`, `tests/test_sandbox.py`, `docs/NEUROEVOLUTION_PLAN.md`, `log.md`.
 
 ### 2026-10-15 — Claude Code (Opus 5.5) — T93: GA core (S2)
 

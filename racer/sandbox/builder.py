@@ -104,6 +104,9 @@ class Plan:
         return copy.deepcopy(self)
 
 
+BUILDABLE = ("ppo", "sac")     # algorithms the Build page can configure
+
+
 def train_preset_name(algorithm: str) -> str:
     return f"{algorithm}_default"
 

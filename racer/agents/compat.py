@@ -87,6 +87,9 @@ def count_params(algorithm: str, obs_dim: int, act_dim: int, net_arch: list[int]
         h = arch[-1] if arch else obs_dim
         policy = _mlp(obs_dim, arch, None) + 2 * (h * act_dim + act_dim)    # latent + mean + log_std heads
         return {"policy": policy, "total": policy + 2 * _mlp(obs_dim + act_dim, arch, 1)}   # twin critics
+    if algorithm == "ga":
+        policy = _mlp(obs_dim, arch, act_dim)                          # the evolved weights, nothing else trains
+        return {"policy": policy, "total": policy}
     raise ValueError(f"no parameter count for algorithm {algorithm!r}")
 
 

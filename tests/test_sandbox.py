@@ -370,12 +370,20 @@ def test_straight_hits_geometry():
 def test_layer_table_adds_up_to_the_manifest_count():
     from racer.agents.compat import count_params
     from racer.sandbox.diagrams import layer_table
-    for algo in ("ppo", "sac"):
+    for algo in ("ppo", "sac", "ga"):
         for obs, act, arch in ((13, 2, [256, 256]), (15, 3, [64, 64, 64]), (9, 2, [32])):
             rows = layer_table(algo, obs, act, arch)
             want = count_params(algo, obs, act, arch)
             assert sum(r["params"] for r in rows if r["network"] == "actor") == want["policy"]
             assert sum(r["params"] for r in rows) == want["total"]
+
+
+def test_every_algorithm_on_the_build_page_validates():
+    from racer.sandbox import builder as B
+    for algo in B.BUILDABLE:
+        plan = B.plan_from_presets(algorithm=algo)
+        plan.tag, plan.why = "check", "every listed algorithm must build"
+        assert B.validate(plan) == [], algo
 
 
 def test_diagrams_render():

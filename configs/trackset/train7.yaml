@@ -1,0 +1,5 @@
+# Track set "train7": the hand-designed training maps only (3 showcase + tracks/train/), no generated pool.
+# Neuroevolution draws one of them per generation (D26); maps added to these folders join new runs.
+fixed:
+  - {folder: showcase, weight: 1.0}
+  - {folder: train, weight: 1.0}

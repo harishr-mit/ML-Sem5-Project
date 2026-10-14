@@ -219,7 +219,7 @@ def run_row(snapshot: Mapping[str, Any], total_steps: int | None = None,
 
     env = snapshot["env_config"]
     train = snapshot["train"]
-    hp = {k: train[k] for k in ("ppo", "sac", "policy", "vecnormalize", "n_envs") if k in train}
+    hp = {k: train[k] for k in ("ppo", "sac", "ga", "policy", "vecnormalize", "n_envs") if k in train}
     try:
         man = manifest_of(snapshot)
     except (KeyError, ValueError):      # a model this engine can't describe (e.g. an unknown feature)

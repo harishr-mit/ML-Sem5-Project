@@ -260,8 +260,9 @@ def _brain(snap, man) -> None:
                           man.get("activation", "tanh")), width="stretch")
     st.caption(f"The driving network (actor): {man['obs_dim']} inputs → "
                + " → ".join(str(n) for n in man["net_arch"]) + f" → {man['action_dim']} outputs, "
-               f"{man.get('activation', 'tanh')} activations. {man['n_params']:,} parameters drive the car; "
-               f"{man['n_params_total']:,} were trained in total (the critic only helps during training).")
+               f"{man.get('activation', 'tanh')} activations. {man['n_params']:,} parameters drive the car"
+               + ("; they were evolved, not trained by gradients." if algo == "ga" else
+                  f"; {man['n_params_total']:,} were trained in total (the critic only helps during training)."))
     try:
         layers = diagrams.layer_table(algo, int(man["obs_dim"]), int(man["action_dim"]), man["net_arch"])
         st.markdown(md_table(["Network", "Layer", "Shape", "Parameters"],

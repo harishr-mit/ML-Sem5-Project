@@ -251,7 +251,7 @@ def main() -> int:
                     self.logger.record_mean("race/lap_time", info["lap_time"])
                 if done:
                     reason = info.get("termination") or "truncated"
-                    for r in ("barrier", "offroad", "stuck", "wrong_way", "truncated"):
+                    for r in ("barrier", "track_limits", "offroad", "stuck", "wrong_way", "truncated"):
                         self.logger.record_mean(f"end/{r}", float(reason == r))
                     self.logger.record_mean("race/laps", info.get("laps", 0))
                     self.logger.record_mean("race/progress_m", info.get("progress", 0.0))

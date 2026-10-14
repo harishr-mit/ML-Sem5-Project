@@ -4,7 +4,9 @@ Presets are plain dicts. A preset may start with ``extends: <other preset of the
 kind>`` to inherit from it. Overrides are deep-merged strictly: an override key that the
 base doesn't have is an error, so a typo can't silently be ignored. Dataclasses built with
 :func:`from_dict` reject unknown *and* missing keys, so every tunable number has to be
-written in a config file (no hidden defaults in code).
+written in a config file (no hidden defaults in code). The one exception is a field added
+after models were saved: it gets a dataclass default that keeps the old behaviour, so
+snapshots without the key still load and run exactly as before.
 """
 from __future__ import annotations
 
@@ -81,13 +83,16 @@ def deep_merge(base: Mapping[str, Any], override: Mapping[str, Any], strict: boo
 
 
 def from_dict(cls: type[T], data: Mapping[str, Any], where: str = "") -> T:
-    """Build dataclass ``cls`` from ``data``, rejecting unknown and missing keys."""
+    """Build dataclass ``cls`` from ``data``, rejecting unknown keys and missing keys without a default."""
     if not dataclasses.is_dataclass(cls):
         raise TypeError(f"{cls!r} is not a dataclass")
-    names = {f.name for f in dataclasses.fields(cls)}
+    fields = dataclasses.fields(cls)
+    names = {f.name for f in fields}
+    required = {f.name for f in fields
+                if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING}
     label = where or cls.__name__
     unknown = sorted(set(data) - names)
-    missing = sorted(names - set(data))
+    missing = sorted(required - set(data))
     if unknown:
         raise ConfigError(f"{label}: unknown keys {unknown}")
     if missing:

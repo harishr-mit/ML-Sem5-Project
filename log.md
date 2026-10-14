@@ -133,7 +133,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T90: Owner decisions (2026-10-13): add a 0° ray (200 m); drop sideways speed (counter-argument given; a with-v_lat ablation proposed). Owner question: can every generation be recorded (SQLite)? Answer: yes, as a lineage database (parent + noise seed per car), proposed in the plan. Record in PROJECT_CONTEXT, plan, log.
 * [x] T91: Owner confirmed the remaining proposals (50 cars, validation settings, 200 s cap, lineage + checkpoint every 100 generations; no full-weight record, disk space). Plan finalised as the implementation contract; build tasks added; pre-implementation commit.
 * *T92–T98: build steps S1–S7 of `docs/NEUROEVOLUTION_PLAN.md` ("done when" checks are there). Uncertain decisions (dropped inputs, one map per generation, σ) are revised if results show them to be poor.*
-* [ ] T92: S1 env: optional track-limits termination (car centre over the road edge, off by default); obs preset `rays7_lean` (7 rays incl. 0°, heading sin/cos, forward speed).
+* [x] T92: S1 env: optional track-limits termination (car centre over the road edge, off by default); obs preset `rays7_lean` (7 rays incl. 0°, heading sin/cos, forward speed).
 * [ ] T93: S2 `racer/agents/neuroevolution.py`: weights, numpy forward, fitness, selection + mutation from seeds, lineage rebuild.
 * [ ] T94: S3 export to a model folder (SB3 PPO zip + identity `vecnormalize.pkl`), `ga` algorithm entry, compat.
 * [ ] T95: S4 evolution loop: workers, validation + stopping, checkpoints + registry, TensorBoard, lineage SQLite, pause/resume, `ga_default.yaml`, `train.py` dispatch, glossary, `.gitignore`, backup of the lineage.
@@ -158,6 +158,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-15 — Claude Code (Opus 5.5) — T92: Track-limits rule, rays7_lean (S1)
+
+* **Status:** DONE. Full suite 202 passed (golden R001 test ran and passed), `physics_sanity.py` ALL PASSED, `check_env` passes for `rays7_lean`. Reviewer (atomic-reviewer, Opus 5.5): CHANGES_REQUESTED (0 critical), all findings fixed (weak "stops at the edge" test tightened to one substep of travel; comment trimmed; glossary end-reason lists; imports).
+* **Track limits:** `env.episode.track_limits` (default false). Checked after every physics substep: the car's centre beyond `half_width` (field distance to the centreline; kerbs lie inside it) ends the episode with `termination: track_limits` and the crash penalty; the barrier takes precedence. In free drive it is a warning. TensorBoard `end/track_limits`.
+* **Config:** `from_dict` now lets a dataclass field with a default be missing (only `track_limits` has one), so old snapshots load unchanged; fields without a default stay required.
+* **`rays7_lean`:** 7 rays (±55° 60 m, ±17° 120 m, ±5.5° 200 m, 0° 200 m), heading sin/cos, v_long = 10 inputs; `track_limits: true`. Ray labels now show decimals (`ray+5.5`); integer angles keep their old labels.
+* **Files:** Created `configs/env/rays7_lean.yaml`. Edited `racer/config.py`, `racer/env/racing_env.py`, `racer/env/features.py`, `racer/sandbox/glossary.yaml`, `scripts/train.py`, `tests/test_env.py`, `tests/test_config.py`, `log.md`.
 
 ### 2026-10-15 — Claude Code (Opus 5.5) — T100: Selection wording, GA in the model id
 

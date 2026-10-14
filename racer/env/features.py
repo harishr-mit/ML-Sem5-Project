@@ -72,7 +72,7 @@ class Rays(Feature):
         self.raycast_params = ctx["raycast_params"]
         self.dist = np.empty(len(rays))
         self.dim = len(rays)
-        self.labels = [f"ray{float(r['angle_deg']):+.0f}" for r in rays]
+        self.labels = [f"ray{float(r['angle_deg']):+g}" for r in rays]
         self.low = np.zeros(self.dim)
 
     def write(self, st, out, k):

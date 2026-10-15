@@ -14,7 +14,7 @@
 
 ## 1. Summary
 
-A 2D top-down racing game written from scratch, with a car that learns to drive with **reinforcement learning (PPO)**. A genetic algorithm (neuroevolution, D26) is planned as a comparison (E10).
+A 2D top-down racing game written from scratch, with a car that learns to drive with **reinforcement learning (PPO)**. A genetic algorithm (neuroevolution, D26) trains the same kind of network without gradients, as a comparison (E10).
 - **What the car senses:** 5 distance rays to the edge of the road, its heading relative to the track, its speed, and a few physics readings. It does not see the map.
 - **What it outputs:** steering in [−1, 1] and gas in [−1, 1], where a negative value means brake.
 - **What makes a racing line appear:** the physics has mass, momentum, gravity and a grip limit that depends on the surface. Taking a corner too fast makes the car slide, so the agent has to learn to brake before corners, take the apex, use the full track width and accelerate out.
@@ -104,11 +104,11 @@ ML Sem5 Project/
 ├── pyproject.toml            # makes racer/ importable: pip install -e .
 ├── configs/
 │   ├── physics/  default.yaml, no_grip_limit.yaml, downforce.yaml
-│   ├── env/      rays5.yaml, rays9.yaml, rays5_curvature.yaml
+│   ├── env/      rays5.yaml, rays9.yaml, rays7_narrow.yaml, rays7_lean.yaml (GA) …
 │   ├── reward/   progress.yaml, speed_naive.yaml (for the reward-hacking demo)
-│   ├── train/    ppo_default.yaml, sac_default.yaml, baseline.yaml (hand-coded driver), ga_default.yaml (neuroevolution, D26, planned)
+│   ├── train/    ppo_default.yaml, sac_default.yaml, baseline.yaml (hand-coded driver), ga_default.yaml (neuroevolution, D26)
 │   ├── track/    default.yaml (kerb threshold, field cell size, generator ranges, clearances)
-│   ├── trackset/ tg.yaml, gen_wide.yaml, final_mix.yaml, maps7.yaml … (which tracks training samples, §8)
+│   ├── trackset/ tg.yaml, gen_wide.yaml, final_mix.yaml, maps7.yaml, train7.yaml (GA) … (which tracks training samples, §8)
 │   ├── eval/     v1.yaml, v2.yaml (evaluation protocols, §8)
 │   ├── queue/    *.yaml (experiment lists for queue_overnight.py; sandbox.yaml is the sandbox's, git-ignored)
 │   ├── sandbox/  default.yaml (AI Sandbox: game-window cascade, stop grace, queue time estimates)
@@ -123,8 +123,8 @@ ML Sem5 Project/
 │   │             features.py (obs v2 feature registry), actions.py (action layouts)
 │   ├── agents/   loader.py (registry → policy + normaliser + configs), baseline.py,
 │   │             evaluation.py (eval protocol, metrics, thumbnails, eval files),
-│   │             algorithms.py (PPO/SAC registry, `ga` planned), compat.py (manifest + engine check),
-│   │             neuroevolution.py (genetic algorithm, D26, planned)
+│   │             algorithms.py (PPO/SAC/GA registry), compat.py (manifest + engine check),
+│   │             neuroevolution.py (GA core: selection, mutation, lineage rebuild), evolve.py (GA runs, D26)
 │   ├── registry/ registry.py, export_xlsx.py, record.py (evaluate + record)
 │   ├── sandbox/  data, explain, diagrams, curves, builder, queue, procs, launcher, glossary.yaml,
 │   │             pages/ (AI Sandbox, §10.5; Streamlit is imported only in pages/)
@@ -148,7 +148,7 @@ ML Sem5 Project/
 │   ├── test/       *.json    # hand-designed test maps, NEVER used in training (D19)
 │   ├── heldout/    *.json    # fixed generated tracks, NEVER used in training
 │   └── user/       *.json    # tracks saved from draw-a-track mode
-├── docs/          SANDBOX_PLAN.md (AI Sandbox implementation plan, D24), NEUROEVOLUTION_PLAN.md (D26, ready to implement)
+├── docs/          SANDBOX_PLAN.md (AI Sandbox implementation plan, D24), NEUROEVOLUTION_PLAN.md (D26, built)
 ├── assets/
 │   ├── LICENSES.md           # manifest, credits, usage notes (READ before using assets)
 │   ├── sprites/cars/  sprites/props/  textures/ground/  fonts/  sounds/  licenses/
@@ -410,10 +410,10 @@ The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward h
   - **Selection (owner, T100):** all 50 cars of the generation (including the previous elites, which drove again) are ranked by fitness. The top 25 % (12) go to the next generation unchanged. The same 12 are the only parents of the other 38: each child is one of them, picked at random, with σ × Gaussian noise added to every weight.
   - **Population:** sized to a run budget, not a fixed count: **50 cars, 12 elites** (≈ 1.8 s per generation on 5 processes, worst case, measured T87–T88).
   - **CPU (owner):** about 60 % CPU load, leaving room for other programs: 5 worker processes by default (measured 64–73 %; 4 = 52 %, 8 = 96 % for only ≈ 13 % more speed, because the CPU has 4 cores / 8 threads). Workers run at below-normal priority. The count is a setting and can be changed when resuming; it never changes the results.
-  - **Stopping:** every 25 generations the best car drives 5 validation tracks (generated from their own seed range, never trained on, not the test or held-out sets); the run stops when that score hasn't improved by 1 % for 500 generations, or when the owner pauses it. No generation cap by default (owner: pausing makes it unnecessary); an optional cap exists for unattended queue entries.
+  - **Stopping:** every 25 generations the best car drives 5 validation tracks (generated from their own seed range, never trained on, not the test or held-out sets); the run stops when that score hasn't improved by 1 % for 500 generations, or when the owner pauses it. No cap by default (owner: pausing makes it unnecessary); an optional env-step budget (`--steps`) for unattended queue entries.
   - **Control run:** a short single-track run (Training Ground) to show overfitting next to E5.
-  - **Recording (owner: limited disk space, no full-weight record of the run):** a lineage database `outputs/evolve/<run_id>/lineage.sqlite` (one row per car per generation: parent, noise seed, fitness, map, lap time, termination; ≈ 30 MB per 10,000 generations), from which any car can be rebuilt and exported; a registered checkpoint (a normal model folder, ≈ 1.8 MB) for the best car every 100 generations and at the end.
-  - **Pause and resume (owner):** Ctrl+C or a `stop.request` file (as for the queue) lets the current generation finish, saves the run state (population, generation, RNG state, best score, stopping counter, env steps) to the git-ignored `outputs/evolve/<run_id>/`, and exits. Rerunning the same command continues from there, identical to an uninterrupted run. The state is also saved every few generations against crashes. Model folders are never used for this.
+  - **Recording (owner: limited disk space, no full-weight record of the run):** a lineage database `outputs/evolve/<run>/lineage.sqlite` (one row per car per generation: parent, noise seed, fitness, map, lap time, termination; ≈ 30 MB per 10,000 generations), from which any car can be rebuilt and exported; a registered checkpoint (a normal model folder; model.zip ≈ 0.3 MB) for the best car every 100 generations and at the end.
+  - **Pause and resume (owner):** Ctrl+C or a `stop.request` file (as for the queue) lets the current generation finish, saves the run state (population, generation, best score, stopping counter, env steps; the random numbers come from the seed and the generation) to the git-ignored `outputs/evolve/<run>/`, and exits (code 3; the queue resumes it on its next start). Rerunning the same command continues from there, identical to an uninterrupted run. The state is also saved every 10 generations against crashes (the sandbox's *Stop queue* kills a run, which then resumes from there). A finished run is not restarted by the same command. Model folders are never used for this. **Built (T92–T95):** a paused run resumed with another worker count was checked to be bit-identical to an uninterrupted one.
 - **Logging:** TensorBoard (`runs/`) for episode reward, length, lap time and losses, plus `race/*` (lap time, laps, progress) and `end/*` (termination reasons).
 
 ---
@@ -592,6 +592,8 @@ How it is built:
 | R018 | R015 reliability (seed 2) | rays7_narrow, `maps7`, 5M | 64 % | 63 % (test maps 0 %) | 1.00 | held-out 100 %, but never finishes the test maps |
 | R019 | R015 reliability (seed 1, 8M) | rays7_narrow, `maps7`, 8M | 14 % | 0 % | 0.92 | failed to learn: stuck at ~50 % barrier crashes |
 
+**Neuroevolution, first results (T96, scratch runs S004/S005, 2026-10-15; not in the registry):** σ 0.02 vs 0.05, 10M env steps each (≈ 30 min each on 5 processes, rays7_lean, 7 training maps, track limits on). σ 0.02 won: best checkpoint (S004@8738k, generation 199) **100 % seen, 87.5 % unseen, lap ratio 0.997**, against 86 % / 62.5 % / 1.083 for σ 0.05; on average 28 of 50 cars finished their lap in the last 50 generations (σ 0.05: 16). One seed each, and the best checkpoint varies a lot from one checkpoint to the next (S004@10017k: 36 % seen), so these are early, single-seed numbers. The real runs (control + main) are queued in `configs/queue/e10_ga.yaml` (T97).
+
 Results are one seed per setting unless two are listed. **R015's result doesn't reproduce reliably (R018, R019, 2026-10-11).**
 - **Seed 2 (R018):** the same setup matches R015 on the seen maps (64 %) and the generated held-out tracks (100 %), at the baseline's lap time. But it finishes none of the test-map episodes at its best checkpoints (2 of its 50 checkpoints manage 17–33 %), where R015 managed 67 %.
 - **8M steps (R019, seed 1):** a longer schedule changes the learning-rate decay from the first update, so it doesn't repeat R015's path either. It got stuck early: episode reward ≈ 500–600 against R015's > 1700, and about half its episodes ended at the barrier. Its exploration noise then collapsed (policy std 0.04) and it never recovered.
@@ -621,7 +623,7 @@ Results are one seed per setting unless two are listed. **R015's result doesn't 
 **Priorities (MoSCoW):**
 - **Must:** grip physics env, PPO training, registry (CSV and xlsx), load any model, multi-car arena (10–20), rays, trails, HUD, learning curves, showcase tracks, held-out evaluation, map library with a test split (D19), AI Sandbox (D24)
 - **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, highlight video, engine and tyre audio (§10.4)
-- **Could:** brain panel, swarm view, SAC (E7), neuroevolution (E10, D26; planned in `docs/NEUROEVOLUTION_PLAN.md`), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
+- **Could:** brain panel, swarm view, SAC (E7), neuroevolution (E10, D26; built, runs pending), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
 - **Won't (this time):** car-to-car collisions, multi-agent competitive training, pixel/CNN observations, 3D
 
 ---
@@ -758,6 +760,8 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-13 | **D26 inputs final (owner, T89–T90):** a 0° ray at 200 m added (braking from top speed to the tightest corner needs 191 m; ±5.5° rays see 52–83 m on a straight, ±5° only 10 % more); sideways speed dropped, so the inputs are 7 rays, heading sin/cos and forward speed (10). Every car of every generation is to be recorded in a lineage database (proposal, `docs/NEUROEVOLUTION_PLAN.md`). |
 | 2026-10-13 | **D26 ready to implement (owner, T91):** 50 cars (12 elites); validation = 5 generated tracks every 25 generations, stop after 500 generations without a 1 % gain; 200 s simulated time cap per try; lineage database + a checkpoint every 100 generations, no full-weight record of the run (disk space). Decisions that were uncertain (dropped inputs, one map per generation, σ) are revised if results show them to be poor. Build steps S1–S7 are tasks T92–T98. |
 | 2026-10-15 | **D26 selection and model id (owner, T100):** all 50 cars are ranked; the top 25 % (12) go to the next generation unchanged, and the same 12 are the only parents of the other 38 (each child = one of them at random + σ × noise). Neuroevolution model ids carry `GA_` before the tag (`R020_GA_main_s1@96000k`). Implementation starts (T92). |
+| 2026-10-15 | **σ = 0.02 (T96):** at the same 10M-step budget it beat 0.05 on every measure (100 % vs 86 % seen, 87.5 % vs 62.5 % unseen, lap ratio 0.997 vs 1.083); `ga_default.yaml` keeps 0.02. |
+| 2026-10-15 | **D26 built (T92–T95); owner decisions for the runs (T96):** the σ test runs now, as two scratch runs with the same env-step budget (10M each, ≈ 200–300 generations; equal compute is the fairer comparison than equal generations); the control and main runs go into a queue file the owner starts. **E10 judging:** GA checkpoints are evaluated and raced under their own rules (track limits on), i.e. stricter than PPO, which may cut onto the grass for up to 1 s; the E10 write-up states this. |
 
 **Open questions:**
 - `final_mix` trains on every track in `tracks/user/`, so a track drawn and saved in the demo becomes training data for later `final_mix` runs. `maps7` leaves `user/` out. Should `final_mix` stay as it is (its meaning is frozen in old snapshots either way), and should faculty-drawn tracks be saved to `tracks/test/` instead? Currently: unchanged; use `maps7` for new runs.

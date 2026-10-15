@@ -1,6 +1,6 @@
 # Neuroevolution plan (D26, E10)
 
-**Status: ready to implement** (2026-10-13). Train the same kind of driving network as PPO with a genetic algorithm instead of gradients, as in the owner's reference video, and compare the two (E10). The decisions and their reasons are in PROJECT_CONTEXT §8 and §16 (T84–T91). Decisions that were uncertain (the dropped inputs, one map per generation, σ) are revised if results show them to be poor.
+**Status: built** (2026-10-15, T92–T95; σ test T96, runs T97). Train the same kind of driving network as PPO with a genetic algorithm instead of gradients, as in the owner's reference video, and compare the two (E10). The decisions and their reasons are in PROJECT_CONTEXT §8 and §16 (T84–T91). Decisions that were uncertain (the dropped inputs, one map per generation, σ) are revised if results show them to be poor.
 
 ## How it works
 

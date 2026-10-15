@@ -1,0 +1,21 @@
+# E10 queue (D26, T97): neuroevolution control run and main run.
+#   .venv\Scripts\python scripts\queue_overnight.py configs\queue\e10_ga.yaml
+#
+# One run at a time: each GA run already uses 5 processes (≈ 60–70 % CPU). σ = 0.02 (T96).
+# The control run trains on Training Ground only (overfitting, next to E5's PPO runs) with the
+# σ test's budget of 10M env steps (≈ 30 min). The main run has no budget: it stops when its
+# validation score hasn't improved by 1 % for 500 generations. Ctrl+C pauses it; starting the
+# queue again resumes it where it stopped.
+
+parallel: 1
+runs:
+  - name: e10_ga_ctrl_tg_s1
+    args: >-
+      --tag ctrl_tg_s1 --train ga_default --tracks training_ground --env rays7_lean --seed 1 --steps 10000000
+      --curriculum "E10: GA control, one map"
+      --notes "Neuroevolution on Training Ground only: does it memorise one track like PPO did (E5: R006/R012, 0 % unseen)?"
+  - name: e10_ga_main_s1
+    args: >-
+      --tag main_s1 --train ga_default --trackset train7 --env rays7_lean --seed 1
+      --curriculum "E10: GA main, 7 training maps"
+      --notes "Neuroevolution on the 7 training maps, one random map per generation, until the validation plateau. Compare with PPO's R015 (64 % seen, 88 % unseen, lap ratio 0.97). The T96 scratch run reached 100 % seen / 87.5 % unseen in 10M steps."

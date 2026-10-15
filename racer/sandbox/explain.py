@@ -230,3 +230,41 @@ def _feature_label(f: Mapping[str, Any]) -> str:
 def unexplained(keys: Iterable[str]) -> list[str]:
     """Keys without a glossary entry (the coverage test uses this)."""
     return sorted({k for k in keys if lookup(k) is None})
+
+
+# ------------------------------------------------------------------ presets
+# The presets a model is built from: kind → (title, train.py flag, what it decides).
+PRESET_KINDS: dict[str, tuple[str, str, str]] = {
+    "env": ("Inputs & episode rules", "--env",
+            "What the car senses (rays and its own readings), what it controls, and when a try ends."),
+    "physics": ("Car", "--physics", "The car and the ground: mass, engine, brakes, grip of road, kerb and grass."),
+    "reward": ("Reward", "--reward",
+               "What PPO and SAC are rewarded for. Neuroevolution ignores it: it scores laps (fitness)."),
+    "train": ("Algorithm & network", "--train",
+              "The learning algorithm (PPO, SAC or neuroevolution), its settings and the network's hidden layers."),
+    "trackset": ("Track sets", "--trackset", "Which tracks a run trains on, and how often each one is picked."),
+}
+# runs.csv column naming the preset a run used (train presets aren't recorded: matched by algorithm)
+_RUN_COLUMN = {"env": "obs_spec", "physics": "physics_preset", "reward": "reward_preset", "trackset": "track_set"}
+
+
+def preset_header(kind: str, name: str) -> str:
+    """The comment block at the top of ``configs/<kind>/<name>.yaml`` (the preset's own description)."""
+    from racer.config import preset_path
+    lines = []
+    for line in preset_path(kind, name).read_text(encoding="utf-8").splitlines():
+        if not line.startswith("#"):
+            break
+        lines.append(line.lstrip("#").strip())
+    return " ".join(x for x in lines if x)
+
+
+def runs_using(kind: str, name: str, runs: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Registered runs trained with this preset (train presets: runs of the same algorithm)."""
+    if kind == "train":
+        from racer.config import load_preset
+        algo = load_preset("train", name).get("algorithm")
+        return [r for r in runs if r.get("algorithm") == algo]
+    col = _RUN_COLUMN[kind]
+    return [r for r in runs if str(r.get(col) or "") == name]
+

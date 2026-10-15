@@ -349,14 +349,24 @@ training:
       affects: "Speed and CPU load only (5 ≈ 60–70 % CPU); results are identical for any number."
       range: "4–8"
     train.ga.checkpoint_every:
-      short: "(GA) Generations between saved checkpoints (the best car of that generation)."
+      short: "(GA, runs before 2026-10-15) Generations between saved checkpoints (the best car on that generation's map). Newer runs save a checkpoint at every validation."
       affects: "How finely you can pick the best moment of a run."
+    train.ga.max_generations:
+      short: "(GA) Stop after this many generations (--generations); empty = run until the validation score stops improving."
+      affects: "Run length. PPO/SAC runs are budgeted in steps instead."
+      range: "200 (a quick test) – several thousand"
+    train.ga.evaluate.top_validated:
+      short: "(GA) After the run, evaluate this many checkpoints with the best validation scores."
+      affects: "Finds the best car even when it came early: later checkpoints aren't reliably better (one map per generation)."
+    train.ga.evaluate.last:
+      short: "(GA) After the run, also evaluate this many of the most recent checkpoints."
+      affects: "Shows where the run ended. The others can be evaluated later with evaluate.py."
     train.ga.state_every:
       short: "(GA) Generations between saves of the pause state, against crashes (a pause always saves)."
       affects: "How much is lost if the PC crashes."
     train.ga.validation.every:
-      short: "(GA) Generations between validation drives of the best car."
-      affects: "How quickly the run notices it has stopped improving."
+      short: "(GA) Generations between validations: all elites drive the validation tracks, and the best-validated elite is saved as a checkpoint."
+      affects: "How quickly the run notices it has stopped improving, and how many checkpoints (Evolution Race steps) it saves."
     train.ga.validation.tracks:
       short: "(GA) Number of generated validation tracks; never trained on, not the test or held-out tracks."
       affects: "More = a steadier stopping signal, slower validation."
@@ -644,7 +654,16 @@ run:
       short: "When this checkpoint was saved."
       affects: "—"
     run.generation:
-      short: "(GA) Generation this car comes from (the best car of that generation)."
+      short: "(GA) Generation this car comes from (which car: run.car)."
+      affects: "—"
+    run.car:
+      short: "(GA) Index of this car in its generation (from generation 1, the first n_elite are the elites carried over, best first)."
+      affects: "—"
+    run.validation:
+      short: "(GA) This car's mean fitness on the validation tracks (generated, never trained on); empty if its generation wasn't validated."
+      affects: "—"
+    run.exported_at:
+      short: "(GA) When this car was rebuilt from the lineage and saved (scripts/export_ga.py or the Explorer's Evolution tab)."
       affects: "—"
     run.fitness:
       short: "(GA) The car's fitness in its generation: lap fraction (0–1) if it failed, 1 + mean speed / speed_scale if it finished the lap."

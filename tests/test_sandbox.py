@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PAGE_KEYS = ["overview", "explorer", "compare", "build", "launch", "glossary"]
+PAGE_KEYS = ["overview", "explorer", "compare", "build", "presets", "launch", "glossary"]
 
 
 @pytest.fixture(autouse=True)
@@ -594,11 +594,14 @@ def test_ga_plan_queues_a_valid_train_command():
     spec.loader.exec_module(train)
     cfg = train.apply_sets(B.load_preset("train", "ga_default"), sets)
     assert cfg["ga"]["sigma"] == 0.05 and cfg["ga"]["validation"]["patience"] == 300
-    assert cfg["ga"]["validation"]["every"] == 25
+    assert cfg["ga"]["validation"]["every"] == 20
     args = B.queue_entries(p, "rays7_lean")[0]["args"]
     assert "--steps" not in args and args[args.index("--train") + 1] == "ga_default"
-    p.steps = 50_000_000
-    assert "--steps" in B.queue_entries(p, "rays7_lean")[0]["args"]
+    p.steps, p.generations = 50_000_000, 500                     # GA runs are budgeted in generations
+    args = B.queue_entries(p, "rays7_lean")[0]["args"]
+    assert args[args.index("--generations") + 1] == "500" and "--steps" not in args
+    assert B.train_config(p)["ga"]["max_generations"] == 500 and "max_generations=" not in " ".join(B.train_sets(p))
+    assert B.estimate_minutes(None, 1, 1, algorithm="ga", generations=500)["run"] > 0
     p.trackset = "maps7"
     assert any("generated pool" in e for e in B.validate(p))
 
@@ -862,3 +865,79 @@ def test_glossary_search():
     assert not at.exception
     text = " ".join(m.value for m in at.markdown)
     assert "mu_static" in text and "wheelbase_m" not in text
+
+
+def test_explorer_evolution_tab_saves_any_generation(tmp_path, monkeypatch):
+    import numpy as np
+    import yaml
+    from streamlit.testing.v1 import AppTest
+
+    from racer.agents.compat import build_manifest
+    from racer.agents.evolve import Evolution, export_car
+    from racer.config import load_preset
+    from racer.registry.registry import Registry, run_row
+    from racer.sandbox.data import Store
+    from racer.sandbox.pages import _ui
+    snap = make_snapshot("S900", "S900_GA_x@0k", 0, env="rays7_lean", tag="x")
+    train = load_preset("train", "ga_default")
+    train["ga"].update(population=6, elite_frac=0.34, workers=1, max_generations=3,
+                       validation={"every": 2, "tracks": 1, "stream": 2, "patience": 1000, "min_gain": 0.01})
+    snap.update(algorithm="ga", train=train, manifest=build_manifest(snap["env_config"], train),
+                versions={"numpy": np.__version__})
+    run_dir = tmp_path / "outputs" / "scratch" / "evolve" / "S900_GA_x"
+    Evolution(run_dir, snap["env_config"], train, 10, 2, log=lambda s: None).run()
+    (run_dir / "snapshot.yaml").write_text(yaml.safe_dump(snap), encoding="utf-8")
+    reg = Registry(tmp_path / "outputs" / "scratch" / "registry")
+    reg.upsert_run(run_row(snap))
+    first, _ = export_car(run_dir, 1, out_dir=tmp_path / "outputs" / "scratch", registry=reg)
+    monkeypatch.setattr(_ui, "STORE", Store(tmp_path))
+    at = AppTest.from_function(_run_page, args=("explorer",), default_timeout=180)
+    at.session_state["explorer_model"] = first.name
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    at.number_input(key="ex_ga_gen_S900").set_value(0).run()
+    at.button(key="ex_ga_save_S900").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    ids = {m["model_id"] for m in reg.models() if m["run_id"] == "S900"}
+    assert len(ids) == 2
+    assert at.subheader[0].value == (ids - {first.name}).pop()        # the new model is selected
+
+
+@pytest.mark.parametrize("kind", ["env", "physics", "reward", "train", "trackset"])
+def test_presets_page_shows_every_preset(kind):
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox import builder as B
+    from racer.sandbox.explain import PRESET_KINDS
+    for name in B.preset_names(kind):
+        at = AppTest.from_function(_run_page, args=("presets",), default_timeout=120)
+        at.session_state["pr_kind"] = kind
+        at.session_state[f"pr_name_{kind}"] = name
+        at.run()
+        assert not at.exception, (kind, name, [e.value for e in at.exception])
+        if name != "baseline":                         # the PID driver's settings, not a train preset
+            assert any(f"{PRESET_KINDS[kind][1]} {name}" in c.value for c in at.code), (kind, name)
+
+
+def test_runs_are_matched_to_their_presets():
+    from racer.sandbox.explain import preset_header, runs_using
+    runs = [{"run_id": "R1", "obs_spec": "rays7_lean", "track_set": "train7", "algorithm": "ga"},
+            {"run_id": "R2", "obs_spec": "rays5", "track_set": "maps7", "algorithm": "ppo"}]
+    assert [r["run_id"] for r in runs_using("env", "rays7_lean", runs)] == ["R1"]
+    assert [r["run_id"] for r in runs_using("trackset", "maps7", runs)] == ["R2"]
+    assert [r["run_id"] for r in runs_using("train", "ga_default", runs)] == ["R1"]
+    assert preset_header("env", "rays7_lean").startswith("Environment preset")
+
+
+def test_queue_list_shows_a_generation_budget(tmp_path):
+    from racer.sandbox.queue import QueueControl
+    qc = QueueControl(root=tmp_path, file="configs/queue/sandbox.yaml")
+    qc.add([{"name": "ga_a", "args": ["--tag", "ga_a", "--train", "ga_default", "--generations", "300"]},
+            {"name": "ppo_a", "args": ["--tag", "ppo_a", "--steps", "2000000"]}])
+    e = {x["name"]: x for x in qc.entries()}
+    assert e["ga_a"]["generations"] == 300 and e["ga_a"]["steps"] is None
+    assert e["ppo_a"]["steps"] == 2_000_000 and e["ppo_a"]["generations"] is None
+    from racer.sandbox.builder import budget_label
+    assert budget_label(None, 300) == "300 generations" and budget_label(2_000_000, None) == "2M steps"
+    assert budget_label(None, None) == "until it stops improving"
+

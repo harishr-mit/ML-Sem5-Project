@@ -1,22 +1,24 @@
 # Neuroevolution preset (D26, docs/NEUROEVOLUTION_PLAN.md). Maps = the run's tracks (--tracks / --trackset).
 algorithm: ga
 seed: 0
-total_steps: null           # optional env-step budget (--steps); null = run until the validation plateau or a pause
 
 ga:
   population: 50
   elite_frac: 0.25          # top 25 % go on unchanged and are the only parents
-  sigma: 0.02               # mutation size
+  sigma: 0.02               # mutation size (σ test: 0.02 beat 0.05)
   speed_scale: 70.0         # m/s; finished-lap fitness = 1 + mean speed / speed_scale
   workers: 5                # processes; can change on resume, never changes results
-  checkpoint_every: 100     # generations
+  max_generations: null     # budget (--generations); null = run until the validation plateau or a pause
   state_every: 10           # generations between pause-state saves
-  validation:
-    every: 25               # generations
+  validation:               # all elites drive these tracks; a checkpoint (the best-validated elite) each time
+    every: 20               # generations
     tracks: 5               # generated tracks, seeds 0..tracks-1 of their own stream
     stream: 2               # 0 = training pool, 1 = held-out set
     patience: 500           # generations without a gain before stopping
     min_gain: 0.01          # relative gain that counts as an improvement
+  evaluate:                 # checkpoints evaluated after the run (others: evaluate.py later)
+    top_validated: 10       # the best validation scores
+    last: 10                # the most recent
 
 policy:
   net_arch: [256, 256]

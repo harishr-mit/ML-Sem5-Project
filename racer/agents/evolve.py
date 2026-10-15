@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import os
+import shutil
 import signal
 import sqlite3
 import time
@@ -25,6 +26,7 @@ from typing import Any, Callable, Mapping
 
 import gymnasium as gym
 import numpy as np
+import yaml
 
 from racer.agents import neuroevolution as ne
 from racer.config import PROJECT_ROOT, from_dict
@@ -33,6 +35,7 @@ EVOLVE_DIR = PROJECT_ROOT / "outputs" / "evolve"
 PAUSED_EXIT = 3          # train.py's exit code for a paused run; the queue marks it "interrupted"
 FINISHED = "finished.json"
 _DRAW, _BREED = 0, 1
+RESUME_FREE = ("workers", "max_generations", "evaluate")     # ga settings a resumed run may change
 
 
 @dataclass(frozen=True)
@@ -42,9 +45,10 @@ class GAParams:
     sigma: float
     speed_scale: float
     workers: int
-    checkpoint_every: int
+    max_generations: int | None
     state_every: int
     validation: dict
+    evaluate: dict
 
     @property
     def n_elite(self) -> int:
@@ -63,10 +67,11 @@ def training_maps(env_config: Mapping[str, Any]) -> list[str]:
 
 
 def settings_key(env_config: Mapping[str, Any], train_cfg: Mapping[str, Any]) -> str:
-    """What must match to resume a run: everything except the worker count and the step budget."""
+    """What must match to resume a run: everything except the worker count, the generation budget
+    and which checkpoints are evaluated afterwards."""
     train = json.loads(json.dumps(train_cfg))
-    train["ga"].pop("workers", None)
-    train.pop("total_steps", None)
+    for k in RESUME_FREE:
+        train["ga"].pop(k, None)
     blob = json.dumps({"env": env_config, "train": train}, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()
 
@@ -89,7 +94,8 @@ def unfinished_run_ids(root: Path = EVOLVE_DIR) -> set[str]:
 
 # ----------------------------------------------------------------- lineage
 class Lineage:
-    """One row per car per generation (``cars``) and per generation (``generations``)."""
+    """One row per car per generation (``cars``), per generation (``generations``) and per
+    validated elite (``validations``: its mean score over the validation tracks)."""
 
     def __init__(self, path: Path) -> None:
         self.db = sqlite3.connect(str(path))
@@ -101,6 +107,8 @@ class Lineage:
                 generation INTEGER PRIMARY KEY, map TEXT, start_s REAL, lateral REAL, heading_offset REAL,
                 speed REAL, best REAL, mean REAL, median REAL, finished INTEGER, env_steps INTEGER,
                 validation REAL);
+            CREATE TABLE IF NOT EXISTS validations (
+                generation INTEGER, car INTEGER, score REAL, PRIMARY KEY (generation, car));
             CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
         """)
 
@@ -111,10 +119,13 @@ class Lineage:
     def meta(self) -> dict[str, Any]:
         return {k: json.loads(v) for k, v in self.db.execute("SELECT key, value FROM meta")}
 
-    def write(self, generation: int, cars: list[tuple], gen_row: Mapping[str, Any]) -> None:
+    def write(self, generation: int, cars: list[tuple], gen_row: Mapping[str, Any],
+              validations: Mapping[int, float] | None = None) -> None:
         # INSERT OR REPLACE: after a crash, generations since the last state save are driven
         # again and rewritten with identical rows.
         self.db.executemany("INSERT OR REPLACE INTO cars VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", cars)
+        self.db.executemany("INSERT OR REPLACE INTO validations VALUES (?, ?, ?)",
+                            [(generation, int(c), float(s)) for c, s in (validations or {}).items()])
         self.db.execute("INSERT OR REPLACE INTO generations VALUES "
                         "(:generation, :map, :start_s, :lateral, :heading_offset, :speed, :best, :mean, :median, "
                         ":finished, :env_steps, :validation)", {"generation": generation, **gen_row})
@@ -222,7 +233,8 @@ class State:
             return cls(weights=z["weights"], parents=z["parents"], seeds=z["seeds"], **meta)
 
 
-Checkpoint = Callable[[np.ndarray, int, int, float], Any]     # (weights, generation, env_steps, fitness)
+# (weights, generation, car, env_steps, fitness, validation score)
+Checkpoint = Callable[[np.ndarray, int, int, int, float, float], Any]
 
 
 class Evolution:
@@ -235,7 +247,7 @@ class Evolution:
         self.env_config, self.train_cfg = env_config, train_cfg
         self.p = from_dict(GAParams, train_cfg["ga"], where="train.ga")
         self.seed = int(train_cfg["seed"])
-        self.budget = train_cfg.get("total_steps")
+        self.budget = self.p.max_generations
         self.sizes = ne.layer_sizes(obs_dim, train_cfg["policy"]["net_arch"], act_dim)
         self.maps = training_maps(env_config)
         self.ep = env_config["env"]["episode"]
@@ -254,8 +266,8 @@ class Evolution:
         if self.state_path.is_file():
             st = State.load(self.state_path)
             if st.settings != key:
-                raise ValueError(f"{self.run_dir.name} was started with different settings; only ga.workers "
-                                 "and total_steps may change when resuming")
+                raise ValueError(f"{self.run_dir.name} was started with different settings; only ga."
+                                 f"{', ga.'.join(RESUME_FREE)} may change when resuming")
             self.log(f"[{self.run_dir.name}] resuming at generation {st.generation} "
                      f"({st.env_steps:,} env steps so far)")
             return st
@@ -301,15 +313,17 @@ class Evolution:
         tasks = [(weights[c], self.sizes, start, self.p.speed_scale, None) for c in chunks]
         return [r for part in self._map(pool, tasks) for r in part]
 
-    def _validate(self, pool, flat: np.ndarray) -> float:
+    def _validate(self, pool, cars: np.ndarray) -> np.ndarray:
+        """Each car's mean fitness over the validation tracks (standing start on the start line)."""
         start = {"start_s": 0.0, "lateral": 0.0, "heading_offset": 0.0, "speed": 0.0}
         n = int(self.p.validation["tracks"])
-        tasks = [(flat[None], self.sizes, start, self.p.speed_scale, k) for k in range(n)]
-        return float(np.mean([part[0][0] for part in self._map(pool, tasks)]))
+        tasks = [(cars, self.sizes, start, self.p.speed_scale, k) for k in range(n)]
+        per_track = [[r[0] for r in part] for part in self._map(pool, tasks)]
+        return np.mean(np.array(per_track), axis=0)
 
     # ------------------------------------------------------------ the loop
     def run(self, pause_after: int | None = None) -> str:
-        """Evolve until the validation plateau, the step budget, or a pause.
+        """Evolve until the validation plateau, the generation budget, or a pause.
 
         ``pause_after``: pause once this many generations are done (tests).
         """
@@ -330,11 +344,17 @@ class Evolution:
                     res = self._drive_all(pool, st.weights, start)
                     scores = np.array([r[0] for r in res])
                     st.env_steps += sum(r[3] for r in res)
-                    best = int(ne.rank(scores)[0])
+                    over_budget = self.budget is not None and g + 1 >= int(self.budget)
 
-                    validation = None
-                    if (g + 1) % int(v["every"]) == 0:
-                        validation = self._validate(pool, st.weights[best])
+                    # Validate the elites (the cars that go on unchanged), not just this map's winner:
+                    # the winner on one map is often not the car that drives other tracks best.
+                    validation, val_scores, val_car = None, {}, None
+                    if (g + 1) % int(v["every"]) == 0 or over_budget:
+                        elites = ne.rank(scores)[:self.p.n_elite]
+                        means = self._validate(pool, st.weights[elites])
+                        val_scores = {int(c): float(m) for c, m in zip(elites, means)}
+                        val_car = int(elites[int(np.argmax(means))])     # ties: the better-ranked elite
+                        validation = val_scores[val_car]
                         if st.best_validation is None or validation > st.best_validation * (1 + float(v["min_gain"])):
                             st.best_validation, st.last_gain = validation, g
                     lineage.write(g, [(g, k, int(st.parents[k]), int(st.seeds[k]), *res[k]) for k in range(len(res))],
@@ -343,17 +363,17 @@ class Evolution:
                                    "best": float(scores.max()), "mean": float(scores.mean()),
                                    "median": float(np.median(scores)),
                                    "finished": sum(r[4] == "lap" for r in res), "env_steps": st.env_steps,
-                                   "validation": validation})
+                                   "validation": validation}, val_scores)
                     self._log_generation(g, start["track"], res, scores, validation, st)
 
-                    plateau = st.best_validation is not None and g - st.last_gain >= int(v["patience"])
-                    over_budget = self.budget is not None and st.env_steps >= int(self.budget)
+                    plateau = val_car is not None and g - st.last_gain >= int(v["patience"])
                     done = plateau or over_budget
-                    if self.checkpoint and ((g + 1) % self.p.checkpoint_every == 0 or done):
-                        self.checkpoint(st.weights[best], g, st.env_steps, float(scores[best]))
+                    if self.checkpoint and val_car is not None:
+                        self.checkpoint(st.weights[val_car], g, val_car, st.env_steps, float(scores[val_car]),
+                                        validation)
                     if done:
                         outcome = "finished"
-                        reason = "validation plateau" if plateau else "step budget"
+                        reason = "validation plateau" if plateau else "generation budget"
                         self.log(f"[{self.run_dir.name}] finished after generation {g} ({reason}); "
                                  f"best validation {st.best_validation}")
                         break
@@ -439,3 +459,119 @@ def export_model(folder: Path, flat: np.ndarray, train_cfg: Mapping[str, Any],
             lin.bias.copy_(torch.as_tensor(b))
     policy.save(folder / "model.zip")
     VecNormalize(venv, training=False, norm_obs=False, norm_reward=False).save(str(folder / "vecnormalize.pkl"))
+
+
+def write_model_folder(folder: Path, flat: np.ndarray, snapshot: Mapping[str, Any],
+                       observation_space: gym.Space, action_space: gym.Space) -> None:
+    """A complete model folder, or nothing: written under a dot name (skipped by the registry,
+    backup and integrity scans) and renamed once ``config.yaml`` is in it."""
+    # The PID keeps a sandbox export and the trainer's checkpoint of the same car apart.
+    partial = folder.with_name(f".{folder.name}.{os.getpid()}.partial")
+    shutil.rmtree(partial, ignore_errors=True)
+    if partial.exists():
+        raise OSError(f"can't remove the unfinished export {partial}; delete it and try again")
+    export_model(partial, flat, snapshot["train"], observation_space, action_space)
+    with (partial / "config.yaml").open("w", encoding="utf-8") as f:
+        yaml.safe_dump(dict(snapshot), f, sort_keys=False, allow_unicode=True)
+    for attempt in range(20):      # a virus scanner or the indexer may hold the new model.zip briefly
+        try:
+            partial.rename(folder)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.25)
+
+
+# ------------------------------------------------------- export any car later
+def run_dir_of(run_id: str, project: Path = PROJECT_ROOT) -> Path:
+    """The evolve folder of a GA run id (R### in outputs/evolve/, S### in outputs/scratch/evolve/)."""
+    root = project / "outputs" / ("scratch/evolve" if run_id.startswith("S") else "evolve")
+    found = sorted(root.glob(f"{run_id}_GA_*")) if root.is_dir() else []
+    if not found:
+        raise FileNotFoundError(f"no neuroevolution run {run_id} in {root}")
+    return found[0]
+
+
+def generation_table(run_dir: Path) -> list[dict[str, Any]]:
+    """Per driven generation: map, best/mean fitness, finishers, env steps, validation (if validated)."""
+    lin = Lineage(run_dir / "lineage.sqlite")
+    try:
+        cur = lin.db.execute("SELECT generation, map, best, mean, finished, env_steps, validation "
+                             "FROM generations ORDER BY generation")
+        cols = [c[0] for c in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+    finally:
+        lin.close()
+
+
+def pick_car(run_dir: Path, generation: int) -> int:
+    """The generation's best-validated elite if it was validated, else its best car on its map."""
+    lin = Lineage(run_dir / "lineage.sqlite")
+    try:
+        # Ties as the checkpoint breaks them: the elite ranked higher (fitness, then index) wins.
+        row = lin.db.execute("SELECT v.car FROM validations v JOIN cars c ON c.generation = v.generation "
+                             "AND c.car = v.car WHERE v.generation = ? ORDER BY v.score DESC, c.fitness DESC, v.car "
+                             "LIMIT 1", (generation,)).fetchone()
+        if row is None:
+            row = lin.db.execute("SELECT car FROM cars WHERE generation = ? ORDER BY fitness DESC, car LIMIT 1",
+                                 (generation,)).fetchone()
+        if row is None:
+            raise KeyError(f"generation {generation} of {run_dir.name} hasn't been driven")
+        return int(row[0])
+    finally:
+        lin.close()
+
+
+def export_car(run_dir: Path, generation: int, car: int | None = None, out_dir: Path | None = None,
+               registry=None) -> tuple[Path, bool]:
+    """Rebuild a car from the lineage and save it as a registered model folder.
+
+    ``car`` defaults to :func:`pick_car`. ``out_dir``/``registry`` default to the run's own
+    (models/ for R runs, outputs/scratch/ for S runs). Returns (folder, created); created is
+    False if that car is already saved (e.g. as a checkpoint).
+    """
+    from racer.config import load_yaml
+    from racer.env.racing_env import RacingEnv
+    from racer.registry.record import registry_for
+    from racer.registry.registry import register_folder
+
+    base = load_yaml(run_dir / "snapshot.yaml")
+    if base["versions"]["numpy"] != np.__version__:
+        raise RuntimeError(f"{run_dir.name} ran with numpy {base['versions']['numpy']}, this is {np.__version__}: "
+                           "rebuilt cars would differ (random streams are only fixed within a numpy version)")
+    car = pick_car(run_dir, generation) if car is None else int(car)
+    lin = Lineage(run_dir / "lineage.sqlite")
+    try:
+        g_row = lin.db.execute("SELECT env_steps FROM generations WHERE generation = ?", (generation,)).fetchone()
+        c_row = lin.db.execute("SELECT fitness FROM cars WHERE generation = ? AND car = ?", (generation, car)).fetchone()
+        v_row = lin.db.execute("SELECT score FROM validations WHERE generation = ? AND car = ?",
+                               (generation, car)).fetchone()
+        if g_row is None or c_row is None:
+            raise KeyError(f"no car {car} in generation {generation} of {run_dir.name}")
+        meta = lin.meta()
+        flat = ne.rebuild(lin.origin, generation, car, meta["sizes"], meta["sigma"])
+    finally:
+        lin.close()
+    scratch = run_dir.name.startswith("S")
+    out_dir = out_dir if out_dir is not None else PROJECT_ROOT / ("outputs/scratch" if scratch else "models")
+    env_steps = int(g_row[0])
+    model_id = f"{run_dir.name}@{env_steps // 1000}k"
+    folder = out_dir / model_id
+    if folder.exists():
+        saved = load_yaml(folder / "config.yaml")
+        same_car = saved.get("car", car) == car       # checkpoints from before T104 have no car
+        if saved.get("generation") == generation and same_car:
+            return folder, False
+        model_id = f"{run_dir.name}_g{generation}c{car}@{env_steps // 1000}k"
+        folder = out_dir / model_id
+        if folder.exists():
+            return folder, False
+    snap = dict(base, model_id=model_id, steps=env_steps, generation=generation, car=car,
+                fitness=round(float(c_row[0]), 6), validation=None if v_row is None else round(float(v_row[0]), 6),
+                saved_at=time.strftime("%Y-%m-%dT%H:%M:%S"), exported_at=time.strftime("%Y-%m-%dT%H:%M:%S"))
+    env = RacingEnv(base["env_config"])
+    write_model_folder(folder, flat, snap, env.observation_space, env.action_space)
+    register_folder(registry if registry is not None else registry_for(scratch), folder)
+    return folder, True
+

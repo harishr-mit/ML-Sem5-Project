@@ -19,7 +19,7 @@ def small_run(workers=1, **ga):
     """A tiny GA on Training Ground: 6 cars, 2 elites, validation on 1 generated track."""
     env_config = make_env_config(["training_ground"], env="rays7_lean")
     train = load_preset("train", "ga_default")
-    train["ga"].update(population=6, elite_frac=0.34, workers=workers, checkpoint_every=4, state_every=3,
+    train["ga"].update(population=6, elite_frac=0.34, workers=workers, state_every=3,
                        validation={"every": 3, "tracks": 1, "stream": 2, "patience": 1000, "min_gain": 0.01})
     train["ga"].update(ga)
     return env_config, train
@@ -32,7 +32,8 @@ def evolution(run_dir, env_config, train, checkpoint=None):
 def lineage_rows(run_dir):
     with sqlite3.connect(str(run_dir / "lineage.sqlite")) as db:
         return (db.execute("SELECT * FROM cars ORDER BY generation, car").fetchall(),
-                db.execute("SELECT * FROM generations ORDER BY generation").fetchall())
+                db.execute("SELECT * FROM generations ORDER BY generation").fetchall(),
+                db.execute("SELECT * FROM validations ORDER BY generation, car").fetchall())
 
 
 def test_paused_and_resumed_with_other_workers_equals_an_uninterrupted_run(tmp_path):
@@ -49,7 +50,7 @@ def test_paused_and_resumed_with_other_workers_equals_an_uninterrupted_run(tmp_p
     assert np.array_equal(a.weights, b.weights) and np.array_equal(a.seeds, b.seeds)
     assert a.env_steps == b.env_steps > 0 and a.best_validation == b.best_validation is not None
     assert lineage_rows(tmp_path / "a") == lineage_rows(tmp_path / "b")
-    cars, gens = lineage_rows(tmp_path / "a")
+    cars, gens, _ = lineage_rows(tmp_path / "a")
     assert len(cars) == 8 * 6 and len(gens) == 8
     assert len({g[1] for g in gens}) == 1 and len({g[2] for g in gens}) == 8   # one map; a new start each generation
 
@@ -94,18 +95,34 @@ def test_validation_plateau_finishes_with_a_final_checkpoint(tmp_path):
     env_config, train = small_run(validation={"every": 2, "tracks": 1, "stream": 2, "patience": 4,
                                               "min_gain": 1e9})     # nothing after the first validation counts
     saved = []
-    ev = evolution(tmp_path, env_config, train, checkpoint=lambda w, g, steps, fit: saved.append(g))
+    ev = evolution(tmp_path, env_config, train, checkpoint=lambda w, g, car, steps, fit, val: saved.append(g))
     assert ev.run() == "finished"
     assert ev.final.generation == 5                  # first validation after gen 1, plateau 4 generations later
-    assert saved == [3, 5]                           # every 4 generations, plus the end
+    assert saved == [1, 3, 5]                        # a checkpoint at every validation
     assert is_finished(tmp_path) and not (tmp_path / "state.npz").exists()
 
 
-def test_step_budget_finishes(tmp_path):
-    env_config, train = small_run()
-    train["total_steps"] = 1
-    ev = evolution(tmp_path, env_config, train)
-    assert ev.run() == "finished" and ev.final.generation == 0
+def test_generation_budget_finishes_with_a_validated_checkpoint(tmp_path):
+    env_config, train = small_run(max_generations=2)       # validation every 3: the budget ends before one
+    saved = []
+    ev = evolution(tmp_path, env_config, train, checkpoint=lambda w, g, car, steps, fit, val: saved.append(g))
+    assert ev.run() == "finished" and ev.final.generation == 1
+    assert saved == [1]                              # the last generation is validated and saved
+
+
+def test_all_elites_are_validated_and_the_best_one_is_saved(tmp_path):
+    env_config, train = small_run(population=8, elite_frac=0.5)       # 4 elites
+    saved = []
+    evolution(tmp_path, env_config, train,
+              checkpoint=lambda w, g, car, steps, fit, val: saved.append((g, car, val))).run(pause_after=3)
+    cars, gens, vals = lineage_rows(tmp_path)
+    assert {v[0] for v in vals} == {2} and len(vals) == 4             # generation 2: its 4 elites
+    fitness = {c[1]: c[4] for c in cars if c[0] == 2}
+    elites = sorted(fitness, key=lambda c: (-fitness[c], c))[:4]
+    assert sorted(v[1] for v in vals) == sorted(elites)
+    best = max(vals, key=lambda v: (v[2], -elites.index(v[1])))
+    assert saved == [(2, best[1], pytest.approx(best[2]))]
+    assert gens[2][-1] == pytest.approx(best[2])                      # the generation's validation = best elite's
 
 
 def test_runs_are_found_by_tag(tmp_path):
@@ -122,15 +139,19 @@ def test_a_crash_after_the_last_save_replays_to_the_same_run(tmp_path):
     """After a crash the run resumes from its last periodic save and drives some generations again;
     their lineage rows are rewritten and their checkpoints offered again, with identical results."""
     import shutil
-    env_config, train = small_run()
+    env_config, train = small_run(validation={"every": 2, "tracks": 1, "stream": 2, "patience": 1000,
+                                              "min_gain": 0.01})
     calls_a, calls_b = [], []
-    evolution(tmp_path / "a", env_config, train, lambda w, g, s, f: calls_a.append((g, s, w.tobytes()))).run(pause_after=6)
+
+    def rec(calls):
+        return lambda w, g, car, s, f, v: calls.append((g, car, s, w.tobytes()))
+    evolution(tmp_path / "a", env_config, train, rec(calls_a)).run(pause_after=6)
     b = tmp_path / "b"
-    evolution(b, env_config, train, lambda w, g, s, f: calls_b.append((g, s, w.tobytes()))).run(pause_after=3)
+    evolution(b, env_config, train, rec(calls_b)).run(pause_after=3)
     shutil.copy(b / "state.npz", tmp_path / "state3.npz")
-    evolution(b, env_config, train, lambda w, g, s, f: calls_b.append((g, s, w.tobytes()))).run(pause_after=5)
+    evolution(b, env_config, train, rec(calls_b)).run(pause_after=5)
     shutil.copy(tmp_path / "state3.npz", b / "state.npz")          # the crash: generations 3–4 are lost
-    evolution(b, env_config, train, lambda w, g, s, f: calls_b.append((g, s, w.tobytes()))).run(pause_after=6)
+    evolution(b, env_config, train, rec(calls_b)).run(pause_after=6)
     assert lineage_rows(tmp_path / "a") == lineage_rows(b)
     assert np.array_equal(State.load(tmp_path / "a" / "state.npz").weights, State.load(b / "state.npz").weights)
     assert set(calls_b) == set(calls_a) and len(calls_b) == len(calls_a) + 1      # gen 3's checkpoint offered twice
@@ -150,10 +171,10 @@ def test_maps_must_be_named():
         training_maps(make_env_config(trackset="maps7"))
 
 
-def test_workers_and_budget_may_change_on_resume():
+def test_workers_budget_and_evaluation_may_change_on_resume():
     env_config, train = small_run()
     other = copy.deepcopy(train)
-    other["ga"]["workers"], other["total_steps"] = 8, 10_000_000
+    other["ga"].update(workers=8, max_generations=3000, evaluate={"top_validated": 3, "last": 1})
     assert settings_key(env_config, train) == settings_key(env_config, other)
     other["seed"] = 5
     assert settings_key(env_config, train) != settings_key(env_config, other)
@@ -208,15 +229,90 @@ def test_folders_are_never_overwritten(exported):
         export_model(folder, flat, load_preset("train", "ga_default"), env.observation_space, env.action_space)
 
 
-
 def test_resume_lists_what_the_command_changed():
+    a = {"train": {"ga": {"sigma": 0.02, "workers": 5}, "seed": 0}, "env_config": {"tracks": ["a"]}}
+    b = {"train": {"ga": {"sigma": 0.05, "workers": 8}, "seed": 0}, "env_config": {"tracks": ["a", "b"]}}
+    assert train_script()._diff_keys(a, b) == ["env_config.tracks", "train.ga.sigma", "train.ga.workers"]
+    assert train_script()._diff_keys(a, a) == []
+
+
+def train_script():
     import importlib.util
 
     from racer.config import PROJECT_ROOT
     spec = importlib.util.spec_from_file_location("train_script", PROJECT_ROOT / "scripts" / "train.py")
-    train_script = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(train_script)
-    a = {"train": {"ga": {"sigma": 0.02, "workers": 5}, "seed": 0}, "env_config": {"tracks": ["a"]}}
-    b = {"train": {"ga": {"sigma": 0.05, "workers": 8}, "seed": 0}, "env_config": {"tracks": ["a", "b"]}}
-    assert train_script._diff_keys(a, b) == ["env_config.tracks", "train.ga.sigma", "train.ga.workers"]
-    assert train_script._diff_keys(a, a) == []
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_evaluation_takes_the_best_validated_and_the_latest(tmp_path):
+    vals = [0.2, 1.3, 0.4, 0.9, 1.1, 0.3, 0.5, 0.6]                  # generations 20, 40, ... 160
+    folders = []
+    for i, v in enumerate(vals):
+        f = tmp_path / f"S001_GA_x@{i}k"
+        f.mkdir()
+        (f / "config.yaml").write_text(yaml.safe_dump({"generation": 20 * (i + 1), "validation": v}), encoding="utf-8")
+        folders.append(f)
+    picked = train_script().checkpoints_to_evaluate(folders, {"top_validated": 2, "last": 2})
+    assert [p.name for p in picked] == ["S001_GA_x@1k", "S001_GA_x@4k", "S001_GA_x@6k", "S001_GA_x@7k"]
+    only_best = train_script().checkpoints_to_evaluate(folders, {"top_validated": 1, "last": 0})
+    assert [p.name for p in only_best] == ["S001_GA_x@1k"]
+
+
+def test_any_generation_is_exported_as_a_working_model(tmp_path):
+    """The export tool rebuilds a car from the lineage alone; it must drive exactly like the car
+    the run checkpointed for that generation."""
+    from racer.agents.evolve import export_car, generation_table, pick_car
+    from racer.registry.registry import Registry
+    env_config, train = small_run(max_generations=3)
+    run_dir = tmp_path / "S900_GA_exp"
+    saved = {}
+    evolution(run_dir, env_config, train, lambda w, g, car, s, f, v: saved.update({g: (car, w.copy())})).run()
+    snap = {"run_id": "S900", "algorithm": "ga", "train": train, "env_config": env_config,
+            "manifest": build_manifest(env_config, train), "versions": {"numpy": np.__version__}}
+    (run_dir / "snapshot.yaml").write_text(yaml.safe_dump(snap), encoding="utf-8")
+    out, reg = tmp_path / "models", Registry(tmp_path / "registry")
+    car, w = saved[2]
+    assert pick_car(run_dir, 2) == car                                 # validated: the best-validated elite
+    folder, created = export_car(run_dir, 2, out_dir=out, registry=reg)
+    assert created and folder.name.startswith("S900_GA_exp@")
+    cfg = yaml.safe_load((folder / "config.yaml").read_text(encoding="utf-8"))
+    assert cfg["generation"] == 2 and cfg["car"] == car and cfg["validation"] is not None
+    obs = np.random.default_rng(0).uniform(0, 1, (16, 10)).astype(np.float32)
+    expected = ne.forward(ne.unflatten(w, ne.layer_sizes(10, [256, 256], 2)), obs)
+    np.testing.assert_allclose(LoadedModel(folder).act_batch(obs), expected, atol=1e-5)
+    assert reg.model(folder.name) is not None
+    assert export_car(run_dir, 2, out_dir=out, registry=reg) == (folder, False)   # already saved
+    other, created = export_car(run_dir, 0, out_dir=out, registry=reg)          # unvalidated: best on its map
+    assert created and yaml.safe_load((other / "config.yaml").read_text(encoding="utf-8"))["validation"] is None
+    assert [r["generation"] for r in generation_table(run_dir)] == [0, 1, 2]
+    with pytest.raises(KeyError):
+        export_car(run_dir, 7, out_dir=out, registry=reg)
+
+
+def test_export_breaks_validation_ties_like_the_checkpoint(tmp_path):
+    """Equal validation scores: the elite ranked higher on its map wins, in the run and in the export."""
+    from racer.agents.evolve import Lineage, pick_car
+    lin = Lineage(tmp_path / "lineage.sqlite")
+    fitness = [0.5, 0.9, 0.7, 0.1]                      # ranking: cars 1, 2, 0 (the elites), then 3
+    lin.write(0, [(0, k, -1, k, f, 0.0, 0.0, 1, "stuck") for k, f in enumerate(fitness)],
+              {"map": "x", "start_s": 0, "lateral": 0, "heading_offset": 0, "speed": 0, "best": 0.9, "mean": 0.5,
+               "median": 0.6, "finished": 0, "env_steps": 4, "validation": 0.3}, {1: 0.3, 2: 0.1, 0: 0.3})
+    lin.close()
+    assert pick_car(tmp_path, 0) == 1                   # not car 0, the lower index with the same score
+
+
+@pytest.mark.parametrize("argv, message", [
+    (["--train", "ga_default", "--tracks", "training_ground", "--env", "rays7_lean", "--steps", "1000"], "--generations"),
+    (["--train", "ga_default", "--tracks", "training_ground", "--env", "rays7_lean", "--generations", "0"], "at least 1"),
+    (["--tracks", "training_ground", "--generations", "10"], "budgeted with --steps"),
+])
+def test_each_algorithm_refuses_the_other_budget(argv, message, monkeypatch, capsys):
+    import sys
+    mod = train_script()
+    monkeypatch.setattr(sys, "argv", ["train.py", "--tag", "x", "--scratch", *argv])
+    with pytest.raises(SystemExit):
+        mod.main()
+    assert message in capsys.readouterr().err
+

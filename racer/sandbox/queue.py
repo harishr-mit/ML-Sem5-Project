@@ -115,7 +115,8 @@ class QueueControl:
             if status == "running" and not live:
                 status = "interrupted"                 # the runner died without updating state.json
             out.append({"name": r["name"], "args": [str(a) for a in r["args"]], "status": status,
-                        "steps": steps_of(r["args"]), "started": s.get("started"), "finished": s.get("finished"),
+                        "steps": steps_of(r["args"]), "generations": _int_arg(r["args"], "--generations"),
+                        "started": s.get("started"), "finished": s.get("finished"),
                         "minutes": s.get("minutes"), "log": s.get("log"), "scratch": "--scratch" in r["args"]})
         return out
 
@@ -172,9 +173,13 @@ def _read_json(path: Path, attempts: int = 10) -> Any:
             time.sleep(0.05)
 
 
-def steps_of(args: Sequence[Any]) -> int | None:
-    v = _arg([str(a) for a in args], "--steps")
+def _int_arg(args: Sequence[Any], flag: str) -> int | None:
+    v = _arg([str(a) for a in args], flag)
     return int(v) if v and re.fullmatch(r"\d+", v) else None
+
+
+def steps_of(args: Sequence[Any]) -> int | None:
+    return _int_arg(args, "--steps")
 
 
 def _arg(argv: Sequence[Any], flag: str) -> str | None:

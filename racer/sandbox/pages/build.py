@@ -16,6 +16,7 @@ from racer.sandbox.queue import QueueControl, command_line
 SCALE_DEFAULTS = {"v_long": 70.0, "v_lat": 10.0, "yaw_rate": 3.0}
 WIDTHS = [16, 32, 64, 128, 256, 512, 1024]
 STEP_LABELS = {1_000_000: "1M", 2_000_000: "2M", 3_000_000: "3M", 5_000_000: "5M"}
+GEN_CHOICES = [200, 500, 1000, 2000]
 
 
 # ------------------------------------------------------------------ state
@@ -105,7 +106,11 @@ def render() -> None:
     with tabs[3]:
         plan.physics, plan.reward, plan.trackset = _world(base, v)
     with tabs[4]:
-        plan.steps, plan.seeds, plan.trial, plan.tag, plan.why, seed_err = _budget(base, v, plan.algorithm)
+        budget, plan.seeds, plan.trial, plan.tag, plan.why, seed_err = _budget(base, v, plan.algorithm)
+        if plan.algorithm == "ga":
+            plan.generations = budget
+        else:
+            plan.steps = budget
 
     st.header("Summary")
     _summary(plan, hp_errors + seed_err)
@@ -210,13 +215,14 @@ def _algorithm(base: B.Plan, v: int) -> tuple[str, dict[str, Any], list[str]]:
                "`--set` arguments of train.py.")
     errors: list[str] = []
     cols = st.columns(3)
-    fields = [(k, d, start.get(k, d)) for k, d in default.items() if not isinstance(d, dict)]
+    fields = [(k, d, start.get(k, d)) for k, d in default.items() if not isinstance(d, dict) and k not in B.BUDGET_KEYS]
     fields += [(f"{k}.{sk}", sd, (start.get(k) or {}).get(sk, sd))      # nested sections, e.g. ga.validation
                for k, d in default.items() if isinstance(d, dict) for sk, sd in d.items()]
     flat: dict[str, Any] = {}
     for i, (k, d, val) in enumerate(fields):
         flat[k] = _hp_input(cols[i % 3], algo, k, d, val, v, errors)
     hp: dict[str, Any] = {}
+    hp.update({k: start.get(k, d) for k, d in default.items() if k in B.BUDGET_KEYS})
     for k, val in flat.items():
         sec, _, sub = k.partition(".")
         if sub:
@@ -293,20 +299,28 @@ def _world(base: B.Plan, v: int) -> tuple[str, str, str]:
 
 def _budget(base: B.Plan, v: int, algorithm: str):
     c1, c2 = st.columns([2, 1])
-    ga = algorithm == "ga"
-    opts = ([None] if ga else []) + list(STEP_LABELS) + ["custom"]
-    labels = {None: "No limit", **STEP_LABELS}
-    current = base.steps if base.steps in labels and (ga or base.steps is not None) else "custom"
-    pick = c1.radio("Step budget" if ga else "Training steps", opts, index=opts.index(current),
-                    format_func=lambda o: labels.get(o, "Custom") if o != "custom" else "Custom",
-                    key=f"bq_steps_{v}_{algorithm}", horizontal=True,
-                    help="Neuroevolution runs until its validation score stops improving (or you pause it); a "
-                         "budget stops it earlier. A checkpoint is saved every 100 generations." if ga else
-                         "More steps = longer training. Every 100k steps a checkpoint is saved and evaluated, "
-                         "so the best moment of the run can be picked afterwards.")
-    steps = pick if pick != "custom" else int(c1.number_input("Steps", 100_000, 500_000_000,
-                                                             int(base.steps or 2_000_000), step=100_000,
-                                                             key=f"bq_steps_custom_{v}"))
+    if algorithm == "ga":
+        opts = [None, *GEN_CHOICES, "custom"]
+        cur = base.generations if base.generations in opts else "custom"
+        pick = c1.radio("Generations", opts, index=opts.index(cur),
+                        format_func=lambda o: "No limit" if o is None else "Custom" if o == "custom" else str(o),
+                        key=f"bq_gens_{v}", horizontal=True,
+                        help="Neuroevolution runs until its validation score stops improving (or you pause it); a "
+                             "number of generations stops it earlier. A checkpoint is saved at every validation.")
+        budget = pick if pick != "custom" else int(c1.number_input("Generations", 1, 100_000,
+                                                                  int(base.generations or 1000), step=100,
+                                                                  key=f"bq_gens_custom_{v}"))
+    else:
+        opts = list(STEP_LABELS) + ["custom"]
+        cur = base.steps if base.steps in STEP_LABELS else "custom"
+        pick = c1.radio("Training steps", opts, index=opts.index(cur),
+                        format_func=lambda o: STEP_LABELS.get(o, "Custom") if o != "custom" else "Custom",
+                        key=f"bq_steps_{v}", horizontal=True,
+                        help="More steps = longer training. Every 100k steps a checkpoint is saved and evaluated, "
+                             "so the best moment of the run can be picked afterwards.")
+        budget = pick if pick != "custom" else int(c1.number_input("Steps", 100_000, 500_000_000,
+                                                                  int(base.steps or 2_000_000), step=100_000,
+                                                                  key=f"bq_steps_custom_{v}"))
     seeds_txt = c2.text_input("Seeds", ", ".join(str(s) for s in base.seeds), key=f"bq_seeds_{v}",
                               help="One run per seed. Two seeds show how much of a result is luck.")
     err = []
@@ -320,7 +334,7 @@ def _budget(base: B.Plan, v: int, algorithm: str):
                         placeholder="e.g. narrow9_ent").strip()
     why = st.text_area("Why this run? (required, stored with the model)", base.why, key=f"bq_why_{v}",
                        placeholder="What should this run show, compared with which model?")
-    return steps, seeds, trial, tag, why, err
+    return budget, seeds, trial, tag, why, err
 
 
 # ------------------------------------------------------------------ summary + add
@@ -338,14 +352,20 @@ def _summary(plan: B.Plan, extra_errors: list[str]) -> None:
         man = None
     waiting = [e for e in qc.entries() if e["status"] in ("waiting", "interrupted", "running")]
     par = qc.load()["parallel"]
-    est = B.estimate_minutes(plan.steps, len(waiting) + len(plan.seeds), par, algorithm=plan.algorithm)
+    est = B.estimate_minutes(plan.steps, len(waiting) + len(plan.seeds), par, algorithm=plan.algorithm,
+                             generations=plan.generations)
     k = st.columns(5)
     k[0].metric("Inputs → outputs", f"{man['obs_dim']} → {man['action_dim']}" if man else "?")
     k[1].metric("Network parameters", f"{man['n_params']:,}" if man else "?")
-    budget = f"{plan.steps / 1e6:g}M steps" if plan.steps is not None else "until it stops improving"
+    if plan.algorithm == "ga":
+        budget = f"{plan.generations} generations" if plan.generations else "until it stops improving"
+    else:
+        budget = f"{plan.steps / 1e6:g}M steps"
     k[2].metric("Runs", f"{len(plan.seeds)} × {budget}")
     k[3].metric("Time per run", _fmt_min(est["run"]) if est else "open-ended",
-                help="Training + evaluating its checkpoints, with 2 runs in parallel (measured T62/T64)." if est else
+                help=("Generations × the measured time per generation (T96; later generations drive longer "
+                      "laps, so it's rough), plus evaluating the chosen checkpoints." if plan.algorithm == "ga" else
+                      "Training + evaluating its checkpoints, with 2 runs in parallel (measured T62/T64).") if est else
                 "Ends at the validation plateau; pause it any time and it resumes where it stopped.")
     k[4].metric("Queue done in", _fmt_min(est["queue"]) if est else "?",
                 help=f"Everything waiting in the queue plus this, {par} at a time.")
@@ -447,7 +467,7 @@ def _queue() -> None:
     for e in entries:
         c1, c2, c3 = st.columns([5, 2, 1.3])
         mins = f" · {e['minutes']} min" if e.get("minutes") else ""
-        steps = f"{e['steps'] / 1e6:g}M steps" if e["steps"] else "no step limit"
+        steps = B.budget_label(e["steps"], e.get("generations"))
         c1.markdown(f"**{e['name']}** · {steps}{' · trial' if e['scratch'] else ''}{mins}")
         icon = {"waiting": "⏳", "running": "🏃", "done": "✅", "failed": "❌", "interrupted": "⏸"}.get(e["status"], "")
         c2.markdown(f"{icon} {e['status']}")

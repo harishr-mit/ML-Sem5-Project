@@ -125,19 +125,54 @@ Tracks: `training_ground`, `technical`, `fast_flow` (showcase); `city_blocks`, `
 - **Live curves:** in a second terminal, run `.venv\Scripts\python -m tensorboard.main --logdir runs` and open http://localhost:6006.
 - **Smoke test:** add `--scratch` to write to `outputs\scratch\` (git-ignored, with its own registry) instead of `models\`.
 
+### Model presets
+
+A model is built from five presets, each a YAML file in `configs/<kind>/`. A run's snapshot keeps a full copy of every preset it used, so changing or adding a preset never changes a saved model. To try something new, add a preset (start the file with a comment saying what it is for) rather than changing one that models were trained with. The sandbox's **Presets** page shows each preset's values with notes, a picture where it helps (rays to scale, track previews) and the runs trained with it.
+
+| Kind (`train.py` flag) | Preset | What it is |
+|---|---|---|
+| **Inputs and episode rules** (`--env`) | `rays5` | Default: 5 rays (−90°, −45°, 0°, +45°, +90°), heading, speed, slide, yaw rate, wheels on road, previous action (13 inputs, obs_spec v1) |
+| | `rays5_short` | E4: as `rays5` with a 60 m forward ray (too short to brake from top speed) |
+| | `rays9` | E4: 9 rays (±10°, ±30°, ±60°, ±90°, 0°), 17 inputs |
+| | `rays7_narrow` | 7 rays with shallow angles (±7°, ±20°, ±60°, 0°) that see bends early, 15 inputs (R015, the best PPO model) |
+| | `rays7_lean` | Neuroevolution: 7 rays (0°, ±5.5°, ±17°, ±55°), heading, forward speed (10 inputs); track limits on |
+| **Car** (`--physics`) | `default` | The car: 1000 kg, 150 kW, grip-limited tyres, road / kerb / grass surfaces |
+| | `no_grip_limit` | E2: unlimited grip on the road, so there is no reason to brake or take a racing line |
+| | `downforce` | E9: grip grows with speed², so fast corners hold more than slow ones |
+| **Reward** (`--reward`, PPO/SAC only) | `progress` | Default: metres of progress, minus a time cost, steering changes and grass; lap bonus, crash penalty |
+| | `speed_naive` | E3: rewards speed in any direction, only to show reward hacking (circling pays too) |
+| **Algorithm and network** (`--train`) | `ppo_default` | PPO, 256 × 256 tanh network, 2M steps by default (`--steps`) |
+| | `ppo_finetune` | PPO with a lower learning rate, for `--parent` fine-tuning |
+| | `sac_default` | SAC (E7), 256 × 256 ReLU network, 1M steps by default |
+| | `ga_default` | Neuroevolution (D26): 50 cars, top 12 kept, σ 0.02, budget in generations (`--generations`) |
+| | `baseline` | Settings of the hand-coded PID driver (E8); not a training preset |
+| **Track sets** (`--trackset`) | `tg` | Training Ground only |
+| | `gen_wide` | Mostly wide generated tracks plus a little Training Ground |
+| | `final_mix` | Showcase tracks, user-drawn tracks and generated tracks |
+| | `maps7` | The 7 training maps plus a generated pool with mixed widths (R015) |
+| | `train7` | The 7 training maps only, no generated tracks (neuroevolution) |
+
+- **Combine them** in one command: `scripts\train.py --tag my_run --env rays7_narrow --physics default --reward progress --train ppo_default --trackset maps7 --steps 5000000`. Flags you leave out use the defaults (`rays5`, `default`, `progress`, `ppo_default`; `--tracks training_ground` without a track set).
+- **Change one value** without a new file: `--set ppo.ent_coef=0.01`, `--set policy.net_arch=[128,128]` or `--set ga.sigma=0.05` (train preset values only; a misspelt key is an error).
+- **Outputs:** `--action-layout steer_throttle_brake` gives the car separate pedals (obs_spec v2 inputs only).
+- **Without typing commands:** the sandbox's *Build & Queue* starts from any preset (or any trained model), lets you change inputs, network, algorithm, car, reward and tracks, and writes a new input preset `configs\env\sb_<tag>.yaml` when the inputs are new.
+- **Other presets** (not part of a model): `configs\eval\` (evaluation protocols v1, v2), `configs\track\default.yaml` (track geometry, generator), `configs\demo\` (arena, rendering, sound), `configs\sandbox\default.yaml`, `configs\backup\default.yaml`, and `configs\queue\` (overnight run lists).
+
 ### Train with neuroevolution (genetic algorithm)
 
 ```bat
-.venv\Scripts\python scripts	rain.py --tag main_s1 --train ga_default --trackset train7 --env rays7_lean --seed 1
+.venv\Scripts\python scripts\train.py --tag main_s1 --train ga_default --trackset train7 --env rays7_lean --seed 1
 ```
 
-- **How it learns:** 50 cars drive the same lap of one of the 7 training maps (a random map and start each generation). The best 12 go on unchanged; the other 38 are copies of those 12 with small random changes to every weight. No gradients, no reward: a car scores the fraction of the lap it covered, or 1 + its mean speed / 70 m/s if it finished.
+- **How it learns:** 50 cars drive the same lap of one of the 7 training maps (a random map and start each generation). The best 12 go on unchanged; the other 38 are copies of those 12 with small random changes to every weight. No gradients, no reward: a car scores the fraction of the lap it covered, or 1 + its mean speed / 70 m/s if it finished. Generation 0 is 50 random networks (PPO also starts from random weights; neither starts from the baseline).
 - **Inputs:** `rays7_lean` (7 rays incl. one straight ahead, heading, speed: 10 inputs). A try ends at the lap, a crash, track limits (the car's centre over the road edge), stuck, wrong way, or 200 s.
-- **When it stops:** every 25 generations the best car drives 5 generated validation tracks; the run stops when that score hasn't improved by 1 % for 500 generations. `--steps N` adds an env-step budget.
-- **Pause and resume:** press `Ctrl+C` (or create `outputs\evolve\<run>\stop.request`). The current generation finishes, the run is saved and the program exits. Run **the same command** again to continue; `--set ga.workers=8` changes the number of processes (default 5, ≈ 60–70 % CPU). The result is the same however often it was paused.
-- **Output:** a checkpoint `models\R###_GA_<tag>@<env steps>k\` every 100 generations and at the end, evaluated with protocol v2 when the run finishes. They load, race and appear in the sandbox like any model. Every car of every generation is recorded in `outputs\evolve\<run>\lineage.sqlite`, from which any car can be rebuilt.
+- **Budget:** in generations, not steps. `--generations 1000` stops after 1000 generations; without it the run stops when its validation score hasn't improved by 1 % for 500 generations. (PPO and SAC use `--steps`; each flag is refused for the other kind.)
+- **Validation and checkpoints:** every 20 generations all 12 elites drive 5 generated tracks they never train on. The best of them is saved as a checkpoint `models\R###_GA_<tag>@<env steps>k\`, so each checkpoint is a step of the evolution. They load, race and appear in the sandbox like any model; an Evolution Race shows them: `scripts\demo.py --run R020 --every 10`.
+- **Evaluation:** when the run finishes, the 10 checkpoints with the best validation scores and the last 10 are evaluated with protocol v2 (later checkpoints aren't reliably better: each generation trains on one map). Evaluate the others any time with `scripts\evaluate.py --model "<id>"`.
+- **Any car, afterwards:** every car of every generation is recorded in `outputs\evolve\<run>\lineage.sqlite`. `scripts\export_ga.py --run R020 --list` shows the validated generations; `--generation 750` saves that generation's best car as a model folder (`--car 3` for a specific one, `--evaluate` to evaluate it). The sandbox's Model Explorer does the same in its **Evolution** tab, with the run's fitness and validation curves.
+- **Pause and resume:** press `Ctrl+C` (or create `outputs\evolve\<run>\stop.request`). The current generation finishes, the run is saved and the program exits. Run **the same command** again to continue; `--set ga.workers=8` changes the number of processes (default 5, ≈ 60–70 % CPU), and `--generations` may change too. The result is the same however often it was paused.
 - **Control run (one map):** `--tracks training_ground` instead of `--trackset train7`.
-- **In the queue or the sandbox:** works as a queue entry; *Build & Queue* offers `ga` (no step limit by default). A paused run is marked *interrupted* and resumes when the queue starts again.
+- **In the queue or the sandbox:** works as a queue entry; *Build & Queue* offers `ga` with a generation budget (no limit by default). A paused run is marked *interrupted* and resumes when the queue starts again.
 
 ### Race models (Model Arena)
 
@@ -168,6 +203,7 @@ This opens the sandbox in its own window (a small built-in browser, Edge WebView
   - **What it trained with:** the car, reward, tracks, hyperparameters and episode rules. Every value has a note on what it affects, and values that differ from the default preset are marked.
   - **Why the run was made** and what it showed, from `registry\run_notes.yaml`, which you can edit on the page.
   - **Results** for every evaluation protocol, plus learning curves from TensorBoard.
+  - **Evolution** (neuroevolution models): fitness and validation per generation, and *Save as a model* for any generation's car.
 - **Compare (2–4 models):** only the settings that differ, each with its note, then their shape, results (within one protocol), learning curves and driven lines side by side.
 - **Build & Queue:** start from a trained model's setup or from presets, then change what you want to test:
   - **Inputs:** a ray table with a live diagram, plus the car's own readings.
@@ -178,6 +214,7 @@ This opens the sandbox in its own window (a small built-in browser, Edge WebView
 
   *Add to queue* reuses an existing input preset, or writes a new `configs\env\sb_<tag>.yaml`. Hyperparameter changes become `train.py --set` arguments. The entry goes into `configs\queue\sandbox.yaml` (git-ignored). *Start queue* opens the overnight queue in its own window, 2 runs at a time; *Stop queue* asks it to stop like `Ctrl+C`. Real runs still need committed code; a new untracked preset doesn't count.
 - **Launch:** pick up to 20 models (or every N-th checkpoint of one run, as an evolution race), a map, laps, the baseline car and same physics for all, then press *Launch*. Each press opens a separate game window named `AI Sandbox #N · …`, so several can run at once; *Stop* closes one.
+- **Presets:** every preset a model is built from (inputs, car, reward, algorithm and network, track sets): its values with notes, the rays drawn to scale or the track previews, and the runs trained with it.
 - **Glossary:** every setting, what it affects and its typical range, searchable.
 
 ### Run experiments overnight
@@ -232,7 +269,8 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | What | Command |
 |---|---|
 | Drive / watch (debug window) | `scripts\drive.py [--track technical] [--mode human\|baseline\|model] [--model models\<model_id>] [--sim-speed 4] [--trace out.csv]` |
-| Train | `scripts\train.py --tag … (--tracks … or --trackset maps7) [--parent <model_id>] [--train ppo_default\|ppo_finetune\|sac_default] [--physics …] [--env rays5\|rays7_narrow\|…] [--action-layout steer_gas\|steer_throttle_brake] [--reward …] [--steps N] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval] [--protocol v2]` |
+| Train | `scripts\train.py --tag … (--tracks … or --trackset maps7) [--parent <model_id>] [--train ppo_default\|ppo_finetune\|sac_default\|ga_default] [--physics …] [--env rays5\|rays7_narrow\|…] [--action-layout steer_gas\|steer_throttle_brake] [--reward …] [--steps N (PPO/SAC) \| --generations N (GA)] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval] [--protocol v2]` |
+| Export a neuroevolution car | `scripts\export_ga.py --run R020 --list` · `--generation 750 [--car 3] [--evaluate]` (rebuilt from the lineage) |
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |
 | Back up models (after every run) | `scripts\backup_models.py [--run R015] [--dry-run] [--dest <folder>]` (copies what's missing; never overwrites or deletes) |

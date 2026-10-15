@@ -5,7 +5,7 @@
                                            --train ppo_finetune
     .venv\\Scripts\\python scripts\\train.py --tag narrow --trackset maps7 --env rays7_narrow
     .venv\\Scripts\\python scripts\\train.py --tag main_s1 --train ga_default --trackset train7 --env rays7_lean
-        [--steps N] [--train ppo_default|sac_default] [--physics default] [--env rays5] [--reward progress]
+        [--steps N] [--generations N (GA)] [--train ppo_default|sac_default|ga_default] [--physics default] [--env rays5] [--reward progress]
         [--action-layout steer_throttle_brake] [--seed 0] [--n-envs 6] [--curriculum TEXT] [--notes TEXT]
         [--set ppo.ent_coef=0.01] [--scratch] [--allow-dirty] [--no-eval] [--eval-workers 6] [--protocol v2]
 
@@ -24,7 +24,9 @@ are the starting point; its obs spec and network must match. --scratch writes ev
 to outputs/scratch/ (git-ignored, S-ids, scratch registry). TensorBoard logs go to runs/.
 
 A train preset with ``algorithm: ga`` runs neuroevolution instead (D26, racer/agents/evolve.py):
-model ids R###_GA_<tag>@<env steps>k, a checkpoint every ``ga.checkpoint_every`` generations.
+model ids R###_GA_<tag>@<env steps>k; a checkpoint (the best-validated elite) at every
+validation and at the end; afterwards the ``ga.evaluate`` best-validated and latest checkpoints
+are evaluated. Budget: ``--generations N`` (PPO/SAC: ``--steps``).
 Ctrl+C or a stop.request file pauses it after the current generation (exit code 3); running the
 same command again resumes the paused run with that tag.
 """
@@ -34,7 +36,6 @@ import argparse
 import datetime as dt
 import platform
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -151,7 +152,8 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
     import numpy as np
     from torch.utils.tensorboard import SummaryWriter
 
-    from racer.agents.evolve import EVOLVE_DIR, PAUSED_EXIT, Evolution, export_model, find_run, is_finished
+    from racer.agents.evolve import (EVOLVE_DIR, PAUSED_EXIT, RESUME_FREE, Evolution, find_run, is_finished,
+                                     write_model_folder)
     from racer.env.racing_env import RacingEnv
     from racer.registry.record import evaluate_and_record, registry_for
     from racer.registry.registry import register_folder, run_row
@@ -171,14 +173,14 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
         run_dir = existing
         base_snapshot = load_yaml(run_dir / "snapshot.yaml")
         run_id = base_snapshot["run_id"]
-        # The run keeps its own settings (a track set may list more maps by now); only the worker
-        # count and the step budget come from this command.
-        workers, budget = train_cfg["ga"]["workers"], train_cfg.get("total_steps")
+        # The run keeps its own settings (a track set may list more maps by now); only the ga
+        # settings in RESUME_FREE come from this command.
+        free = {k: train_cfg["ga"][k] for k in RESUME_FREE}
         differ = sorted(k for k in _diff_keys({"train": base_snapshot["train"], "env_config": base_snapshot["env_config"]},
                                               {"train": train_cfg, "env_config": env_config})
-                        if k not in ("train.ga.workers", "train.total_steps"))
+                        if k.split(".")[:3] not in [["train", "ga", f] for f in RESUME_FREE])
         train_cfg = base_snapshot["train"]
-        train_cfg["ga"]["workers"], train_cfg["total_steps"] = workers, budget
+        train_cfg["ga"].update(free)
         env_config, manifest = base_snapshot["env_config"], base_snapshot["manifest"]
         if differ:
             print(f"[{run_dir.name}] resuming with the run's own settings; this command differs in "
@@ -198,41 +200,34 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
     env = RacingEnv(env_config)
     obs_space, act_space = env.observation_space, env.action_space
 
-    def save_checkpoint(flat: np.ndarray, generation: int, env_steps: int, fitness: float) -> None:
+    def save_checkpoint(flat: np.ndarray, generation: int, car: int, env_steps: int, fitness: float,
+                        validation: float) -> None:
         model_id = f"{run_name}@{env_steps // 1000}k"
         folder = out_dir / model_id
-        if folder.exists():      # generations since the last state save are driven again after a crash
-            return
-        # Exported under a dot name (skipped by the registry, backup and integrity scans), so a killed
-        # export never looks like a model.
-        partial = folder.with_name(f".{folder.name}.partial")
-        shutil.rmtree(partial, ignore_errors=True)
-        if partial.exists():
-            raise OSError(f"can't remove the unfinished export {partial}; delete it and resume")
-        export_model(partial, flat, train_cfg, obs_space, act_space)
-        snap = dict(base_snapshot, model_id=model_id, steps=env_steps, generation=generation,
-                    fitness=round(fitness, 6), git_commit=git_commit(),
+        if folder.exists():
+            saved = load_yaml(folder / "config.yaml")
+            if (saved.get("generation"), saved.get("car")) == (generation, car):
+                return           # driven again after a crash: this car is already saved
+            model_id = f"{run_name}_g{generation}c{car}@{env_steps // 1000}k"   # same thousand of steps
+            folder = out_dir / model_id
+            if folder.exists():
+                return
+        snap = dict(base_snapshot, train=train_cfg, model_id=model_id, steps=env_steps, generation=generation,
+                    car=car, fitness=round(fitness, 6), validation=round(validation, 6), git_commit=git_commit(),
                     saved_at=dt.datetime.now().isoformat(timespec="seconds"))
-        with (partial / "config.yaml").open("w", encoding="utf-8") as f:
-            yaml.safe_dump(snap, f, sort_keys=False, allow_unicode=True)
-        for attempt in range(20):      # a virus scanner or the indexer may hold the new model.zip briefly
-            try:
-                partial.rename(folder)
-                break
-            except PermissionError:
-                if attempt == 19:
-                    raise
-                time.sleep(0.25)
+        write_model_folder(folder, flat, snap, obs_space, act_space)
         register_folder(reg, folder)
-        print(f"[{run_name}] checkpoint {model_id} (generation {generation}, fitness {fitness:.3f})", flush=True)
+        print(f"[{run_name}] checkpoint {model_id} (generation {generation}, car {car}, "
+              f"validation {validation:.3f})", flush=True)
 
     ga = train_cfg["ga"]
     tb_root = (SCRATCH_DIR / "tb") if args.scratch else RUNS_DIR
     writer = SummaryWriter(str(tb_root / f"{run_name}_1"))
-    print(f"[{run_name}] neuroevolution on {track_label}: {ga['population']} cars, top {ga['elite_frac']:.0%} kept, "
-          f"σ {ga['sigma']}, {ga['workers']} workers, seed {train_cfg['seed']}; {manifest['obs_dim']} inputs, "
-          f"{manifest['action_dim']} outputs, {manifest['n_params']:,} weights. Pause: Ctrl+C or "
-          f"{(run_dir / 'stop.request').relative_to(PROJECT_ROOT)}", flush=True)
+    budget = f"up to {ga['max_generations']} generations" if ga["max_generations"] else "until the validation plateau"
+    print(f"[{run_name}] neuroevolution on {track_label}, {budget}: {ga['population']} cars, top "
+          f"{ga['elite_frac']:.0%} kept, σ {ga['sigma']}, {ga['workers']} workers, seed {train_cfg['seed']}; "
+          f"{manifest['obs_dim']} inputs, {manifest['action_dim']} outputs, {manifest['n_params']:,} weights. "
+          f"Pause: Ctrl+C or {(run_dir / 'stop.request').relative_to(PROJECT_ROOT)}", flush=True)
     ev = Evolution(run_dir, env_config, train_cfg, manifest["obs_dim"], manifest["action_dim"],
                    checkpoint=save_checkpoint, writer=writer, log=lambda s: print(s, flush=True))
     try:
@@ -246,11 +241,25 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
     reg.upsert_run({"run_id": run_id, "total_steps": st.env_steps, "wall_clock_min": round(st.wall_s / 60, 1)})
     if outcome == "paused":
         return PAUSED_EXIT
-    folders = sorted(p for p in out_dir.glob(f"{run_name}@*") if (p / "config.yaml").is_file())
+    folders = checkpoints_to_evaluate(sorted([*out_dir.glob(f"{run_name}@*"), *out_dir.glob(f"{run_name}_g*@*")]), ga["evaluate"])
     if not args.no_eval and folders:
-        print(f"[{run_name}] evaluating {len(folders)} checkpoints (protocol {args.protocol})", flush=True)
+        print(f"[{run_name}] evaluating {len(folders)} checkpoints (the {ga['evaluate']['top_validated']} best "
+              f"validated + the last {ga['evaluate']['last']}; protocol {args.protocol})", flush=True)
         evaluate_and_record(folders, args.protocol, args.eval_workers or int(ga["workers"]))
     return 0
+
+
+def checkpoints_to_evaluate(folders: list[Path], cfg: dict[str, Any]) -> list[Path]:
+    """A GA run's checkpoints worth evaluating: the best-validated ones and the latest ones.
+
+    Later isn't reliably better (one map per generation), so the latest alone can miss the peak.
+    """
+    snaps = [(f, load_yaml(f / "config.yaml")) for f in folders if (f / "config.yaml").is_file()]
+    snaps.sort(key=lambda fs: fs[1]["generation"])
+    by_val = sorted(snaps, key=lambda fs: (-(fs[1].get("validation") or 0.0), fs[1]["generation"]))
+    last = int(cfg["last"])
+    keep = {f for f, _ in by_val[:int(cfg["top_validated"])]} | {f for f, _ in snaps[len(snaps) - last:] if last > 0}
+    return [f for f, _ in snaps if f in keep]
 
 
 def main() -> int:
@@ -260,7 +269,9 @@ def main() -> int:
     tg.add_argument("--tracks", nargs="+", help="explicit track names (default: training_ground)")
     tg.add_argument("--trackset", help="track set preset in configs/trackset/ (D7)")
     ap.add_argument("--parent", default=None, help="model id or folder to fine-tune from (D8)")
-    ap.add_argument("--steps", type=int, default=None, help="override total_steps")
+    ap.add_argument("--steps", type=int, default=None, help="PPO/SAC: env steps to train (overrides total_steps)")
+    ap.add_argument("--generations", type=int, default=None,
+                    help="neuroevolution: stop after this many generations (default: at the validation plateau)")
     ap.add_argument("--train", default="ppo_default")
     ap.add_argument("--physics", default="default")
     ap.add_argument("--env", default="rays5")
@@ -326,10 +337,16 @@ def main() -> int:
         ap.error(str(e))
 
     parent_dir, parent_id = None, None
+    if args.generations is not None and algo.name != "ga":
+        ap.error(f"--generations is for neuroevolution; {algo.name.upper()} runs are budgeted with --steps")
     if algo.name == "ga":
-        if args.parent or args.n_envs is not None:
-            ap.error("neuroevolution starts from random networks (no --parent); set its processes with "
-                     "--set ga.workers=N")
+        if args.parent or args.n_envs is not None or args.steps is not None:
+            ap.error("neuroevolution starts from random networks (no --parent), is budgeted in generations "
+                     "(--generations N, not --steps) and sets its processes with --set ga.workers=N")
+        if args.generations is not None:
+            if args.generations < 1:
+                ap.error("--generations must be at least 1")
+            train_cfg["ga"]["max_generations"] = args.generations
         from racer.agents.evolve import training_maps
         try:
             training_maps(env_config)

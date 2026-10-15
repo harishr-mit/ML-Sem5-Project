@@ -575,6 +575,34 @@ def test_plan_validation():
     assert any("No rays" in w for w in B.warnings(p))
 
 
+def test_ga_plan_queues_a_valid_train_command():
+    import importlib.util
+
+    from racer.sandbox import builder as B
+    p = B.plan_from_presets("rays7_lean", "ga")
+    p.tag, p.why = "ga_main", "neuroevolution on the 7 training maps (E10)"
+    assert p.trackset == "train7" and p.steps is None
+    assert B.validate(p) == [] and B.matching_env_preset(p) == "rays7_lean" and B.train_sets(p) == []
+    assert B.preview(p)["n_params"] == 69_122
+    assert B.estimate_minutes(p.steps, 1, 1) is None
+    assert B.estimate_minutes(50_000_000, 1, 1, algorithm="ga") is None     # PPO's rates don't apply
+    p.hparams["sigma"] = 0.05
+    p.hparams["validation"] = dict(p.hparams["validation"], patience=300)
+    sets = B.train_sets(p)
+    spec = importlib.util.spec_from_file_location("train_script", PROJECT_ROOT / "scripts" / "train.py")
+    train = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(train)
+    cfg = train.apply_sets(B.load_preset("train", "ga_default"), sets)
+    assert cfg["ga"]["sigma"] == 0.05 and cfg["ga"]["validation"]["patience"] == 300
+    assert cfg["ga"]["validation"]["every"] == 25
+    args = B.queue_entries(p, "rays7_lean")[0]["args"]
+    assert "--steps" not in args and args[args.index("--train") + 1] == "ga_default"
+    p.steps = 50_000_000
+    assert "--steps" in B.queue_entries(p, "rays7_lean")[0]["args"]
+    p.trackset = "maps7"
+    assert any("generated pool" in e for e in B.validate(p))
+
+
 def test_plan_from_a_real_snapshot():
     from racer.sandbox import builder as B
     from racer.sandbox.data import STORE
@@ -777,6 +805,30 @@ def test_build_page_adds_a_run_to_the_queue(tmp_path, monkeypatch):
     assert any("Added sbtest_s1, sbtest_s2" in m.value for m in at.success)
     at.button(key="bq_rm_sbtest_s2").click().run()
     assert qc.names() == {"sbtest_s1"}
+
+
+def test_build_page_queues_a_neuroevolution_run(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    from racer.sandbox.pages import build
+    from racer.sandbox.queue import QueueControl
+    qc = QueueControl(root=tmp_path, file="configs/queue/sandbox.yaml")
+    monkeypatch.setattr(build, "_qc", lambda: qc)
+    at = AppTest.from_function(_run_page, args=("build",), default_timeout=180)
+    at.run()
+    at.selectbox(key="bq_from_env").select("rays7_lean")
+    at.selectbox(key="bq_from_algo").select("ga").run()
+    at.button(key="bq_load_presets").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    at.text_input(key="bq_tag_1").input("gatest")
+    at.text_area(key="bq_why_1").input("check that the form queues a neuroevolution run")
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert not at.button(key="bq_add").disabled, [e.value for e in at.error]
+    at.button(key="bq_add").click().run()
+    args = qc.load()["runs"][0]["args"]
+    assert args[args.index("--train") + 1] == "ga_default" and args[args.index("--trackset") + 1] == "train7"
+    assert "--steps" not in args and "--set" not in args
 
 
 def test_overview_leaderboard_order(tmp_path, monkeypatch):

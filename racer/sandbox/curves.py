@@ -21,6 +21,8 @@ MAIN_CURVES = {
     "race/progress_m": "Progress per episode (m)",
     "race/laps": "Laps per episode",
     "rollout/ep_len_mean": "Episode length (decisions)",
+    "ga/validation": "Validation score (neuroevolution)",
+    "ga/best_fitness": "Best fitness per generation (neuroevolution)",
 }
 END_PREFIX = "end/"          # termination reasons: share of episodes ending each way
 TRAIN_PREFIX = "train/"      # losses and optimiser statistics

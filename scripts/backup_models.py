@@ -4,7 +4,8 @@
 
 Run it after every completed run (training + evaluation, or a whole queue). It copies model
 folders and files missing from the backup (``configs/backup/default.yaml``: ``dest``), never
-overwrites or deletes anything, and reports files whose size differs. It refuses to run while
+overwrites or deletes anything, and reports files whose size differs. Finished neuroevolution
+runs (``outputs/evolve/<run>/``: lineage database) go to ``<dest>/evolve/``. It refuses to run while
 a training, queue or evaluation is running, because those are still writing model folders.
 """
 from __future__ import annotations
@@ -13,9 +14,10 @@ import argparse
 import sys
 from pathlib import Path
 
+from racer.agents.evolve import EVOLVE_DIR
 from racer.agents.loader import MODELS_DIR
 from racer.config import load_preset
-from racer.registry.backup import backup
+from racer.registry.backup import backup, finished_evolve_runs
 from racer.sandbox import procs
 
 
@@ -41,9 +43,13 @@ def main() -> int:
     print(f"[backup] {dest}")
     print(f"[backup] {verb} {len(r.copied)} files ({r.bytes_copied / 1e6:.1f} MB), "
           f"{len(r.new_folders)} new model folders; {r.up_to_date} files already backed up")
-    for c in r.conflicts:
+    runs = finished_evolve_runs(EVOLVE_DIR, a.run)
+    e = backup(EVOLVE_DIR, dest / "evolve", dry_run=a.dry_run, folders=runs)
+    print(f"[backup] neuroevolution lineage: {verb} {len(e.copied)} files ({e.bytes_copied / 1e6:.1f} MB) "
+          f"of {len(runs)} finished runs")
+    for c in r.conflicts + [f"evolve/{c}" for c in e.conflicts]:
         print(f"[backup] CONFLICT (size differs, left alone): {c}")
-    return 0 if r.ok else 1
+    return 0 if r.ok and e.ok else 1
 
 
 if __name__ == "__main__":

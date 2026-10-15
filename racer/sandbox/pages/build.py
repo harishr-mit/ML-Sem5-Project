@@ -90,7 +90,7 @@ def render() -> None:
             envs = B.preset_names("env")
             env = st.selectbox("Inputs preset", envs, index=envs.index("rays7_narrow") if "rays7_narrow" in envs else 0,
                                key="bq_from_env")
-            algo = st.selectbox("Algorithm", ["ppo", "sac"], key="bq_from_algo")
+            algo = st.selectbox("Algorithm", list(B.BUILDABLE), key="bq_from_algo")
             st.button("Use these presets", key="bq_load_presets", on_click=_load_presets, args=(env, algo))
     st.caption(f"Based on: **{base.started_from or 'presets'}**. Nothing is written until you press *Add to queue*.")
 
@@ -105,7 +105,7 @@ def render() -> None:
     with tabs[3]:
         plan.physics, plan.reward, plan.trackset = _world(base, v)
     with tabs[4]:
-        plan.steps, plan.seeds, plan.trial, plan.tag, plan.why, seed_err = _budget(base, v)
+        plan.steps, plan.seeds, plan.trial, plan.tag, plan.why, seed_err = _budget(base, v, plan.algorithm)
 
     st.header("Summary")
     _summary(plan, hp_errors + seed_err)
@@ -208,35 +208,48 @@ def _algorithm(base: B.Plan, v: int) -> tuple[str, dict[str, Any], list[str]]:
     start = base.hparams if algo == base.algorithm else default
     st.caption(f"Defaults come from `configs/train/{B.train_preset_name(algo)}.yaml`; changed values become "
                "`--set` arguments of train.py.")
-    hp: dict[str, Any] = {}
-    errors = []
+    errors: list[str] = []
     cols = st.columns(3)
-    for i, (k, d) in enumerate(default.items()):
-        val = start.get(k, d)
-        e = explain.lookup(f"train.{algo}.{k}") or {}
-        tip = " ".join(x for x in (e.get("short"), e.get("affects"), f"Typical: {e['range']}." if e.get("range")
-                                   else "", f"Default: {d}.") if x)
-        col = cols[i % 3]
-        key = f"bq_hp_{algo}_{k}_{v}"
-        if k == "lr_schedule":
-            hp[k] = col.selectbox(k, ["linear", "constant"], index=0 if val == "linear" else 1, key=key, help=tip)
-        elif isinstance(d, bool):
-            hp[k] = col.checkbox(k, value=bool(val), key=key, help=tip)
-        elif isinstance(d, int) and not isinstance(d, bool):
-            hp[k] = int(col.number_input(k, value=int(val), min_value=1, step=1, key=key, help=tip))
-        else:                                   # floats (and SAC's ent_coef, which may be 'auto')
-            txt = col.text_input(k, f"{val:g}" if isinstance(val, float) else str(val), key=key, help=tip).strip()
-            try:
-                hp[k] = float(txt)
-            except ValueError:
-                if isinstance(d, str) and txt:
-                    hp[k] = txt
-                else:
-                    errors.append(f"{k}: not a number ({txt!r}).")
-                    hp[k] = d
-        if hp[k] != d:
-            col.caption(f"changed (default {d})")
+    fields = [(k, d, start.get(k, d)) for k, d in default.items() if not isinstance(d, dict)]
+    fields += [(f"{k}.{sk}", sd, (start.get(k) or {}).get(sk, sd))      # nested sections, e.g. ga.validation
+               for k, d in default.items() if isinstance(d, dict) for sk, sd in d.items()]
+    flat: dict[str, Any] = {}
+    for i, (k, d, val) in enumerate(fields):
+        flat[k] = _hp_input(cols[i % 3], algo, k, d, val, v, errors)
+    hp: dict[str, Any] = {}
+    for k, val in flat.items():
+        sec, _, sub = k.partition(".")
+        if sub:
+            hp.setdefault(sec, {})[sub] = val
+        else:
+            hp[k] = val
     return algo, hp, errors
+
+
+def _hp_input(col, algo: str, k: str, d: Any, val: Any, v: int, errors: list[str]) -> Any:
+    e = explain.lookup(f"train.{algo}.{k}") or {}
+    tip = " ".join(x for x in (e.get("short"), e.get("affects"), f"Typical: {e['range']}." if e.get("range")
+                               else "", f"Default: {d}.") if x)
+    key = f"bq_hp_{algo}_{k}_{v}"
+    if k == "lr_schedule":
+        out = col.selectbox(k, ["linear", "constant"], index=0 if val == "linear" else 1, key=key, help=tip)
+    elif isinstance(d, bool):
+        out = col.checkbox(k, value=bool(val), key=key, help=tip)
+    elif isinstance(d, int):
+        out = int(col.number_input(k, value=int(val), min_value=1, step=1, key=key, help=tip))
+    else:                                   # floats (and SAC's ent_coef, which may be 'auto')
+        txt = col.text_input(k, f"{val:g}" if isinstance(val, float) else str(val), key=key, help=tip).strip()
+        try:
+            out = float(txt)
+        except ValueError:
+            if isinstance(d, str) and txt:
+                out = txt
+            else:
+                errors.append(f"{k}: not a number ({txt!r}).")
+                out = d
+    if out != d:
+        col.caption(f"changed (default {d})")
+    return out
 
 
 def _world(base: B.Plan, v: int) -> tuple[str, str, str]:
@@ -278,16 +291,22 @@ def _world(base: B.Plan, v: int) -> tuple[str, str, str]:
     return physics, reward, trackset
 
 
-def _budget(base: B.Plan, v: int):
+def _budget(base: B.Plan, v: int, algorithm: str):
     c1, c2 = st.columns([2, 1])
-    opts = list(STEP_LABELS) + ["custom"]
-    pick = c1.radio("Training steps", opts, index=opts.index(base.steps) if base.steps in STEP_LABELS else len(opts) - 1,
-                    format_func=lambda o: STEP_LABELS.get(o, "Custom") if o != "custom" else "Custom",
-                    key=f"bq_steps_{v}", horizontal=True,
-                    help="More steps = longer training. Every 100k steps a checkpoint is saved and evaluated, "
+    ga = algorithm == "ga"
+    opts = ([None] if ga else []) + list(STEP_LABELS) + ["custom"]
+    labels = {None: "No limit", **STEP_LABELS}
+    current = base.steps if base.steps in labels and (ga or base.steps is not None) else "custom"
+    pick = c1.radio("Step budget" if ga else "Training steps", opts, index=opts.index(current),
+                    format_func=lambda o: labels.get(o, "Custom") if o != "custom" else "Custom",
+                    key=f"bq_steps_{v}_{algorithm}", horizontal=True,
+                    help="Neuroevolution runs until its validation score stops improving (or you pause it); a "
+                         "budget stops it earlier. A checkpoint is saved every 100 generations." if ga else
+                         "More steps = longer training. Every 100k steps a checkpoint is saved and evaluated, "
                          "so the best moment of the run can be picked afterwards.")
-    steps = pick if pick != "custom" else int(c1.number_input("Steps", 100_000, 50_000_000, int(base.steps),
-                                                             step=100_000, key=f"bq_steps_custom_{v}"))
+    steps = pick if pick != "custom" else int(c1.number_input("Steps", 100_000, 500_000_000,
+                                                             int(base.steps or 2_000_000), step=100_000,
+                                                             key=f"bq_steps_custom_{v}"))
     seeds_txt = c2.text_input("Seeds", ", ".join(str(s) for s in base.seeds), key=f"bq_seeds_{v}",
                               help="One run per seed. Two seeds show how much of a result is luck.")
     err = []
@@ -319,15 +338,17 @@ def _summary(plan: B.Plan, extra_errors: list[str]) -> None:
         man = None
     waiting = [e for e in qc.entries() if e["status"] in ("waiting", "interrupted", "running")]
     par = qc.load()["parallel"]
-    est = B.estimate_minutes(plan.steps, len(waiting) + len(plan.seeds), par)
+    est = B.estimate_minutes(plan.steps, len(waiting) + len(plan.seeds), par, algorithm=plan.algorithm)
     k = st.columns(5)
     k[0].metric("Inputs → outputs", f"{man['obs_dim']} → {man['action_dim']}" if man else "?")
     k[1].metric("Network parameters", f"{man['n_params']:,}" if man else "?")
-    k[2].metric("Runs", f"{len(plan.seeds)} × {plan.steps / 1e6:g}M steps")
-    k[3].metric("Time per run", _fmt_min(est["run"]), help="Training + evaluating its checkpoints, "
-                "with 2 runs in parallel (measured T62/T64).")
-    k[4].metric("Queue done in", _fmt_min(est["queue"]), help=f"Everything waiting in the queue plus this, "
-                f"{par} at a time.")
+    budget = f"{plan.steps / 1e6:g}M steps" if plan.steps is not None else "until it stops improving"
+    k[2].metric("Runs", f"{len(plan.seeds)} × {budget}")
+    k[3].metric("Time per run", _fmt_min(est["run"]) if est else "open-ended",
+                help="Training + evaluating its checkpoints, with 2 runs in parallel (measured T62/T64)." if est else
+                "Ends at the validation plateau; pause it any time and it resumes where it stopped.")
+    k[4].metric("Queue done in", _fmt_min(est["queue"]) if est else "?",
+                help=f"Everything waiting in the queue plus this, {par} at a time.")
     match = B.matching_env_preset(plan) if man else None
     if match:
         inputs = f"existing preset `{match}`"
@@ -386,8 +407,9 @@ def _start() -> None:
 def _stop() -> None:
     ok = _qc().request_stop()
     st.session_state["bq_msg"] = ("info", "Stop requested: running trainings stop within a few seconds and are "
-                                          "marked interrupted (they restart from scratch when the queue starts "
-                                          "again)." if ok else "The queue isn't running.")
+                                          "marked interrupted (when the queue starts again, PPO/SAC runs restart "
+                                          "from scratch; neuroevolution resumes from its last saved generation)."
+                                          if ok else "The queue isn't running.")
 
 
 def _remove(name: str) -> None:
@@ -425,7 +447,8 @@ def _queue() -> None:
     for e in entries:
         c1, c2, c3 = st.columns([5, 2, 1.3])
         mins = f" · {e['minutes']} min" if e.get("minutes") else ""
-        c1.markdown(f"**{e['name']}** · {(e['steps'] or 0) / 1e6:g}M steps{' · trial' if e['scratch'] else ''}{mins}")
+        steps = f"{e['steps'] / 1e6:g}M steps" if e["steps"] else "no step limit"
+        c1.markdown(f"**{e['name']}** · {steps}{' · trial' if e['scratch'] else ''}{mins}")
         icon = {"waiting": "⏳", "running": "🏃", "done": "✅", "failed": "❌", "interrupted": "⏸"}.get(e["status"], "")
         c2.markdown(f"{icon} {e['status']}")
         if e["status"] in ("waiting", "interrupted", "failed"):

@@ -87,13 +87,13 @@ class Plan:
     features: list[dict[str, Any]] = field(default_factory=list)
     layout: str = "steer_gas"
     algorithm: str = "ppo"
-    hparams: dict[str, Any] = field(default_factory=dict)      # the algorithm's section (ppo: / sac:)
+    hparams: dict[str, Any] = field(default_factory=dict)      # the algorithm's section (ppo: / sac: / ga:)
     net_arch: list[int] = field(default_factory=lambda: [256, 256])
     activation: str = "tanh"
     physics: str = "default"
     reward: str = "progress"
     trackset: str = "maps7"
-    steps: int = 2_000_000
+    steps: int | None = 2_000_000       # None: no budget (neuroevolution only)
     seeds: list[int] = field(default_factory=lambda: [1])
     trial: bool = False
     raycast: dict[str, Any] = field(default_factory=dict)
@@ -104,20 +104,26 @@ class Plan:
         return copy.deepcopy(self)
 
 
-BUILDABLE = ("ppo", "sac")     # algorithms the Build page can configure
+BUILDABLE = ("ppo", "sac", "ga")     # algorithms the Build page can configure
+GA_TRACKSET = "train7"               # neuroevolution drives named maps, never a generated pool
 
 
 def train_preset_name(algorithm: str) -> str:
     return f"{algorithm}_default"
 
 
-def plan_from_presets(env: str = "rays7_narrow", algorithm: str = "ppo", trackset: str = "maps7") -> Plan:
+def _steps(value: Any) -> int | None:
+    return None if value is None else int(value)
+
+
+def plan_from_presets(env: str = "rays7_narrow", algorithm: str = "ppo", trackset: str | None = None) -> Plan:
     env_cfg = load_preset("env", env)
     train = load_preset("train", train_preset_name(algorithm))
     return Plan(features=features_of(env_cfg), layout=(env_cfg.get("action_spec") or {}).get("layout", "steer_gas"),
                 algorithm=algorithm, hparams=dict(train[algorithm]), net_arch=list(train["policy"]["net_arch"]),
-                activation=train["policy"]["activation"], trackset=trackset, steps=int(train["total_steps"]),
-                raycast=dict(env_cfg["raycast"]), episode=dict(env_cfg["episode"]))
+                activation=train["policy"]["activation"],
+                trackset=trackset or (GA_TRACKSET if algorithm == "ga" else "maps7"),
+                steps=_steps(train["total_steps"]), raycast=dict(env_cfg["raycast"]), episode=dict(env_cfg["episode"]))
 
 
 def plan_from_snapshot(snap: Mapping[str, Any], model_id: str | None = None) -> Plan:
@@ -134,7 +140,7 @@ def plan_from_snapshot(snap: Mapping[str, Any], model_id: str | None = None) -> 
                 algorithm=algo, hparams=dict(train.get(algo, {})), net_arch=[int(n) for n in train["policy"]["net_arch"]],
                 activation=train["policy"]["activation"], physics=presets.get("physics", "default"),
                 reward=presets.get("reward", "progress"), trackset=trackset or "maps7",
-                steps=int(train.get("total_steps", 2_000_000)), seeds=[int(snap.get("seed", 1))],
+                steps=_steps(train.get("total_steps", 2_000_000)), seeds=[int(snap.get("seed", 1))],
                 raycast=dict(env["env"]["raycast"]), episode=dict(env["env"]["episode"]),
                 started_from=model_id or snap.get("model_id"))
 
@@ -216,7 +222,7 @@ def _yaml_value(v: Any) -> str:
 def train_config(plan: Plan, seed: int | None = None) -> dict[str, Any]:
     """The train config train.py will build (preset + --steps/--seed + --set)."""
     cfg = load_preset("train", train_preset_name(plan.algorithm))
-    cfg["total_steps"] = int(plan.steps)
+    cfg["total_steps"] = _steps(plan.steps)
     if seed is not None:
         cfg["seed"] = int(seed)
     override: dict[str, Any] = {plan.algorithm: {}, "policy": {}}
@@ -265,9 +271,20 @@ def validate(plan: Plan, taken_tags: set[str] = frozenset(), queued: set[str] = 
             errs.append(f"Tag {tag!r} is already used by a run; choose another.")
         if tag in queued:
             errs.append(f"{tag!r} is already in the queue.")
-    ckpt = int(load_preset("train", train_preset_name(plan.algorithm))["checkpoint_every"])
-    if plan.steps < ckpt:
-        errs.append(f"Steps: at least {ckpt:,} (one checkpoint).")
+    if plan.algorithm == "ga":
+        if plan.trackset in preset_names("trackset"):
+            from racer.agents.evolve import training_maps
+            from racer.env.trackset import resolve_trackset
+            try:
+                training_maps({"tracks": resolve_trackset(plan.trackset)})
+            except (ValueError, ConfigError) as e:
+                errs.append(f"Tracks: {e}")
+    elif plan.steps is None:
+        errs.append("Steps: PPO and SAC need a number of steps.")
+    else:
+        ckpt = int(load_preset("train", train_preset_name(plan.algorithm))["checkpoint_every"])
+        if plan.steps < ckpt:
+            errs.append(f"Steps: at least {ckpt:,} (one checkpoint).")
     if not plan.net_arch or any(int(n) < 1 for n in plan.net_arch):
         errs.append("Network: every hidden layer needs at least 1 neuron.")
     for kind, name in (("physics", plan.physics), ("reward", plan.reward), ("trackset", plan.trackset)):
@@ -322,7 +339,10 @@ def write_env_preset(plan: Plan, root: Path = PROJECT_ROOT) -> Path:
 def train_argv(plan: Plan, env_name: str, tag: str, seed: int) -> list[str]:
     curriculum = "AI Sandbox" + (f" (from {plan.started_from})" if plan.started_from else "")
     argv = ["--tag", tag, "--trackset", plan.trackset, "--env", env_name, "--train", train_preset_name(plan.algorithm),
-            "--physics", plan.physics, "--reward", plan.reward, "--steps", str(int(plan.steps)), "--seed", str(seed)]
+            "--physics", plan.physics, "--reward", plan.reward]
+    if plan.steps is not None:
+        argv += ["--steps", str(int(plan.steps))]
+    argv += ["--seed", str(seed)]
     for s in train_sets(plan):
         argv += ["--set", s]
     argv += ["--curriculum", curriculum, "--notes", plan.why.strip()]
@@ -335,8 +355,14 @@ def queue_entries(plan: Plan, env_name: str) -> list[dict[str, Any]]:
     return [{"name": tag, "args": train_argv(plan, env_name, tag, seed)} for tag, seed in run_tags(plan)]
 
 
-def estimate_minutes(steps: int, runs_ahead: int, parallel: int, cfg: Mapping[str, Any] | None = None) -> dict[str, float]:
-    """Rough time for one run of ``steps`` and for the queue: ``runs_ahead`` includes this one."""
+def estimate_minutes(steps: int | None, runs_ahead: int, parallel: int,
+                     cfg: Mapping[str, Any] | None = None, algorithm: str = "ppo") -> dict[str, float] | None:
+    """Rough time for one run of ``steps`` and for the queue: ``runs_ahead`` includes this one.
+
+    None for neuroevolution: its speed per step and checkpoint rate differ, and without a budget
+    it ends at its validation plateau."""
+    if steps is None or algorithm == "ga":
+        return None
     q = (cfg or load_preset("sandbox", "default"))["queue"]
     per_m = float(q["minutes_per_million_parallel" if parallel > 1 else "minutes_per_million_alone"])
     run = steps / 1e6 * per_m + steps / 100_000 * float(q["eval_minutes_per_checkpoint"])

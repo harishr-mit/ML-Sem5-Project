@@ -77,6 +77,7 @@ Tracks: `training_ground`, `technical`, `fast_flow` (showcase); `city_blocks`, `
 | A real run (commit your changes first) | `scripts\train.py --tag my_run --trackset maps7 --env rays7_narrow --steps 5000000` |
 | Check an overnight queue without running it | `scripts\queue_overnight.py configs\queue\night1.yaml --dry-run` |
 | Run a queue, 2 runs at a time (stop with `Ctrl+C`) | `scripts\queue_overnight.py configs\queue\night1.yaml --parallel 2` |
+| Neuroevolution on the 7 training maps (pause with `Ctrl+C`; the same command resumes it) | `scripts\train.py --tag main_s1 --train ga_default --trackset train7 --env rays7_lean --seed 1` |
 
 **Evaluate**
 

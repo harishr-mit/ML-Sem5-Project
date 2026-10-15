@@ -643,6 +643,12 @@ run:
     run.saved_at:
       short: "When this checkpoint was saved."
       affects: "—"
+    run.generation:
+      short: "(GA) Generation this car comes from (the best car of that generation)."
+      affects: "—"
+    run.fitness:
+      short: "(GA) The car's fitness in its generation: lap fraction (0–1) if it failed, 1 + mean speed / speed_scale if it finished the lap."
+      affects: "—"
     run.versions.*:
       short: "Library version used for training."
       affects: "—"

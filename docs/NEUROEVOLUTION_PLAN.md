@@ -34,7 +34,7 @@ every 100 generations: the best car is saved as a registered checkpoint
 
 ## Pause and resume
 
-- **Pause:** Ctrl+C, or a `stop.request` file (the sandbox's Stop button, as for the queue). The generation in progress finishes, the run state is saved, the process exits. A second Ctrl+C aborts immediately.
+- **Pause:** Ctrl+C, or a `stop.request` file in `outputs/evolve/<run>/`. The generation in progress finishes, the run state is saved, the process exits (code 3; the queue marks the entry interrupted and resumes it on its next start). A second Ctrl+C aborts immediately. The sandbox's *Stop queue* kills the queue's runs instead: a GA run then resumes from its last periodic save (at most `state_every` generations are driven again, with identical results).
 - **State:** population weights, generation (each generation's random numbers come from `default_rng([seed, generation])`, so there is no RNG state to save), best scores, stopping counter, env steps. Saved atomically to `outputs/evolve/<run_id>/state.npz` (≈ 14 MB, overwritten), also every 10 generations against crashes.
 - **Resume:** rerun the same command (or the queue entry); it continues where it stopped, identical to an uninterrupted run, with any worker count.
 - Model folders are never touched by this.

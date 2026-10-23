@@ -127,8 +127,14 @@ def _running() -> None:
         for e in live:
             started = dt.datetime.fromisoformat(e["started"]) if e.get("started") else dt.datetime.now()
             elapsed = (dt.datetime.now() - started).total_seconds() / 60
-            total = (e["steps"] or 0) / 1e6 * per_m
-            q.markdown(f"🏃 **{e['name']}** · {(e['steps'] or 0) / 1e6:g}M steps · running {elapsed:.0f} min"
+            from racer.sandbox import builder as B
+            if e.get("generations") or "ga_default" in e["args"]:      # neuroevolution: a generation budget, or none
+                est = B.estimate_minutes(None, 1, 1, algorithm="ga", generations=e.get("generations"))
+                total = est["run"] if est else 0
+            else:
+                total = (e["steps"] or 0) / 1e6 * per_m
+            q.markdown(f"🏃 **{e['name']}** · {B.budget_label(e['steps'], e.get('generations'))} · "
+                       f"running {elapsed:.0f} min"
                        + (f" · ≈ {max(total - elapsed, 0):.0f} min of training left" if total else ""))
         if waiting:
             q.caption(f"Waiting: {', '.join(e['name'] for e in waiting)}")

@@ -29,6 +29,8 @@ outputs/frames/
 outputs/scratch/
 # overnight queue logs and state (scripts/queue_overnight.py)
 outputs/queue_logs/
+# neuroevolution run state and lineage databases (D26)
+outputs/evolve/
 *.tmp
 # AI Sandbox state (game instances, logs, caches) and local Streamlit settings
 outputs/sandbox/

@@ -47,10 +47,20 @@ def _copy_file(src: Path, dst: Path) -> None:
     os.replace(tmp, dst)
 
 
-def backup(models_dir: Path, dest: Path, only_run: str | None = None, dry_run: bool = False) -> BackupReport:
-    """Copy what is missing from ``dest``; never overwrite or delete."""
+def finished_evolve_runs(evolve_dir: Path, only_run: str | None = None) -> list[Path]:
+    """Neuroevolution run folders whose run has finished (a paused run's files still change)."""
+    from racer.agents.evolve import FINISHED
+    return [p for p in model_folders(evolve_dir, only_run) if (p / FINISHED).is_file()]
+
+
+def backup(models_dir: Path, dest: Path, only_run: str | None = None, dry_run: bool = False,
+           folders: list[Path] | None = None) -> BackupReport:
+    """Copy what is missing from ``dest``; never overwrite or delete.
+
+    ``folders`` (all under ``models_dir``) replaces the default list of model folders.
+    """
     report = BackupReport()
-    for folder in model_folders(models_dir, only_run):
+    for folder in folders if folders is not None else model_folders(models_dir, only_run):
         target = dest / folder.name
         if not target.exists():
             report.new_folders.append(folder.name)

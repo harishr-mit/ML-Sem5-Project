@@ -131,7 +131,7 @@ reward:
       short: "Bonus for each completed lap."
       affects: "Extra incentive to finish laps cleanly."
     reward.crash:
-      short: "Penalty when the episode ends early (barrier, off-road too long, stuck, wrong way)."
+      short: "Penalty when the episode ends early (barrier, off-road too long, stuck, wrong way, track limits if on)."
       affects: "Higher = more cautious driving."
       range: "10–50"
     reward.speed:
@@ -229,13 +229,16 @@ episode:
     env.episode.max_steps:
       short: "Episode is truncated after this many decisions (4000 = 200 s)."
       affects: "Caps very slow episodes."
+    env.episode.track_limits:
+      short: "If true, the episode ends (with the crash penalty) as soon as the car's centre crosses the road edge. Kerbs count as road. Missing = false (all models before D26)."
+      affects: "No grass shortcuts and no driving with half the car off the road: the car must stay on track. Used by neuroevolution (rays7_lean, D26)."
 
 training:
   title: How it trained (hyperparameters)
-  intro: "Settings of the learning algorithm and the network (PROJECT_CONTEXT §8). PPO and SAC descriptions come from racer/agents/algorithms.py."
+  intro: "Settings of the learning algorithm and the network (PROJECT_CONTEXT §8). Algorithm descriptions (PPO, SAC, GA) come from racer/agents/algorithms.py."
   keys:
     train.algorithm:
-      short: "Learning algorithm (ppo or sac)."
+      short: "Learning algorithm (ppo, sac or ga = neuroevolution)."
       affects: "How the policy is improved from experience (E7)."
       related: E7
     train.seed:
@@ -243,7 +246,7 @@ training:
       affects: "Starting weights and random starts. Two seeds of the same setting show how much results vary by luck."
     train.total_steps:
       short: "Environment steps of training, all envs together (decisions)."
-      affects: "Training time: ≈ 10 min per million steps alone, ≈ 13 min with 2 runs in parallel. The best checkpoint may come earlier."
+      affects: "Training time: ≈ 10 min per million steps alone, ≈ 13 min with 2 runs in parallel. The best checkpoint may come earlier. GA: an optional budget; empty = run until validation stops improving or the run is paused."
       range: "1M–5M"
     train.n_envs:
       short: "Environments simulated in parallel processes."
@@ -326,6 +329,57 @@ training:
     train.sac.ent_coef:
       short: "(SAC) Entropy weight (auto = tuned to a target)."
       affects: "Exploration."
+    train.ga.population:
+      short: "(GA) Cars per generation; all drive the same map from the same start."
+      affects: "More cars explore more variations per generation, but each generation takes longer."
+      range: "50"
+    train.ga.elite_frac:
+      short: "(GA) Share of the best cars that go to the next generation unchanged; they are also the only parents."
+      affects: "Higher = safer (good cars kept), lower = more new variations per generation."
+      range: "0.25"
+    train.ga.sigma:
+      short: "(GA) Mutation size: the spread of the random noise added to every weight of a child."
+      affects: "Too small = slow progress; too large = children lose what their parent could do."
+      range: "0.02–0.05"
+    train.ga.speed_scale:
+      short: "(GA) m/s; a finished lap scores 1 + mean speed / speed_scale, a failed try its lap fraction (0–1)."
+      affects: "Only the scale of the fitness: any finisher beats any non-finisher, a faster lap beats a slower one."
+    train.ga.workers:
+      short: "(GA) Processes that drive the cars of a generation in parallel."
+      affects: "Speed and CPU load only (5 ≈ 60–70 % CPU); results are identical for any number."
+      range: "4–8"
+    train.ga.checkpoint_every:
+      short: "(GA, runs before 2026-10-15) Generations between saved checkpoints (the best car on that generation's map). Newer runs save a checkpoint at every validation."
+      affects: "How finely you can pick the best moment of a run."
+    train.ga.max_generations:
+      short: "(GA) Stop after this many generations (--generations); empty = run until the validation score stops improving."
+      affects: "Run length. PPO/SAC runs are budgeted in steps instead."
+      range: "200 (a quick test) – several thousand"
+    train.ga.evaluate.top_validated:
+      short: "(GA) After the run, evaluate this many checkpoints with the best validation scores."
+      affects: "Finds the best car even when it came early: later checkpoints aren't reliably better (one map per generation)."
+    train.ga.evaluate.last:
+      short: "(GA) After the run, also evaluate this many of the most recent checkpoints."
+      affects: "Shows where the run ended. The others can be evaluated later with evaluate.py."
+    train.ga.state_every:
+      short: "(GA) Generations between saves of the pause state, against crashes (a pause always saves)."
+      affects: "How much is lost if the PC crashes."
+    train.ga.validation.every:
+      short: "(GA) Generations between validations: all elites drive the validation tracks, and the best-validated elite is saved as a checkpoint."
+      affects: "How quickly the run notices it has stopped improving, and how many checkpoints (Evolution Race steps) it saves."
+    train.ga.validation.tracks:
+      short: "(GA) Number of generated validation tracks; never trained on, not the test or held-out tracks."
+      affects: "More = a steadier stopping signal, slower validation."
+    train.ga.validation.stream:
+      short: "(GA) Generator seed stream of the validation tracks (0 = training pool, 1 = held-out set)."
+      affects: "Keeps validation tracks separate from every other set."
+    train.ga.validation.patience:
+      short: "(GA) Generations without a validation gain before the run stops."
+      affects: "Longer = more chance of a late improvement, longer runs."
+      range: "500"
+    train.ga.validation.min_gain:
+      short: "(GA) Relative validation gain that counts as an improvement (0.01 = 1 %)."
+      affects: "Stops runs that only creep forward."
     train.policy.net_arch:
       short: "Hidden layer widths of the network (the critic has the same shape)."
       affects: "Capacity: bigger can learn more complex driving but trains slower and needs more data."
@@ -599,6 +653,21 @@ run:
     run.saved_at:
       short: "When this checkpoint was saved."
       affects: "—"
+    run.generation:
+      short: "(GA) Generation this car comes from (which car: run.car)."
+      affects: "—"
+    run.car:
+      short: "(GA) Index of this car in its generation (from generation 1, the first n_elite are the elites carried over, best first)."
+      affects: "—"
+    run.validation:
+      short: "(GA) This car's mean fitness on the validation tracks (generated, never trained on); empty if its generation wasn't validated."
+      affects: "—"
+    run.exported_at:
+      short: "(GA) When this car was rebuilt from the lineage and saved (scripts/export_ga.py or the Explorer's Evolution tab)."
+      affects: "—"
+    run.fitness:
+      short: "(GA) The car's fitness in its generation: lap fraction (0–1) if it failed, 1 + mean speed / speed_scale if it finished the lap."
+      affects: "—"
     run.versions.*:
       short: "Library version used for training."
       affects: "—"
@@ -623,7 +692,7 @@ results:
       short: "Completion over every evaluation episode."
       affects: "Used to pick the best checkpoint (D9)."
     metric.crash_rate:
-      short: "Share of episodes ended by a crash, off-road, stuck or wrong way."
+      short: "Share of episodes ended by a crash, off-road, stuck, wrong way or track limits."
       affects: "—"
     metric.mean_speed:
       short: "Mean speed over all episodes (m/s)."

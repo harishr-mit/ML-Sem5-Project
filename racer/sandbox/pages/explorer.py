@@ -64,9 +64,9 @@ def render() -> None:
                "with and why, and how well it drives. Every setting has a short note; the Glossary page has them all.")
     want = st.session_state.pop("explorer_model", None)
     c1, c2, c3 = st.columns([4, 5, 1.4])
-    trials = c3.toggle("Trial runs", key="ex_trials", help="Include trial (scratch) runs, S-ids.")
     if want and want.startswith("S"):
-        trials = True
+        st.session_state["ex_trials"] = True     # keep showing trial runs on the next interaction too
+    trials = c3.toggle("Trial runs", key="ex_trials", help="Include trial (scratch) runs, S-ids.")
     runs = s.explorable_runs(trials)
     if not runs:
         st.info("No trained models found in models/ yet.")
@@ -119,7 +119,8 @@ def render() -> None:
     else:
         k[4].metric("Evaluation", "not evaluated")
 
-    tabs = st.tabs(TABS)
+    ga = snap.get("algorithm") == "ga"
+    tabs = st.tabs(TABS + (["Evolution"] if ga else []))
     with tabs[0]:
         _summary(s, run, snap, model_id, m, doc)
     with tabs[1]:
@@ -140,6 +141,9 @@ def render() -> None:
         _results(s, run_id, model_id)
     with tabs[9]:
         _curves(run_id)
+    if ga:
+        with tabs[10]:
+            _evolution(s, run_id, snap)
 
 
 # ------------------------------------------------------------------ tabs
@@ -260,8 +264,9 @@ def _brain(snap, man) -> None:
                           man.get("activation", "tanh")), width="stretch")
     st.caption(f"The driving network (actor): {man['obs_dim']} inputs → "
                + " → ".join(str(n) for n in man["net_arch"]) + f" → {man['action_dim']} outputs, "
-               f"{man.get('activation', 'tanh')} activations. {man['n_params']:,} parameters drive the car; "
-               f"{man['n_params_total']:,} were trained in total (the critic only helps during training).")
+               f"{man.get('activation', 'tanh')} activations. {man['n_params']:,} parameters drive the car"
+               + ("; they were evolved, not trained by gradients." if algo == "ga" else
+                  f"; {man['n_params_total']:,} were trained in total (the critic only helps during training)."))
     try:
         layers = diagrams.layer_table(algo, int(man["obs_dim"]), int(man["action_dim"]), man["net_arch"])
         st.markdown(md_table(["Network", "Layer", "Shape", "Parameters"],
@@ -438,3 +443,57 @@ def _curves(run_id) -> None:
             with cols[i % 3]:
                 st.markdown(f"`{tag}`")
                 st.line_chart(curves.downsample(curves.smooth(sc[tag], w), 200), height=160)
+
+
+def _export_car(root, run_id: str, generation: int, car: int | None) -> None:
+    from racer.agents.evolve import export_car, run_dir_of
+    from racer.registry.registry import Registry
+    scratch = run_id.startswith("S")
+    try:
+        folder, created = export_car(run_dir_of(run_id, root), generation, car,
+                                     out_dir=root / ("outputs/scratch" if scratch else "models"),
+                                     registry=Registry(root / ("outputs/scratch/registry" if scratch else "registry")))
+    except (KeyError, RuntimeError, OSError) as e:
+        st.session_state["ex_ga_msg"] = ("error", f"Not saved: {e}")
+        return
+    st.session_state["ex_ga_msg"] = ("success", f"{'Saved' if created else 'Already saved as'} {folder.name}; "
+                                                "it is selected above and races like any checkpoint.")
+    st.session_state["explorer_model"] = folder.name
+
+
+def _evolution(s, run_id: str, snap) -> None:
+    from racer.agents.evolve import generation_table, is_finished, run_dir_of
+    st.markdown("How this neuroevolution run improved, generation by generation, from its lineage database "
+                "(every car of every generation is recorded there).")
+    try:
+        run_dir = run_dir_of(run_id, s.root)
+    except FileNotFoundError:
+        st.info("This run's lineage (outputs/evolve/) isn't on this PC.")
+        return
+    rows = generation_table(run_dir)
+    if not rows:
+        st.info("No generation has been driven yet.")
+        return
+    df = pd.DataFrame(rows).set_index("generation")
+    status = "finished" if is_finished(run_dir) else "paused or still running"
+    st.caption(f"{len(df)} generations ({status}). Fitness: lap fraction (0–1) if the car failed, 1 + mean speed / "
+               f"{snap['train']['ga']['speed_scale']:g} m/s if it finished the lap. Validation: the best elite's mean "
+               "fitness on generated tracks it never trains on (every "
+               f"{snap['train']['ga']['validation']['every']} generations).")
+    chart = df[["best", "mean"]].copy()
+    chart["validation"] = df["validation"].interpolate(limit_area="inside")
+    st.line_chart(chart)
+    st.markdown("**Save any generation's car as a model** (rebuilt exactly from the lineage), e.g. to add a step "
+                "to an Evolution Race. *Auto* takes the generation's best-validated elite if it was validated, "
+                "otherwise its best car on that generation's map.")
+    msg = st.session_state.pop("ex_ga_msg", None)
+    if msg:
+        getattr(st, msg[0])(msg[1])
+    last = int(df.index.max())
+    c1, c2, c3 = st.columns(3)
+    gen = int(c1.number_input("Generation", 0, last, last, key=f"ex_ga_gen_{run_id}"))
+    auto = c2.radio("Car", ["Auto", "By index"], key=f"ex_ga_auto_{run_id}", horizontal=True) == "Auto"
+    car = None if auto else int(c3.number_input("Car index", 0, int(snap["train"]["ga"]["population"]) - 1, 0,
+                                                key=f"ex_ga_car_{run_id}"))
+    st.button("Save as a model", key=f"ex_ga_save_{run_id}", on_click=_export_car, args=(s.root, run_id, gen, car))
+

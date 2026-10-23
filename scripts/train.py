@@ -4,7 +4,8 @@
     .venv\\Scripts\\python scripts\\train.py --tag curric_wide --trackset gen_wide --parent R001_ppo_rays5_tg@1200k
                                            --train ppo_finetune
     .venv\\Scripts\\python scripts\\train.py --tag narrow --trackset maps7 --env rays7_narrow
-        [--steps N] [--train ppo_default|sac_default] [--physics default] [--env rays5] [--reward progress]
+    .venv\\Scripts\\python scripts\\train.py --tag main_s1 --train ga_default --trackset train7 --env rays7_lean
+        [--steps N] [--generations N (GA)] [--train ppo_default|sac_default|ga_default] [--physics default] [--env rays5] [--reward progress]
         [--action-layout steer_throttle_brake] [--seed 0] [--n-envs 6] [--curriculum TEXT] [--notes TEXT]
         [--set ppo.ent_coef=0.01] [--scratch] [--allow-dirty] [--no-eval] [--eval-workers 6] [--protocol v2]
 
@@ -21,6 +22,13 @@ registry.xlsx is regenerated.
 --parent fine-tunes a saved model (curriculum, D8): its weights and VecNormalize statistics
 are the starting point; its obs spec and network must match. --scratch writes everything
 to outputs/scratch/ (git-ignored, S-ids, scratch registry). TensorBoard logs go to runs/.
+
+A train preset with ``algorithm: ga`` runs neuroevolution instead (D26, racer/agents/evolve.py):
+model ids R###_GA_<tag>@<env steps>k; a checkpoint (the best-validated elite) at every
+validation and at the end; afterwards the ``ga.evaluate`` best-validated and latest checkpoints
+are evaluated. Budget: ``--generations N`` (PPO/SAC: ``--steps``).
+Ctrl+C or a stop.request file pauses it after the current generation (exit code 3); running the
+same command again resumes the paused run with that tag.
 """
 from __future__ import annotations
 
@@ -112,6 +120,148 @@ def apply_sets(train_cfg: dict[str, Any], items: list[str]) -> dict[str, Any]:
     return train_cfg
 
 
+def base_snapshot_of(run_id: str, args, algo_name: str, train_cfg: dict[str, Any], env_config: dict[str, Any],
+                     manifest: dict[str, Any], parent_id: str | None) -> dict[str, Any]:
+    """The part of config.yaml every checkpoint of a run shares."""
+    import numpy as np
+    import torch
+    return {
+        "run_id": run_id, "tag": args.tag, "algorithm": algo_name, "seed": int(train_cfg["seed"]),
+        "created_at": dt.datetime.now().isoformat(timespec="seconds"), "git_commit": git_commit(),
+        "obs_spec_version": env_config["env"]["obs_spec"]["version"], "notes": args.notes,
+        "parent_model": parent_id, "curriculum": args.curriculum,
+        "command": " ".join([Path(sys.argv[0]).name] + sys.argv[1:]),
+        "versions": {"python": platform.python_version(), "torch": str(torch.__version__),
+                     "stable_baselines3": __import__("stable_baselines3").__version__,
+                     "gymnasium": __import__("gymnasium").__version__, "numpy": np.__version__},
+        "train": train_cfg, "env_config": env_config, "manifest": manifest,
+    }
+
+
+def _diff_keys(a: Any, b: Any, prefix: str = "") -> list[str]:
+    """Dotted paths where two nested configs differ."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        return [k for key in sorted(set(a) | set(b))
+                for k in _diff_keys(a.get(key), b.get(key), f"{prefix}{key}.")]
+    return [] if a == b else [prefix.rstrip(".")]
+
+
+def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manifest: dict[str, Any],
+             track_label: str) -> int:
+    """Neuroevolution (D26): start a run, or resume the paused run with this tag."""
+    import numpy as np
+    from torch.utils.tensorboard import SummaryWriter
+
+    from racer.agents.evolve import (EVOLVE_DIR, PAUSED_EXIT, RESUME_FREE, Evolution, find_run, is_finished,
+                                     write_model_folder)
+    from racer.env.racing_env import RacingEnv
+    from racer.registry.record import evaluate_and_record, registry_for
+    from racer.registry.registry import register_folder, run_row
+
+    out_dir = SCRATCH_DIR if args.scratch else MODELS_DIR
+    evolve_root = SCRATCH_DIR / "evolve" if args.scratch else EVOLVE_DIR
+    prefix = "S" if args.scratch else "R"
+    reg = registry_for(args.scratch)
+    existing = find_run(prefix, args.tag, evolve_root)
+    if existing is not None and is_finished(existing):
+        print(f"[{existing.name}] this run has already finished; evaluate its checkpoints with "
+              f"scripts\\evaluate.py --run {existing.name.split('_', 1)[0]}{' --scratch' if args.scratch else ''}, "
+              "or start a new run with another tag",
+              flush=True)
+        return 2
+    if existing is not None:
+        run_dir = existing
+        base_snapshot = load_yaml(run_dir / "snapshot.yaml")
+        run_id = base_snapshot["run_id"]
+        # The run keeps its own settings (a track set may list more maps by now); only the ga
+        # settings in RESUME_FREE come from this command.
+        free = {k: train_cfg["ga"][k] for k in RESUME_FREE}
+        differ = sorted(k for k in _diff_keys({"train": base_snapshot["train"], "env_config": base_snapshot["env_config"]},
+                                              {"train": train_cfg, "env_config": env_config})
+                        if k.split(".")[:3] not in [["train", "ga", f] for f in RESUME_FREE])
+        train_cfg = base_snapshot["train"]
+        train_cfg["ga"].update(free)
+        env_config, manifest = base_snapshot["env_config"], base_snapshot["manifest"]
+        if differ:
+            print(f"[{run_dir.name}] resuming with the run's own settings; this command differs in "
+                  f"{', '.join(differ[:8])}{' …' if len(differ) > 8 else ''} (ignored)", flush=True)
+        if base_snapshot["git_commit"] != git_commit():
+            print(f"[{run_dir.name}] warning: started at commit {base_snapshot['git_commit']}, resuming at "
+                  f"{git_commit()}; a code change can make the rest of the run differ", flush=True)
+    else:
+        run_id = reserve_run_id(prefix, out_dir, out_dir, RUNS_DIR if not args.scratch else SCRATCH_DIR, evolve_root)
+        run_dir = evolve_root / f"{run_id}_GA_{args.tag}"
+        run_dir.mkdir(parents=True)
+        base_snapshot = base_snapshot_of(run_id, args, "ga", train_cfg, env_config, manifest, None)
+        with (run_dir / "snapshot.yaml").open("w", encoding="utf-8") as f:
+            yaml.safe_dump(base_snapshot, f, sort_keys=False, allow_unicode=True)
+        reg.upsert_run(run_row(base_snapshot))
+    run_name = run_dir.name
+    env = RacingEnv(env_config)
+    obs_space, act_space = env.observation_space, env.action_space
+
+    def save_checkpoint(flat: np.ndarray, generation: int, car: int, env_steps: int, fitness: float,
+                        validation: float) -> None:
+        model_id = f"{run_name}@{env_steps // 1000}k"
+        folder = out_dir / model_id
+        if folder.exists():
+            saved = load_yaml(folder / "config.yaml")
+            if (saved.get("generation"), saved.get("car")) == (generation, car):
+                return           # driven again after a crash: this car is already saved
+            model_id = f"{run_name}_g{generation}c{car}@{env_steps // 1000}k"   # same thousand of steps
+            folder = out_dir / model_id
+            if folder.exists():
+                return
+        snap = dict(base_snapshot, train=train_cfg, model_id=model_id, steps=env_steps, generation=generation,
+                    car=car, fitness=round(fitness, 6), validation=round(validation, 6), git_commit=git_commit(),
+                    saved_at=dt.datetime.now().isoformat(timespec="seconds"))
+        write_model_folder(folder, flat, snap, obs_space, act_space)
+        register_folder(reg, folder)
+        print(f"[{run_name}] checkpoint {model_id} (generation {generation}, car {car}, "
+              f"validation {validation:.3f})", flush=True)
+
+    ga = train_cfg["ga"]
+    tb_root = (SCRATCH_DIR / "tb") if args.scratch else RUNS_DIR
+    writer = SummaryWriter(str(tb_root / f"{run_name}_1"))
+    budget = f"up to {ga['max_generations']} generations" if ga["max_generations"] else "until the validation plateau"
+    print(f"[{run_name}] neuroevolution on {track_label}, {budget}: {ga['population']} cars, top "
+          f"{ga['elite_frac']:.0%} kept, σ {ga['sigma']}, {ga['workers']} workers, seed {train_cfg['seed']}; "
+          f"{manifest['obs_dim']} inputs, {manifest['action_dim']} outputs, {manifest['n_params']:,} weights. "
+          f"Pause: Ctrl+C or {(run_dir / 'stop.request').relative_to(PROJECT_ROOT)}", flush=True)
+    ev = Evolution(run_dir, env_config, train_cfg, manifest["obs_dim"], manifest["action_dim"],
+                   checkpoint=save_checkpoint, writer=writer, log=lambda s: print(s, flush=True))
+    try:
+        outcome = ev.run()
+    except KeyboardInterrupt:
+        print(f"[{run_name}] aborted; rerunning the same command continues from the last saved state", flush=True)
+        return 130
+    finally:
+        writer.close()
+    st = ev.final
+    reg.upsert_run({"run_id": run_id, "total_steps": st.env_steps, "wall_clock_min": round(st.wall_s / 60, 1)})
+    if outcome == "paused":
+        return PAUSED_EXIT
+    folders = checkpoints_to_evaluate(sorted([*out_dir.glob(f"{run_name}@*"), *out_dir.glob(f"{run_name}_g*@*")]), ga["evaluate"])
+    if not args.no_eval and folders:
+        print(f"[{run_name}] evaluating {len(folders)} checkpoints (the {ga['evaluate']['top_validated']} best "
+              f"validated + the last {ga['evaluate']['last']}; protocol {args.protocol})", flush=True)
+        evaluate_and_record(folders, args.protocol, args.eval_workers or int(ga["workers"]))
+    return 0
+
+
+def checkpoints_to_evaluate(folders: list[Path], cfg: dict[str, Any]) -> list[Path]:
+    """A GA run's checkpoints worth evaluating: the best-validated ones and the latest ones.
+
+    Later isn't reliably better (one map per generation), so the latest alone can miss the peak.
+    """
+    snaps = [(f, load_yaml(f / "config.yaml")) for f in folders if (f / "config.yaml").is_file()]
+    snaps.sort(key=lambda fs: fs[1]["generation"])
+    by_val = sorted(snaps, key=lambda fs: (-(fs[1].get("validation") or 0.0), fs[1]["generation"]))
+    last = int(cfg["last"])
+    keep = {f for f, _ in by_val[:int(cfg["top_validated"])]} | {f for f, _ in snaps[len(snaps) - last:] if last > 0}
+    return [f for f, _ in snaps if f in keep]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--tag", required=True, help="short tag for the model id, e.g. ppo_rays5_tg")
@@ -119,7 +269,9 @@ def main() -> int:
     tg.add_argument("--tracks", nargs="+", help="explicit track names (default: training_ground)")
     tg.add_argument("--trackset", help="track set preset in configs/trackset/ (D7)")
     ap.add_argument("--parent", default=None, help="model id or folder to fine-tune from (D8)")
-    ap.add_argument("--steps", type=int, default=None, help="override total_steps")
+    ap.add_argument("--steps", type=int, default=None, help="PPO/SAC: env steps to train (overrides total_steps)")
+    ap.add_argument("--generations", type=int, default=None,
+                    help="neuroevolution: stop after this many generations (default: at the validation plateau)")
     ap.add_argument("--train", default="ppo_default")
     ap.add_argument("--physics", default="default")
     ap.add_argument("--env", default="rays5")
@@ -143,7 +295,6 @@ def main() -> int:
     if not re.fullmatch(r"[a-z0-9_]+", args.tag):
         ap.error("--tag must be lowercase letters, digits and underscores")
 
-    import numpy as np
     import torch
     from stable_baselines3.common.callbacks import BaseCallback
     from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
@@ -186,6 +337,22 @@ def main() -> int:
         ap.error(str(e))
 
     parent_dir, parent_id = None, None
+    if args.generations is not None and algo.name != "ga":
+        ap.error(f"--generations is for neuroevolution; {algo.name.upper()} runs are budgeted with --steps")
+    if algo.name == "ga":
+        if args.parent or args.n_envs is not None or args.steps is not None:
+            ap.error("neuroevolution starts from random networks (no --parent), is budgeted in generations "
+                     "(--generations N, not --steps) and sets its processes with --set ga.workers=N")
+        if args.generations is not None:
+            if args.generations < 1:
+                ap.error("--generations must be at least 1")
+            train_cfg["ga"]["max_generations"] = args.generations
+        from racer.agents.evolve import training_maps
+        try:
+            training_maps(env_config)
+        except ValueError as e:
+            ap.error(str(e))
+        return train_ga(args, train_cfg, env_config, manifest, track_label)
     if args.parent:
         parent_dir = resolve_model(args.parent)
         parent_snap = load_yaml(parent_dir / "config.yaml")
@@ -207,17 +374,7 @@ def main() -> int:
     torch.set_num_threads(int(train_cfg["torch_threads"]))
     reg = registry_for(args.scratch)
 
-    base_snapshot = {
-        "run_id": run_id, "tag": args.tag, "algorithm": algo.name, "seed": seed,
-        "created_at": dt.datetime.now().isoformat(timespec="seconds"), "git_commit": git_commit(),
-        "obs_spec_version": env_config["env"]["obs_spec"]["version"], "notes": args.notes,
-        "parent_model": parent_id, "curriculum": args.curriculum,
-        "command": " ".join([Path(sys.argv[0]).name] + sys.argv[1:]),
-        "versions": {"python": platform.python_version(), "torch": str(torch.__version__),
-                     "stable_baselines3": __import__("stable_baselines3").__version__,
-                     "gymnasium": __import__("gymnasium").__version__, "numpy": np.__version__},
-        "train": train_cfg, "env_config": env_config, "manifest": manifest,
-    }
+    base_snapshot = base_snapshot_of(run_id, args, algo.name, train_cfg, env_config, manifest, parent_id)
     reg.upsert_run(run_row(base_snapshot))
 
     def save_folder(model, vecnorm, steps: int) -> Path:
@@ -251,7 +408,7 @@ def main() -> int:
                     self.logger.record_mean("race/lap_time", info["lap_time"])
                 if done:
                     reason = info.get("termination") or "truncated"
-                    for r in ("barrier", "offroad", "stuck", "wrong_way", "truncated"):
+                    for r in ("barrier", "track_limits", "offroad", "stuck", "wrong_way", "truncated"):
                         self.logger.record_mean(f"end/{r}", float(reason == r))
                     self.logger.record_mean("race/laps", info.get("laps", 0))
                     self.logger.record_mean("race/progress_m", info.get("progress", 0.0))

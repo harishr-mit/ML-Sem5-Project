@@ -219,7 +219,7 @@ def run_row(snapshot: Mapping[str, Any], total_steps: int | None = None,
 
     env = snapshot["env_config"]
     train = snapshot["train"]
-    hp = {k: train[k] for k in ("ppo", "sac", "policy", "vecnormalize", "n_envs") if k in train}
+    hp = {k: train[k] for k in ("ppo", "sac", "ga", "policy", "vecnormalize", "n_envs") if k in train}
     try:
         man = manifest_of(snapshot)
     except (KeyError, ValueError):      # a model this engine can't describe (e.g. an unknown feature)
@@ -275,6 +275,8 @@ def backfill(reg: Registry, models_dir: Path) -> list[str]:
     """Register every run and checkpoint found in ``models_dir`` (e.g. runs from before the registry)."""
     by_run: dict[str, list[tuple[Path, dict[str, Any]]]] = {}
     for cfg in sorted(models_dir.glob("*/config.yaml")):
+        if cfg.parent.name.startswith("."):          # unfinished exports and markers, never models
+            continue
         snap = register_folder(reg, cfg.parent)
         by_run.setdefault(snap["run_id"], []).append((cfg.parent, snap))
     for run_id, items in by_run.items():

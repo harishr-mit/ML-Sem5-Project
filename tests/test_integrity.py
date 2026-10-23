@@ -54,9 +54,13 @@ def test_registry_ids_are_unique_and_linked(registry):
 
 
 def test_every_run_has_exactly_one_best_checkpoint(registry):
+    from racer.agents.evolve import EVOLVE_DIR, unfinished_run_ids
     runs, models = registry
+    in_progress = unfinished_run_ids(EVOLVE_DIR)       # a paused neuroevolution run is evaluated when it finishes
     bad = {}
     for r in runs:
+        if r["run_id"] in in_progress:
+            continue
         best = [m for m in models if m["run_id"] == r["run_id"] and is_true(m["is_best"])]
         if len(best) != 1:
             bad[r["run_id"]] = len(best)

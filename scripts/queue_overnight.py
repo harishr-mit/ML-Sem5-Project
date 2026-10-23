@@ -21,6 +21,7 @@ evaluates every checkpoint itself. The queue
   ``state.json``, so the AI Sandbox can tell a live queue from a stale one (T71);
 * stops like Ctrl+C when a ``stop.request`` file appears next to ``state.json`` (the
   sandbox's *Stop queue*): running entries become ``interrupted`` and run again on the next start.
+  A neuroevolution entry that paused itself (exit code 3) is ``interrupted`` too, and resumes.
 
 Queue file::
 
@@ -41,6 +42,8 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+
+from racer.agents.evolve import PAUSED_EXIT
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 LOG_ROOT = PROJECT_ROOT / "outputs" / "queue_logs"
@@ -172,7 +175,7 @@ def main() -> int:
         proc, t0, log = running.pop(name)
         log.close()
         minutes = round((time.perf_counter() - t0) / 60, 1)
-        status = "done" if code == 0 else "failed"
+        status = "done" if code == 0 else "interrupted" if code == PAUSED_EXIT else "failed"
         state[name].update(status=status, returncode=code, finished=now(), minutes=minutes)
         save_state()
         print(f"[queue] {now()} {name}: {status.upper()} (exit {code}) after {minutes} min", flush=True)

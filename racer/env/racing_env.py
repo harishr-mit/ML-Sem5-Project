@@ -44,6 +44,9 @@ class EpisodeParams:
     wrongway_limit_s: float
     max_laps: int
     max_steps: int
+    # D26: end the episode as soon as the car's centre is beyond the road edge (kerbs are road).
+    # Added after models were saved, so a snapshot without the key keeps the old rules.
+    track_limits: bool = False
 
 
 def make_env_config(tracks: Sequence[str] | None = None, physics: str = "default", env: str = "rays5",
@@ -191,6 +194,8 @@ class RacingEnv(gym.Env):
             self.substep_poses.clear()
         free = self.free_drive
         wall_hit = False
+        over_limits = False
+        limits = ep.track_limits
         for _ in range(self.substeps):
             prev_pose = (car.x, car.y, car.theta)
             car.step(steer, gas, self._wheels.tolist())
@@ -208,7 +213,9 @@ class RacingEnv(gym.Env):
             offroad_acc += 1.0 - on
             all_off = on == 0.0
             self.offroad_time = self.offroad_time + dt if all_off else 0.0
-            if crashed:
+            if limits and not over_limits:
+                over_limits = self.track.sample(car.x, car.y)[0] > self.track.half_width
+            if crashed or (over_limits and not free):
                 break
         offroad_frac = offroad_acc / self.substeps
 
@@ -241,6 +248,8 @@ class RacingEnv(gym.Env):
         reason = None
         if crashed:
             reason = "barrier"
+        elif over_limits:
+            reason = "track_limits"
         elif self.offroad_time > ep.offroad_limit_s:
             reason = "offroad"
         elif (len(self._progress_hist) == self._progress_hist.maxlen

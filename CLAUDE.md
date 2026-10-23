@@ -31,11 +31,67 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 
 ## After a training run or queue completes
 - **Back up the models** once the run is trained and evaluated (or the whole queue has finished): `.venv\Scripts\python scripts\backup_models.py`. It copies only what is missing to the backup folder (`configs/backup/default.yaml`), never overwrites or deletes, and refuses while a training, queue or evaluation is running. Also run it after evaluating older models (it adds their new eval files). Log the result (files copied, any CONFLICT lines) in `log.md`.
+- **Neuroevolution runs (D26):** the backup also copies a finished run's lineage database (`outputs/evolve/<run>/lineage.sqlite`). A paused run's `state.npz` is how it resumes, so never delete it while the run is unfinished. Pause a run with Ctrl+C or a `stop.request` file, never by killing the process.
 
 ## End of a run (before the final summary)
 - **Stop everything you started:** training runs, the demo window, TensorBoard and any other servers. Leave something running only if the user explicitly asked for that.
 - **Clean up:** confirm there are 0 background tasks and 0 open sockets left.
 - **Update the docs:** review the docs related to the task or bug (`PROJECT_CONTEXT.md`, `README.md`, `log.md`) and update them to reflect the changes or fixes made.
+
+## Working with the owner
+- Feel free to ask for any critical decisions midrun.
+- If any bugs are found midrun, do the needful: fix them (with a test), and log them in `log.md`.
+- Add appropriate tests to test what you build or change.
+
+## Workflow for any change (agents)
+1. **Orient** as in *Context and status tracking*, plus the PROJECT_CONTEXT sections the change touches. Work on a branch, not on `main`.
+2. **Decide.** If the change alters a goal, a decision or a design rule, say so and get the owner's agreement first. Then record it in PROJECT_CONTEXT (the section and the §16 decisions log) before writing code.
+3. **Plan** the tasks in `log.md`; split anything bigger than one sitting into steps that each have a "done when" check.
+4. **Build test-first, in small steps.** Write the failing test, then the code. Put the logic in `racer/` (testable), not in `scripts/` or Streamlit pages.
+5. **Check.** Run the checks for every part you touched (table below), then the full suite: `.venv\Scripts\python -m pytest -q`.
+6. **Review** the diff before committing, and fix what the review finds.
+7. **Document** as in *End of a run*, including the README preset list, the glossary and `docs/*.md`.
+8. **Commit** with a Conventional Commits message; real training runs need a clean tree (D12).
+9. **Finish** as in *After a training run* and *End of a run*.
+
+## Architecture (follow it)
+```
+scripts/  (thin CLIs: parse arguments, call racer/)        racer/render  (pygame demo)   racer/sandbox  (Streamlit only in pages/)
+        │                                                          │                          │
+        ▼                                                          ▼                          ▼
+racer/agents + racer/registry (one layer; they use each other)
+               algorithms registry · loader · compat (manifest) · evaluation · baseline · neuroevolution (pure GA core) · evolve (GA runs)
+               CSV registry (source of truth) · record (evaluate + register) · backup
+        │
+        ▼
+racer/env      Gymnasium env · sensors · obs features · action layouts · rewards · track sets · race (multi-car, no pygame)
+        │
+        ▼
+racer/track · racer/physics   spline/field/progress/generator · car + surfaces + physics versions
+configs/<kind>/*.yaml         every tunable number; a glossary entry for every key
+```
+- **Dependencies point down.** The simulation (`physics`, `track`, `env`) never imports pygame, Streamlit, torch, `agents` or `registry`.
+- **Extend, don't change.** New behaviour gets a new registered piece: an obs feature or spec version, an action layout, a physics version, a reward type, an algorithm, an evaluation protocol, a preset. Never change what an existing one means, because saved models depend on it.
+- **Models are self-describing and immutable.** A model is its folder (`model.zip`, `vecnormalize.pkl`, a full `config.yaml` snapshot with its manifest). Every engine part checks compatibility before loading (`compat.py`).
+- **Long jobs are pausable and resumable.** Their state lives outside model folders (`outputs/`), they are deterministic from seeds, and they have a stop file plus an exit code the queue understands.
+- **One source of truth per fact.** Registry CSVs (xlsx is generated), configs for numbers, the glossary for explanations, PROJECT_CONTEXT for decisions.
+
+## Parts to keep in mind
+| Part | Where | When you change it, also … |
+|---|---|---|
+| Physics engine | `racer/physics`, `configs/physics` | run `scripts/physics_sanity.py`; a change to the equations = a new physics version; the golden R001 test must still pass |
+| Env, sensors, inputs | `racer/env`, `configs/env` | a new input = a new feature or obs_spec version; `check_env` and golden tests; ray diagrams and brain-panel labels in the sandbox/demo |
+| Rewards, episode rules | `racer/env/reward.py`, `configs/reward`, `env.episode` | new keys need a dataclass default so old snapshots load (`from_dict`) |
+| Tracks | `racer/track`, `tracks/` | `scripts/make_maps.py --check`; `tracks/test/` and `tracks/heldout/` are never trained on |
+| Training | `scripts/train.py`, `racer/agents/algorithms.py`, `evolve.py` | the model folder format, manifest and compat; registry run rows; TensorBoard tags the sandbox curves read; `train.py --help` |
+| Evaluation | `racer/agents/evaluation.py`, `configs/eval` | protocols are frozen once used: a change = a new protocol version; registry columns are only appended |
+| Registry | `racer/registry` | CSV columns only appended; `tests/test_integrity.py` |
+| Queue | `scripts/queue_overnight.py`, `configs/queue` | runs without Claude; `state.json`, `stop.request`, exit codes (3 = a paused GA run); `--dry-run` every new queue file |
+| Backup | `scripts/backup_models.py`, `configs/backup` | additive only; run after every completed run or queue |
+| AI Sandbox | `racer/sandbox` | a glossary entry for every config and snapshot key (a test fails otherwise); Build & Queue for new algorithms or preset kinds; the Presets page; headless page tests |
+| Demo | `racer/render`, `scripts/demo.py` | 60 FPS with 20 cars; every model must race (compat); the on-screen key list test |
+| Tests | `tests/` | add tests for new behaviour; the full suite passes before a commit |
+| Docs | PROJECT_CONTEXT, README, `log.md`, `docs/`, `assets/LICENSES.md` | PROJECT_CONTEXT first, then everything else that states the old behaviour |
 
 ## Working rules
 - Follow PROJECT_CONTEXT.md. If a task conflicts with it, say so before coding, and update the file once the user agrees.

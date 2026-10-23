@@ -50,3 +50,14 @@ def test_export_has_all_sheets(reg, tmp_path):
 def test_ablation_group_strips_seed():
     assert ablation_group("e4_rays9_s12") == "e4_rays9"
     assert ablation_group("ppo_rays5_tg") == "ppo_rays5_tg"
+
+
+def test_backfill_skips_unfinished_exports(reg, tmp_path):
+    """A GA checkpoint is written as .<id>.partial and renamed when complete; a leftover is never a model."""
+    from racer.registry.registry import backfill
+    models = tmp_path / "models"
+    (models / ".R020_GA_x@5k.partial").mkdir(parents=True)
+    (models / ".R020_GA_x@5k.partial" / "config.yaml").write_text("run_id: R020\n", encoding="utf-8")
+    before = len(reg.models())
+    assert backfill(reg, models) == []
+    assert len(reg.models()) == before

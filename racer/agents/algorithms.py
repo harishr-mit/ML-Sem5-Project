@@ -17,7 +17,7 @@ class Algorithm:
     sb3_class: str              # attribute of stable_baselines3
     description: str
     build: Callable[..., Any]   # (train_cfg, venv, tb_dir, seed, device="cpu") -> model
-    update_steps: Callable[[Mapping[str, Any]], int]   # env steps (all envs) between policy updates
+    update_steps: Callable[[Mapping[str, Any]], int] | None   # env steps (all envs) between policy updates
 
 
 def _activation(name: str):
@@ -60,6 +60,17 @@ def _build_sac(train_cfg, venv, tb_dir, seed, device="cpu"):
     )
 
 
+def _build_ga(train_cfg, venv, tb_dir, seed, device="cpu"):
+    """The SB3 container a GA network is saved in: a PPO policy whose actor holds the evolved
+    weights; the value net is never trained, so it is reduced to one layer (``vf: []``)."""
+    from stable_baselines3 import PPO
+
+    pol = train_cfg["policy"]
+    return PPO("MlpPolicy", venv, policy_kwargs={"net_arch": {"pi": list(pol["net_arch"]), "vf": []},
+                                                 "activation_fn": _activation(pol["activation"])},
+               seed=seed, device=device, verbose=0)
+
+
 ALGORITHMS: dict[str, Algorithm] = {
     "ppo": Algorithm(
         "ppo", "PPO",
@@ -71,6 +82,11 @@ ALGORITHMS: dict[str, Algorithm] = {
         "Soft Actor-Critic: off-policy; learns from a replay buffer of all past driving and rewards keeping "
         "the policy random (entropy). Usually more sample-efficient, slower per step (E7).",
         _build_sac, lambda cfg: int(cfg["sac"]["train_freq"]) * int(cfg["n_envs"])),
+    "ga": Algorithm(
+        "ga", "PPO",
+        "Neuroevolution (genetic algorithm, D26): no gradients. A population of cars drives the same lap; "
+        "the best (the elite share) go on unchanged and every other car is a mutated copy of one of them (E10).",
+        _build_ga, None),
 }
 
 

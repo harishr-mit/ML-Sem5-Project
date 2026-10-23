@@ -84,14 +84,14 @@ class QueueControl:
     # ----------------------------------------------------------- the runner
     def state(self) -> dict[str, dict[str, Any]]:
         try:
-            return json.loads((self.log_dir / "state.json").read_text(encoding="utf-8"))
+            return _read_json(self.log_dir / "state.json")
         except (FileNotFoundError, ValueError):
             return {}
 
     def runner(self) -> dict[str, Any] | None:
         """The runner working on this queue file, if it is alive."""
         try:
-            info = json.loads((self.log_dir / "runner.json").read_text(encoding="utf-8"))
+            info = _read_json(self.log_dir / "runner.json")
         except (FileNotFoundError, ValueError):
             return None
         try:
@@ -115,7 +115,8 @@ class QueueControl:
             if status == "running" and not live:
                 status = "interrupted"                 # the runner died without updating state.json
             out.append({"name": r["name"], "args": [str(a) for a in r["args"]], "status": status,
-                        "steps": steps_of(r["args"]), "started": s.get("started"), "finished": s.get("finished"),
+                        "steps": steps_of(r["args"]), "generations": _int_arg(r["args"], "--generations"),
+                        "started": s.get("started"), "finished": s.get("finished"),
                         "minutes": s.get("minutes"), "log": s.get("log"), "scratch": "--scratch" in r["args"]})
         return out
 
@@ -159,9 +160,26 @@ class QueueControl:
             return ""
 
 
-def steps_of(args: Sequence[Any]) -> int | None:
-    v = _arg([str(a) for a in args], "--steps")
+def _read_json(path: Path, attempts: int = 10) -> Any:
+    """Read a JSON file the queue runner replaces atomically; on Windows a read that meets the
+    replace fails with PermissionError for a moment, so retry briefly."""
+    import time
+    for i in range(attempts):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except PermissionError:
+            if i == attempts - 1:
+                raise
+            time.sleep(0.05)
+
+
+def _int_arg(args: Sequence[Any], flag: str) -> int | None:
+    v = _arg([str(a) for a in args], flag)
     return int(v) if v and re.fullmatch(r"\d+", v) else None
+
+
+def steps_of(args: Sequence[Any]) -> int | None:
+    return _int_arg(args, "--steps")
 
 
 def _arg(argv: Sequence[Any], flag: str) -> str | None:

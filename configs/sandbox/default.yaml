@@ -15,6 +15,10 @@ queue:
   minutes_per_million_alone: 10.0
   minutes_per_million_parallel: 13.0
   eval_minutes_per_checkpoint: 0.15  # protocol v2 on shared workers, after training
+  # Neuroevolution (T96: 224 generations of 50 cars in ≈ 30 min on 5 processes; later generations
+  # drive longer laps, so this is rough). Evaluation: the 20 checkpoints chosen after a run.
+  ga_minutes_per_generation: 0.15
+  ga_eval_minutes: 4.0
 
 window:                         # the sandbox's own window (D25, T75; pywebview on Edge WebView2)
   title: "AI Sandbox — RL Racing Line"

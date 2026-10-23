@@ -59,3 +59,16 @@ def test_backup_config_points_outside_the_project():
     from racer.config import PROJECT_ROOT
     dest = Path(load_preset("backup", "default")["dest"])
     assert dest.is_absolute() and not dest.resolve().is_relative_to(PROJECT_ROOT.resolve())
+
+
+def test_only_finished_evolve_runs_are_backed_up(tmp_path):
+    """A paused run's lineage keeps growing; copying it would leave a stale copy that is never updated."""
+    from racer.registry.backup import finished_evolve_runs
+    evolve, dest = tmp_path / "evolve", tmp_path / "backup" / "evolve"
+    make_model(evolve, "R020_GA_main_s1", {"lineage.sqlite": b"done", "finished.json": b"{}"})
+    make_model(evolve, "R021_GA_ctrl_s1", {"lineage.sqlite": b"growing", "state.npz": b"s"})
+    runs = finished_evolve_runs(evolve)
+    assert [p.name for p in runs] == ["R020_GA_main_s1"]
+    r = backup(evolve, dest, folders=runs)
+    assert sorted(r.copied) == ["R020_GA_main_s1/finished.json", "R020_GA_main_s1/lineage.sqlite"]
+    assert not (dest / "R021_GA_ctrl_s1").exists()

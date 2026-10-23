@@ -341,6 +341,10 @@ training:
       short: "(GA) Mutation size: the spread of the random noise added to every weight of a child."
       affects: "Too small = slow progress; too large = children lose what their parent could do."
       range: "0.02–0.05"
+    train.ga.start:
+      short: "(GA) Where each generation's try starts: line = on the start/finish line, centred, standing still; random = a random point, offset and speed (runs before 2026-10-24)."
+      affects: "line: every lap is a full lap from a standing start, like evaluation; random: the cars learn to recover from any position."
+      range: "line"
     train.ga.speed_scale:
       short: "(GA) m/s; a finished lap scores 1 + mean speed / speed_scale, a failed try its lap fraction (0–1)."
       affects: "Only the scale of the fitness: any finisher beats any non-finisher, a faster lap beats a slower one."

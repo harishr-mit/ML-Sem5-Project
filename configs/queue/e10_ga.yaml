@@ -3,9 +3,12 @@
 #
 # One run at a time: each GA run already uses 5 processes (≈ 60–70 % CPU). σ = 0.02 (T96).
 # The control run trains on Training Ground only (overfitting, next to E5's PPO runs) for 300
-# generations (≈ 30–45 min; the σ test ran 220–300 generations in 10M steps). The main run has no
-# budget: it stops when its validation score hasn't improved by 1 % for 500 generations. Ctrl+C
-# pauses it; starting the queue again resumes it where it stopped.
+# generations (≈ 30–45 min; the σ test ran 220–300 generations in 10M steps). The main runs (seeds
+# 1 and 2, owner T116) have no budget: each stops when its validation score hasn't improved by 1 %
+# for 500 generations. Every try starts on the start/finish line from standstill (ga.start: line,
+# T115). Ctrl+C pauses a GA run; starting the queue again resumes it where it stopped.
+# Last: PPO under GA's rules (rays7_lean = same 10 inputs + track limits, same 7 maps), so E10
+# compares the methods, not inputs or rules. A PPO run can't pause: if interrupted it starts over.
 
 parallel: 1
 runs:
@@ -19,3 +22,13 @@ runs:
       --tag main_s1 --train ga_default --trackset train7 --env rays7_lean --seed 1
       --curriculum "E10: GA main, 7 training maps"
       --notes "Neuroevolution on the 7 training maps, one random map per generation, until the validation plateau. Compare with PPO's R015 (64 % seen, 88 % unseen, lap ratio 0.97). The T96 scratch run reached 100 % seen / 87.5 % unseen in 10M steps."
+  - name: e10_ga_main_s2
+    args: >-
+      --tag main_s2 --train ga_default --trackset train7 --env rays7_lean --seed 2
+      --curriculum "E10: GA main, 7 training maps"
+      --notes "Second seed of the GA main run (owner T116): one seed can be lucky (PPO R015 vs R018/R019)."
+  - name: e10_ppo_lean_s1
+    args: >-
+      --tag e10_ppo_lean_s1 --train ppo_default --trackset train7 --env rays7_lean --seed 1 --steps 5000000
+      --curriculum "E10: PPO under GA rules"
+      --notes "PPO with GA's inputs (rays7_lean, 10) and track limits on, on the same 7 maps, 5M steps like R015: makes E10 a like-for-like method comparison."

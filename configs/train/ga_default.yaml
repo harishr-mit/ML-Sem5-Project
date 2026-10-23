@@ -6,6 +6,7 @@ ga:
   population: 50
   elite_frac: 0.25          # top 25 % go on unchanged and are the only parents
   sigma: 0.02               # mutation size (σ test: 0.02 beat 0.05)
+  start: line              # every try starts on the start/finish line, centred and standing (random = anywhere)
   speed_scale: 70.0         # m/s; finished-lap fitness = 1 + mean speed / speed_scale
   workers: 5                # processes; can change on resume, never changes results
   max_generations: null     # budget (--generations); null = run until the validation plateau or a pause

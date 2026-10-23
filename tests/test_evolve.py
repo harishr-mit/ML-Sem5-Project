@@ -52,7 +52,7 @@ def test_paused_and_resumed_with_other_workers_equals_an_uninterrupted_run(tmp_p
     assert lineage_rows(tmp_path / "a") == lineage_rows(tmp_path / "b")
     cars, gens, _ = lineage_rows(tmp_path / "a")
     assert len(cars) == 8 * 6 and len(gens) == 8
-    assert len({g[1] for g in gens}) == 1 and len({g[2] for g in gens}) == 8   # one map; a new start each generation
+    assert len({g[1] for g in gens}) == 1 and {g[2] for g in gens} == {0.0}   # one map; always the start line (ga.start: line)
 
 
 def test_any_car_is_rebuilt_from_the_lineage(tmp_path):
@@ -316,3 +316,19 @@ def test_each_algorithm_refuses_the_other_budget(argv, message, monkeypatch, cap
         mod.main()
     assert message in capsys.readouterr().err
 
+
+
+def test_line_start_puts_every_generation_on_the_start_line_with_the_same_maps(tmp_path):
+    env_config = make_env_config(trackset="train7", env="rays7_lean")
+    rand = evolution(tmp_path / "r", env_config, small_run(start="random")[1])
+    line = evolution(tmp_path / "l", env_config, small_run(start="line")[1])
+    standing = {"start_s": 0.0, "lateral": 0.0, "heading_offset": 0.0, "speed": 0.0}
+    for g in range(20):
+        assert line._start(g) == {"track": rand._start(g)["track"], **standing}
+    assert len({rand._start(g)["start_s"] for g in range(20)}) > 1
+
+
+def test_runs_without_a_start_setting_keep_random_starts(tmp_path):
+    env_config, train = small_run()
+    del train["ga"]["start"]
+    assert evolution(tmp_path, env_config, train)._start(0)["start_s"] != 0.0

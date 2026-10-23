@@ -4,7 +4,7 @@ the lineage database, pause/resume, and exporting a car as a model folder.
 A run lives in ``outputs/evolve/<run_name>/``: ``state.npz`` (the population to drive next;
 deleted when the run finishes), ``lineage.sqlite`` (every car of every generation),
 ``snapshot.yaml`` (the run's snapshot, reused on resume) and ``stop.request`` (pause).
-Generation ``g`` draws its map and start from ``default_rng([seed, g, 0])`` and is bred from
+Generation ``g`` draws its map (and, with ``ga.start: random``, its start) from ``default_rng([seed, g, 0])`` and is bred from
 ``default_rng([seed, g, 1])``, and every car drives alone from a fully specified start, so a
 run is identical however often it was paused and however many workers drove it.
 """
@@ -49,6 +49,7 @@ class GAParams:
     state_every: int
     validation: dict
     evaluate: dict
+    start: str = "random"         # "line": every try on the start line, standing; older snapshots lack it
 
     @property
     def n_elite(self) -> int:
@@ -246,6 +247,8 @@ class Evolution:
         self.run_dir = Path(run_dir)
         self.env_config, self.train_cfg = env_config, train_cfg
         self.p = from_dict(GAParams, train_cfg["ga"], where="train.ga")
+        if self.p.start not in ("line", "random"):
+            raise ValueError(f"train.ga.start must be 'line' or 'random', not {self.p.start!r}")
         self.seed = int(train_cfg["seed"])
         self.budget = self.p.max_generations
         self.sizes = ne.layer_sizes(obs_dim, train_cfg["policy"]["net_arch"], act_dim)
@@ -281,6 +284,8 @@ class Evolution:
         from racer.env.trackset import get_track
         rng = self._rng(generation, _DRAW)
         name = self.maps[int(rng.integers(len(self.maps)))]
+        if self.p.start == "line":         # the map is drawn first, so both modes evolve on the same maps
+            return {"track": name, "start_s": 0.0, "lateral": 0.0, "heading_offset": 0.0, "speed": 0.0}
         length = get_track(name, self.env_config["track"]).length
         ep = self.ep
         return {"track": name, "start_s": float(rng.uniform(0.0, length)),

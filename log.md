@@ -165,6 +165,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T115: Owner (2026-10-24, mid-T110): GA training tries always start on the start/finish line (centred, aligned, standing) on every map, not at a random point. New setting `ga.start: line | random` (`ga_default`: line; missing = random, so older runs resume unchanged). Done when: test shows line starts and an unchanged map sequence; docs (PROJECT_CONTEXT §8, §16, glossary, README). T110 paused meanwhile.
 * [x] T116: Owner decisions for the E10 queue (2026-10-24): control run (TG, 300 gen), GA main seeds 1 and 2 (no generation cap, plateau stop), PPO under GA rules (rays7_lean + track limits, train7, 5M steps) last; σ stays 0.02; commit and merge locally; the owner starts the queue.
 * [x] T117: Owner (2026-10-24): the E10 queue runs in this folder on `main`; development continues in a git worktree (`ML Sem5 Project - dev`, branch `feat/draw-a-track`); both merged when the queue finishes. Rules noted under Current Status.
+* [x] T118: E10 queue finished (2026-10-24); backup checked. Still open (owner, "later"): record the E10 results (GA vs PPO under GA rules) in PROJECT_CONTEXT §11/§16, then merge `feat/draw-a-track` and remove the worktree (see Current Status).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -181,6 +182,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T118: E10 queue finished, backup checked
+
+* **Task:** owner said the queue run completed; do the after-queue backup and log it.
+* **Status:** DONE. `e10_ga.yaml`: all 4 entries `done`, exit code 0, no Python processes left. Backup: `backup_models.py` copied 0 files (8008 already backed up, 3 finished GA lineages already there); R022 (45 folders) and R023 (50 folders) are in both `models/` and the backup. No CONFLICT lines.
+* **Runs:** R020 `GA_ctrl_tg_s1` (14.4 min); R021 `GA_main_s1` (47.4 min, stopped at generation 919, best validation 1.368, best evaluated `@46282k`); R022 `GA_main_s2` (38.1 min, generation 899, best validation 1.367, best evaluated `@40055k`); R023 `e10_ppo_lean_s1` (5.0M steps in 46.6 min, evaluation 345 s, best `@1700k`: seen/held-out/unseen/overall 100 %).
+* **Files:** Edited `log.md` only.
+* **Notes:** E10 results are not yet compared or written into PROJECT_CONTEXT (owner: "later"). Not yet merged: `feat/draw-a-track` and the worktree. Before the full-suite run on merge, `CLAUDE.md` shows as modified in `git status` (not by this entry).
 
 ### 2026-10-24 — Claude Code (Opus 5.5) — T117: Queue folder and dev worktree
 

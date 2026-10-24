@@ -36,6 +36,9 @@ class RaceRules:
     countdown_s: float
     respawn_s: float
     finish_timeout_s: float     # race ends this long after the winner (or when all finish)
+    start: str = "grid"          # "grid" (staggered 2-wide) or "scatter" (random places and speeds: the swarm view)
+    scatter_speed_max_ms: float = 15.0
+    scatter_lateral_frac: float = 0.6
 
 
 @dataclass
@@ -114,19 +117,29 @@ class Race:
         n = int(self.rules.laps * self.length) + 2
         self._first_t = np.full(n, np.nan)     # earliest race time any car reached each metre
         self._grid()
+        if self.started:                       # no countdown (the swarm): everyone is racing from the first tick
+            for car in self.cars:
+                car.state, car.t_state = "racing", self.t
 
     # -------------------------------------------------------------- setup
     def _grid(self) -> None:
         r = self.rules
+        if r.start == "scatter":
+            rng = np.random.default_rng(1234)
+            for car in self.cars:
+                s = float(rng.uniform(0.0, self.length))
+                lat = float(rng.uniform(-1, 1)) * r.scatter_lateral_frac * car.track.half_width
+                self._place(car, s, lat, s, speed=float(rng.uniform(0.0, r.scatter_speed_max_ms)))
+            return
         for car in self.cars:
             row, side = divmod(car.index, 2)
             d0 = -(row + 1) * r.grid_gap_m
             lateral = (1 if side == 0 else -1) * r.grid_lateral_frac * car.track.half_width
             self._place(car, d0 % self.length, lateral, d0)
 
-    def _place(self, car: RaceCar, s: float, lateral: float, dist: float) -> None:
+    def _place(self, car: RaceCar, s: float, lateral: float, dist: float, speed: float = 0.0) -> None:
         obs, _ = car.env.reset(seed=car.index, options={"track": car.track, "start_s": s, "lateral": lateral,
-                                                         "heading_offset": 0.0, "speed": 0.0})
+                                                         "heading_offset": 0.0, "speed": speed})
         car.obs = obs
         car.offset = dist
         car.poses.clear()

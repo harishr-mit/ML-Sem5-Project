@@ -39,12 +39,17 @@ label_offset_m: 4.0           # car label drawn this far above the car
 leaderboard_width: 460
 trail_length: 240             # substeps of trail per car (4 s)
 selected_trail_length: 900    # longer trail for the followed car
+swarm:                        # swarm view (T132): one policy, many cars scattered over the track
+  default_cars: 24
+  max_cars: 60
+  laps: 50              # a swarm never finishes; this only sizes the timing tables
+  speed_max_ms: 15.0
+  lateral_frac: 0.6
+  leaderboard_rows: 10
 effects:                      # skid marks, smoke, dust, crash sparks (T129); E toggles them
   default_on: true
   max_particles: 700
-  max_skid_segments: 6000
-  skid_life_s: 45.0
-  skid_alpha: 150
+  max_skid_segments: 6000     # marks are baked into the world surface, so they last for the race
   skid_min_speed_ms: 4.0
   dust_min_speed_ms: 7.0
   dust_rate: 0.5          # particles per wheel per 1/60 s

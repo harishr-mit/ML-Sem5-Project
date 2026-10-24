@@ -36,6 +36,7 @@ class Selection:
     fair: bool = False
     gradient: bool = False      # colour cars from blue (first) to red (last): the Evolution Race
     human: str | None = None    # add your own car with this physics preset (Human vs AI)
+    swarm: int | None = None    # race this many copies of the one selected model (or the baseline), scattered
 
 
 @dataclass
@@ -63,6 +64,7 @@ class ModelPicker:
     title: str = "MODEL ARENA — pick a track and up to 20 models"
     extra_help: str = ""
     extra_foot: str = ""
+    count_label: str = "laps"
 
     def __post_init__(self) -> None:
         self.text = TextCache(self.font)
@@ -215,7 +217,7 @@ class ModelPicker:
         # footer
         extras = (["+ baseline"] if self.baseline else []) + (["fair physics"] if self.fair else []) \
             + (["best only"] if self.best_only else [])
-        foot = (f"track {self.track} · {len(self.selected)} model(s) · {self.laps} laps"
+        foot = (f"track {self.track} · {len(self.selected)} model(s) · {self.laps} {self.count_label}"
                 + ("".join(f" · {e}" for e in extras)) + (f" · filter '{self.filter}'" if self.filter else "") + self.extra_foot)
         screen.blit(t.get(foot, c["hud_text"]), (20, h - 40))
         btn = pygame.Rect(w - 170, h - 48, 150, 34)

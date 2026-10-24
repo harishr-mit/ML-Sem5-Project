@@ -71,10 +71,15 @@ class ParticleField:
 class SkidMarks:
     """Line segments laid down by sliding wheels, newest last, the oldest forgotten beyond ``max_segments``."""
 
-    def __init__(self, max_segments: int, life_s: float) -> None:
+    def __init__(self, max_segments: int) -> None:
         self.segments: deque[tuple[float, float, float, float, float]] = deque(maxlen=int(max_segments))
-        self.life_s = float(life_s)
         self._last: dict[tuple[int, int], tuple[float, float]] = {}
+        self.fresh: list[tuple[float, float, float, float]] = []      # segments not yet baked into the world
+
+    def drain(self) -> list[tuple[float, float, float, float]]:
+        """New segments since the last call (the world bakes them into its surface, so they last for the race)."""
+        out, self.fresh = self.fresh, []
+        return out
 
     def add(self, car: int, wheel: int, x: float, y: float, sliding: bool, now: float) -> None:
         key = (car, wheel)
@@ -82,12 +87,14 @@ class SkidMarks:
         if sliding:
             if last is not None and (x - last[0]) ** 2 + (y - last[1]) ** 2 > 0.0004:
                 self.segments.append((last[0], last[1], x, y, now))
+                self.fresh.append((last[0], last[1], x, y))
             self._last[key] = (x, y)
         else:
             self._last.pop(key, None)
 
     def clear(self) -> None:
         self.segments.clear()
+        self.fresh.clear()
         self._last.clear()
 
 
@@ -115,11 +122,10 @@ class Effects:
         self.cfg = cfg
         self.rng = np.random.default_rng(seed)
         self.particles = ParticleField(int(cfg["max_particles"]))
-        self.skids = SkidMarks(int(cfg["max_skid_segments"]), float(cfg["skid_life_s"]))
+        self.skids = SkidMarks(int(cfg["max_skid_segments"]))
         self.shake = Shake()
         self.t = 0.0
         self._state: dict[int, str] = {}
-        self._overlay: pygame.Surface | None = None
         self._puffs: dict[tuple[int, int, int], pygame.Surface] = {}
 
     # ------------------------------------------------------------------ state
@@ -202,40 +208,25 @@ class Effects:
             self._puffs[key] = s
         return s
 
-    def _overlay_for(self, size: tuple[int, int]) -> pygame.Surface:
-        if self._overlay is None or self._overlay.get_size() != size:
-            self._overlay = pygame.Surface(size, pygame.SRCALPHA)
-        return self._overlay
-
     def draw_under(self, screen: pygame.Surface, cam) -> None:
-        """Skid marks, smoke and dust (call before the cars)."""
+        """Smoke and dust (call before the cars). Skid marks are baked into the world, see ``TrackWorld.bake_marks``."""
         z = cam.view_zoom
         x0, y0 = cam.to_world(0, screen.get_height())
         x1, y1 = cam.to_world(screen.get_width(), 0)
         p = self.particles
         idx = p.view(x0 - 3, x1 + 3, y0 - 3, y1 + 3)
         idx = idx[p.kind[idx] != KINDS["spark"]]
-        segs = [s for s in self.skids.segments if min(s[0], s[2]) < x1 and max(s[0], s[2]) > x0
-                and min(s[1], s[3]) < y1 and max(s[1], s[3]) > y0]
-        if not len(idx) and not segs:
+        if not len(idx):
             return
-        ov = self._overlay_for(screen.get_size())
-        ov.fill((0, 0, 0, 0))
-        base = int(self.cfg["skid_alpha"])
-        width = max(int(0.35 * z), 1)
-        for ax, ay, bx, by, born in segs:
-            age = (self.t - born) / self.skids.life_s
-            if age < 1.0:
-                pygame.draw.line(ov, (12, 12, 14, int(base * (1.0 - age))), cam.to_screen(ax, ay), cam.to_screen(bx, by), width)
         order = idx[np.argsort(p.age[idx])[::-1]]                               # old (big, faint) first
-        for i in order:
-            f = p.age[i] / p.life[i]
-            r = int((p.size0[i] + (p.size1[i] - p.size0[i]) * f) * z)
-            a = int(np.clip(p.alpha[i] * (1.0 - f) * 8.0, 1, 8))
-            spr = self._puff(int(p.kind[i]), max(r, 2), a)
-            sx, sy = cam.to_screen(p.x[i], p.y[i])
-            ov.blit(spr, (sx - spr.get_width() / 2, sy - spr.get_height() / 2))
-        screen.blit(ov, (0, 0))
+        f = p.age[order] / p.life[order]
+        radius = np.maximum(((p.size0[order] + (p.size1[order] - p.size0[order]) * f) * z).astype(np.int32) // 2 * 2, 2)
+        alpha = np.clip(p.alpha[order] * (1.0 - f) * 8.0, 1, 8).astype(np.int32)
+        sx = (p.x[order] - cam.cx) * z + cam.w / 2
+        sy = (cam.cy - p.y[order]) * z + cam.h / 2
+        for kind, r, a, x, y in zip(p.kind[order].tolist(), radius.tolist(), alpha.tolist(), sx.tolist(), sy.tolist()):
+            spr = self._puff(kind, r, a)
+            screen.blit(spr, (x - spr.get_width() / 2, y - spr.get_height() / 2))
 
     def draw_over(self, screen: pygame.Surface, cam) -> None:
         """Crash sparks (call after the cars)."""

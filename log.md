@@ -180,8 +180,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T129: Effects: trails, skid marks, smoke and dust, brake lights, start lights. Done when: screenshot check and cost measured.
 * [x] T130: Visuals: textures, kerbs, start line, barrier, scenery, shadows, tinted cars. Done when: screenshots on 3 tracks look right.
 * [x] T131: Menus and HUD: leaderboard, results screen, minimap, key list `H`, camera (speed zoom, overview, cycle cars). Done when: the on-screen key list test passes.
-* [ ] T132: Swarm view. Done when: many cars from one policy run at 60 FPS.
-* [ ] T133: Performance: 20 cars with all effects and audio at 60 FPS. Done when: a bench script and a test threshold pass.
+* [x] T132: Swarm view. Done when: many cars from one policy run at 60 FPS.
+* [x] T133: Performance: 20 cars with all effects and audio at 60 FPS. Done when: a bench script and a test threshold pass.
 * [ ] T134: Rays table: Delete column + *Remove ticked rays* button in Build & Queue. Done when: a page test removes chosen rows.
 * [ ] T135: `racer/agents/telemetry.py` + `racer/sandbox/plots.py`: racing line, speed trace, g-g diagram, braking zones, registry plots (curves, ablation bars, E10). Done when: unit tests on small data pass.
 * [ ] T136: Sandbox *Workbench* page (live plots from the same runtime) + default plots on Overview; Compare links to it. Done when: headless page tests pass.
@@ -204,9 +204,19 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Notes / Errors:** anything the next agent needs to know
 -->
 
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T133: Performance
+
+* **Status:** DONE. Profiled a 30-car swarm: the effects layer cost 21 ms per frame (a full-screen alpha overlay and a Python loop over 6000 skid segments plus per-particle numpy calls). Skid marks are now baked into the world surface as they are made (permanent for the race, only new segments are drawn), smoke and dust blit straight to the screen and are vectorised. Result (headless, brain panel, effects, minimap, audio on): trained model 20 cars 112 fps, 30 cars 93 fps; baseline 20 cars 215 fps, 40 cars 154 fps. `scripts/bench_demo.py` prints it (exit 1 below `--min-fps`); a test asserts at least 45 fps for 20 cars (the target is 60; the floor avoids flaking on a busy machine).
+* **Files:** Created `scripts/bench_demo.py`; edited `racer/render/effects.py`, `world.py`, `arena.py`, `configs/demo/arena.yaml`, `tests/test_effects.py`, `tests/test_swarm.py`, `log.md`.
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T132: Swarm view
+
+* **Status:** DONE. Menu mode `swarm` and `demo.py --swarm N --models M | --baseline`: one model (or the baseline) as N cars scattered at random places and speeds (`Race` rule `start: scatter`, new keys with defaults so grid races are unchanged; cars race from the first tick without a countdown), whole-track view, blue-to-red car colours, a swarm leaderboard (distance, speed, crashes) and distance on the dashboard instead of laps. The picker takes exactly one model; `+`/`−` change the car count (default 24, max 60, `arena.yaml: swarm`). Tests: `tests/test_swarm.py` (scatter start and determinism, grid start unchanged, picker, headless swarm, refusal without a policy).
+* **Files:** Created `racer/render/swarm.py`, `tests/test_swarm.py`; edited `racer/env/race.py`, `racer/render/arena.py`, `hud.py`, `dashboard.py`, `ui.py`, `app.py`, `scripts/demo.py`, `configs/demo/arena.yaml`, `log.md`.
+
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T131: Menus, HUD, minimap and camera
 
-* **Status:** DONE. Fonts: Rajdhani for the HUD, Orbitron for big numbers and titles (`render.yaml: fonts`). Dashboard for the followed car (`dashboard.py`: rpm arc with redline, speed, gear from the cosmetic gearbox, lap/last/best, lateral g, gas/brake/steer bars). Minimap (`minimap.py`, key N). Start lights (three reds, then green) instead of a number. Results screen on top of everything with medals, the fastest lap in purple, and Enter to race again (`run_race` restarts). The camera zooms out with speed (`camera_speed_zoom`, up to 30 % at 70 m/s) and eases back. Mode menu with an animated track-and-cars background, the wrapped credit line, accent bars. Tests: dashboard, minimap, camera and menu in `tests/test_render.py`; 71 passed in the demo test files.
+* **Status:** DONE. Fonts: Rajdhani for the HUD, Orbitron for big numbers and titles (`render.yaml: fonts`). Dashboard for the followed car (`dashboard.py`: rpm arc with redline, speed, gear from the cosmetic gearbox, lap/last/best, lateral g, gas/brake/steer bars). Minimap (`minimap.py`, key N). Start lights (three reds, then green) instead of a number. Results screen on top of everything with medals, the fastest lap in purple, and Enter to race again (`run_race` restarts). The camera zooms out with speed (`camera_speed_zoom`, up to 30 % at 70 m/s) and eases back. Mode menu with an animated track-and-cars background, the wrapped credit line, accent bars. Tests: dashboard, minimap, camera and menu in `tests/test_render.py`; 58 passed (render, human, effects, world, brain, audio).
 * **Files:** Created `racer/render/dashboard.py`, `racer/render/minimap.py`; edited `racer/render/hud.py`, `camera.py`, `arena.py`, `app.py`, `menu.py`, `configs/demo/render.yaml`, `tests/test_render.py`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T129: Race effects

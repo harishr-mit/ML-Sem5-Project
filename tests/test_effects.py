@@ -32,7 +32,7 @@ def test_particle_view_filters_by_rectangle():
 
 
 def test_skid_marks_connect_consecutive_sliding_points_only():
-    s = SkidMarks(max_segments=3, life_s=10.0)
+    s = SkidMarks(max_segments=3)
     s.add(0, 0, 0.0, 0.0, True, 0.0)                     # first point: nothing to connect yet
     assert not s.segments
     s.add(0, 0, 1.0, 0.0, True, 0.1)

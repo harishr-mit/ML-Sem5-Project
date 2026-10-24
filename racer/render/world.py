@@ -191,6 +191,14 @@ class TrackWorld:
                 colour = self.c["start_light"] if (a + b) % 2 == 0 else self.c["start_dark"]
                 pygame.draw.polygon(self.surface, colour, [self.wpx(*q) for q in corners])
 
+    def bake_marks(self, segments, colour=(34, 34, 38), width: int = 2) -> None:
+        """Draw tyre marks permanently into the world surface (world metres), e.g. ``Effects.skids.drain()``."""
+        if not segments or self.surface is None:
+            return
+        for ax, ay, bx, by in segments:
+            pygame.draw.line(self.surface, colour, self.wpx(ax, ay), self.wpx(bx, by), width)
+        self._scaled_cache = None
+
     def _sprite(self, kind: str) -> pygame.Surface | None:
         if kind not in self._sprites:
             try:

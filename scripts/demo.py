@@ -36,6 +36,8 @@ def main() -> int:
                     help="engine and tyre sound (default: on for races, off for headless --screenshot runs; M toggles)")
     ap.add_argument("--human", nargs="?", const="default", default=None, metavar="PHYSICS",
                     help="add your own car (arrows/WASD or gamepad) with this physics preset (default: default)")
+    ap.add_argument("--swarm", type=int, default=None, metavar="N",
+                    help="race N copies of one model (--models M) or of --baseline, scattered over the track")
     ap.add_argument("--gradient", action="store_true", help="colour the cars from blue (first) to red (last)")
     ap.add_argument("--baseline", action="store_true", help="add the hand-coded PID baseline car")
     ap.add_argument("--laps", type=int, default=None)
@@ -53,13 +55,13 @@ def main() -> int:
 
     if args.mode and args.mode not in {m.key for m in app.MODES}:
         ap.error(f"unknown mode {args.mode!r}; choose from {', '.join(m.key for m in app.MODES)}")
-    direct = bool(args.models or args.run or args.best or args.baseline or args.human)
+    direct = bool(args.models or args.run or args.best or args.baseline or args.human or args.swarm)
     ctx = app.build_context(track=args.track, laps=args.laps, sim_speed=args.sim_speed, screenshot=args.screenshot,
                             frames=args.frames, title=args.title, direct=direct, sound=args.sound)
     try:
         preset = app.preset_selection(ctx, models=args.models, run=args.run, best=args.best, every=args.every,
                                       baseline=args.baseline, spaced=args.spaced, top=args.top,
-                                      human=args.human)
+                                      human=args.human, swarm=args.swarm)
     except ValueError as e:
         ap.error(str(e))
     if preset is not None:

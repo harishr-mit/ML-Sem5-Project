@@ -94,6 +94,39 @@ class RaceHud:
             y += lh
         return rows
 
+    def swarm_board(self, screen: pygame.Surface, race: Race, colour_of, selected: int, title: str,
+                    max_rows: int = 10) -> list[tuple[pygame.Rect, int]]:
+        """Standings of a swarm: distance driven, speed and crashes (laps and gaps mean nothing for scattered cars)."""
+        lh = self.font.get_linesize() + 2
+        cars = sorted(race.cars, key=lambda c: -c.dist)
+        alive = sum(1 for c in race.cars if c.state == "racing")
+        x0 = screen.get_width() - self.width - 12
+        shown = cars[:max_rows]
+        rect = pygame.Rect(x0, 12, self.width, lh * (len(shown) + 2) + 12)
+        panel(screen, rect, self.c["hud_bg"])
+        t = self.text
+        screen.blit(t.get(f"{title}   {alive}/{len(race.cars)} driving   {fmt_time(max(race.t, 0.0))}", self.c["hud_text"]),
+                    (x0 + 10, 18))
+        y = 18 + lh
+        cols = (x0 + 10, x0 + 36, x0 + 54, x0 + 250, x0 + 330, x0 + 410)
+        for s, cx in zip(("P", "", "car", "km", "km/h", "crash"), cols):
+            screen.blit(t.get(s, self.c["hud_dim"]), (cx, y))
+        y += lh
+        rows = []
+        for pos, car in enumerate(shown, 1):
+            row = pygame.Rect(x0 + 4, y - 1, self.width - 8, lh)
+            if car.index == selected:
+                panel(screen, row, (255, 255, 255, 40))
+            rows.append((row, car.index))
+            pygame.draw.rect(screen, colour_of(car.index), (cols[1], y + 3, 12, lh - 8))
+            dim = self.c["hud_dim"] if car.state == "respawn" else self.c["hud_text"]
+            for s, cx in ((str(pos), cols[0]), (car.label.rsplit("#", 1)[-1].join(["#", ""]), cols[2]),
+                          (f"{car.dist / 1000:.2f}", cols[3]), (f"{car.env.car.speed * 3.6:.0f}", cols[4]),
+                          (str(car.crashes) if car.crashes else "", cols[5])):
+                screen.blit(t.get(s, dim), (cx, y))
+            y += lh
+        return rows
+
     def car_readout(self, screen: pygame.Surface, race: Race, car: RaceCar, colour) -> None:
         """Followed car: speed, lap, lap times (bottom left)."""
         lh = self.font.get_linesize()

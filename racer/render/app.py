@@ -58,6 +58,11 @@ def _evolution(ctx: Context, preset: Selection | None) -> str:
     return run_evolution(ctx, preset)
 
 
+def _swarm(ctx: Context, preset: Selection | None) -> str:
+    from racer.render.swarm import run_swarm
+    return run_swarm(ctx, preset)
+
+
 def _human(ctx: Context, preset: Selection | None) -> str:
     from racer.render.human import run_human
     return run_human(ctx, preset)
@@ -67,6 +72,7 @@ MODES: list[Mode] = [
     Mode("arena", "Model Arena", "Pick up to 20 models and race them on a track.", _arena),
     Mode("evolution", "Evolution Race", "The checkpoints of one run race: watch it learn.", _evolution),
     Mode("human", "Human vs AI", "Drive a car yourself against the models (keyboard or gamepad).", _human),
+    Mode("swarm", "Swarm", "One model, dozens of cars at once: chaos early on, variety later.", _swarm),
 ]
 
 
@@ -97,9 +103,9 @@ def build_context(*, track: str, laps: int | None, sim_speed: float, screenshot:
 
 def preset_selection(ctx: Context, *, models: list[str] | None, run: str | None, best: bool, every: int,
                      baseline: bool, spaced: int | None = None, top: int | None = None,
-                     human: str | None = None) -> Selection | None:
+                     human: str | None = None, swarm: int | None = None) -> Selection | None:
     """The cars the command line asked for, or ``None`` to open the menu. Raises ValueError if empty."""
-    if not (models or run or best or baseline or human):
+    if not (models or run or best or baseline or human or swarm):
         return None
     rows = ctx.reg_rows
     if models:
@@ -112,6 +118,10 @@ def preset_selection(ctx: Context, *, models: list[str] | None, run: str | None,
     else:
         ids = []                                       # --baseline alone
     ids = ids[: int(ctx.acfg["max_cars"]) - int(baseline) - int(bool(human))]
+    if swarm:
+        if not ids and not baseline:
+            raise ValueError("a swarm needs one model (--models) or --baseline")
+        return Selection(ctx.track, ids[:1], baseline and not ids, ctx.laps, False, gradient=True, swarm=swarm)
     if not ids and not baseline and not human:
         raise ValueError("no models selected")
     return Selection(ctx.track, ids, baseline, ctx.laps, False, gradient=bool(run), human=human)

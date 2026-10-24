@@ -28,6 +28,7 @@ class Dashboard:
         self.font, self.big, self.small = fonts
         self.c = colours
         self.size = size
+        self.swarm = False                       # a swarm has no laps: show distance instead
         self.rpm0, self.rpm1 = rpm_range
         self.t = TextCache(self.font)
         self.tb = TextCache(self.big)
@@ -64,6 +65,8 @@ class Dashboard:
         rows = [f"lap {race.lap_of(car)}/{race.rules.laps}   {fmt_time(race.current_lap_time(car))}",
                 f"last {fmt_time(last)}   best {fmt_time(best)}",
                 f"lateral {phys.a_lat / 9.81:+.1f} g   crashes {car.crashes}"]
+        if self.swarm:
+            rows = [f"driven {car.dist / 1000:.2f} km", f"time {fmt_time(max(race.t, 0.0))}", rows[2]]
         if state:
             rows[2] = state
         for k, s in enumerate(rows):

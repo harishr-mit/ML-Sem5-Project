@@ -12,11 +12,13 @@ from __future__ import annotations
 
 from collections import deque
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pygame
 
 from racer.config import load_preset
+from racer.env.trackset import get_track
 from racer.render.app import Context
 from racer.agents.activations import ActivationProbe
 from racer.agents.loader import LoadedModel
@@ -158,7 +160,16 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
         return "back"
     rules = dict(acfg["race"], laps=sel.laps)
     fair = load_preset("physics", acfg["fair_physics"]) if sel.fair else None
-    race = Race(sel.track, entries, rules, physics_override=fair)
+    track_arg: Any = sel.track
+    if sel.swarm:
+        sw = acfg["swarm"]
+        first = entries[0]
+        entries = [Entry(f"{first.label} #{i + 1}", first.env_config, first.act_batch, key=first.key)
+                   for i in range(min(int(sel.swarm), int(sw["max_cars"])))]
+        rules = dict(acfg["race"], laps=int(sw["laps"]), countdown_s=0.0, start="scatter",
+                     scatter_speed_max_ms=float(sw["speed_max_ms"]), scatter_lateral_frac=float(sw["lateral_frac"]))
+        track_arg = get_track(sel.track, load_preset("track", "default"))     # built once, shared by every car
+    race = Race(track_arg, entries, rules, physics_override=fair)
 
     size = screen.get_size()
     cam = Camera(size, dcfg)
@@ -166,7 +177,7 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
     world.set_track(race.track)
     p0 = race.cars[0].env.params
     palette = acfg["palette"]
-    if sel.gradient:
+    if sel.gradient or sel.swarm:
         from racer.render.evorace import gradient_palette
         palette = gradient_palette(len(race.cars))
     sprites = CarSprites(palette, p0.car_length_m, p0.car_width_m)
@@ -180,10 +191,13 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
     speed_i = speeds.index(ctx.sim_speed) if ctx.sim_speed in speeds else speeds.index(1.0)
     selected = 0
     show_rays, all_trails, show_labels, paused = True, False, True, False
+    if sel.swarm:
+        cam.overview, show_rays, show_labels = True, False, False      # the chaos shot: the whole track, no clutter
     brain = BrainPanel(ctx.fonts, colours, (int(acfg["brain"]["width"]), int(acfg["brain"]["height"])),
                        float(acfg["brain"]["smoothing"]))
     show_brain, brain_car = bool(acfg["brain"]["default_on"]), -1
     dash = Dashboard(fonts, colours)
+    dash.swarm = bool(sel.swarm)
     gearbox = Gearbox(load_preset("demo", "audio")["gearbox"])
     gearbox_car = -1
     minimap = Minimap(colours)
@@ -273,6 +287,7 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
         x, y, th = sc.pose
         if show_fx and n:
             fx.step(n / 60.0, race.cars, follow=selected)
+            world.bake_marks(fx.skids.drain())
         if audio is not None:
             audio.follow(selected)
             if paused != was_paused:
@@ -332,7 +347,11 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
         if race.over:
             rows = []
         else:
-            rows = hud.leaderboard(screen, race, sprites.colour, selected, title)
+            if sel.swarm:
+                rows = hud.swarm_board(screen, race, sprites.colour, selected, f"Swarm · {race.track.name}",
+                                       int(acfg["swarm"]["leaderboard_rows"]))
+            else:
+                rows = hud.leaderboard(screen, race, sprites.colour, selected, title)
             hud.countdown(screen, race)
         if gearbox_car != selected:
             gearbox.reset()

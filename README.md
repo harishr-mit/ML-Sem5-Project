@@ -6,12 +6,13 @@ A 2D top-down racing game written from scratch, where a car learns to drive a ra
 - **What it outputs:** steering and gas/brake.
 - **Why a racing line appears:** grip-limited physics with momentum and per-wheel surfaces. Corner too fast and the car slides, so it has to learn to brake, hit the apex and use the full track width.
 
-The demo (pygame-ce) loads any trained model from a registry and races up to 20 of them as ghost cars (Model Arena). Week 3 adds the evolution race, draw-a-track mode and human vs AI.
+The demo (pygame-ce) loads any trained model from a registry and races up to 20 of them as ghost cars. It has a mode menu: **Model Arena**, **Evolution Race** (one run's checkpoints), **Human vs AI** and **Swarm**, with textures, scenery, tyre smoke and skid marks, a brain panel that shows the network's neurons live, a dashboard, a minimap and engine sound. The AI Sandbox adds a **Workbench** for live plots and analysis.
 
 > **Status:** milestone M2 (Week 2) done. Track sets with generated tracks, fine-tuning (`--parent`), the evaluation protocol, the model registry (CSV → xlsx), an overnight experiment queue and the Model Arena (20 different models at a steady 60 FPS) are in place. The best model so far, `R015_t50_narrow7_s1@4600k` (7 narrow rays, trained on the map library), is faster than the hand-coded baseline and completes 88 % of the runs on maps it has never seen. A second seed and a longer run of the same setup didn't reproduce that (R018, R019), so results vary a lot between runs. Experiment results so far: [PROJECT_CONTEXT.md §11](PROJECT_CONTEXT.md).
 > **New (2026-10-11):** a map library of 9 hand-designed maps (7 for training, 2 test maps never trained on), evaluation protocol v2, and an upgradable model design: inputs are built from named features, the outputs follow a versioned action layout, and PPO and SAC are both supported. Any model the engine can run races in the arena.
 > **New: the AI Sandbox** (`scripts\sandbox.py`, a local app in its own window). It explains every trained model (what it senses, its network, what it was trained with and why), compares models, builds and queues new training runs, and launches races in separate game windows. See [AI Sandbox](#understand-compare-build-and-race-models-ai-sandbox) below.
 > **New (2026-10-15): neuroevolution** (D26), a genetic algorithm that trains the same kind of driving network without gradients, to compare with PPO (experiment E10, run 2026-10-24: with the same inputs and rules PPO won, see PROJECT_CONTEXT §11). See [Train with neuroevolution](#train-with-neuroevolution-genetic-algorithm). Design: [docs/NEUROEVOLUTION_PLAN.md](docs/NEUROEVOLUTION_PLAN.md).
+> **New (2026-10-24, D28): the demo is complete.** Mode menu, Evolution Race, Human vs AI, Swarm, brain panel, audio, effects and polish (see *Play the game* and *Race models*), and the sandbox's Workbench and *Drive it yourself*. The game-window drawing editor, video recorder, slides and highlight video were dropped. Plan: [docs/DEMO_PLAN.md](docs/DEMO_PLAN.md).
 > Full design, plan and timeline: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). Progress and change log: [log.md](log.md).
 
 ## Setup (Windows)
@@ -97,7 +98,9 @@ Tracks: `training_ground`, `technical`, `fast_flow` (showcase); `city_blocks`, `
 | Physics sanity tests (after any physics change) | `scripts\physics_sanity.py` |
 | Simulation speed and baseline laps | `scripts\bench_env.py` |
 
-### Play the game
+### Play the game (debug window)
+
+This is the plain driving window. The full game (menu, races, Human vs AI with other cars) is `scripts\demo.py`, see *Race models* below.
 
 ```bat
 .venv\Scripts\python scripts\drive.py
@@ -174,19 +177,25 @@ A model is built from five presets, each a YAML file in `configs/<kind>/`. A run
 - **Control run (one map):** `--tracks training_ground` instead of `--trackset train7`.
 - **In the queue or the sandbox:** works as a queue entry; *Build & Queue* offers `ga` with a generation budget (no limit by default). A paused run is marked *interrupted* and resumes when the queue starts again.
 
-### Race models (Model Arena)
+### Race models (the game window)
 
 ```bat
-.venv\Scripts\python scripts\demo.py
+.venv\Scripts\python scripts\demo.py                                     the mode menu
+.venv\Scripts\python scripts\demo.py --mode arena                        straight to a mode (arena, evolution, human, swarm)
 .venv\Scripts\python scripts\demo.py --track technical --best --baseline
-.venv\Scripts\python scripts\demo.py --track fast_flow --run R002 --every 3
+.venv\Scripts\python scripts\demo.py --track fast_flow --run R023 --spaced 6   a run's checkpoints, blue (early) to red (late)
+.venv\Scripts\python scripts\demo.py --track technical --human downforce --baseline   drive yourself
+.venv\Scripts\python scripts\demo.py --track alpine --swarm 30 --models R023_e10_ppo_lean_s1@1700k
 ```
 
-- **Picker:** pick a track on the left and up to 20 models on the right (click rows; click a column header to sort; type to filter; `Tab` best checkpoints only; `Shift+B` adds the PID baseline; `Shift+P` fair physics; `+/−` laps), then `Enter`.
-- **Race:** ghost cars start from a grid after a countdown. A crashed car restarts where it crashed after 1 s, and its crashes are counted.
-- **Keys:** `Tab` (or click a leaderboard row) follows the next car · `F` overview · `R` rays · `T` all trails · `L` labels · `Space` pause · `+/−` sim speed · mouse wheel zoom · `H` hides or shows the on-screen key list (bottom right) · `Esc` back to the picker (or quits, when started with `--models`, `--run` or `--best`). The same keys work in the Evolution Race (`--run`).
+- **Modes (menu: Up/Down, 1-4, click):** *Model Arena* (up to 20 models), *Evolution Race* (pick a run, then which checkpoints: every N-th, N evenly spaced or the N best; click to add or remove), *Human vs AI* (you drive; arrows or WASD, or a gamepad; ABS keeps the keyboard brake inside the grip limit, `K` toggles; Shift+C in the picker chooses your car's physics) and *Swarm* (one model as N cars scattered over the track).
+- **Picker:** pick a track on the left and the models on the right (click rows; click a header to sort; type to filter; `Tab` best checkpoints only; `Shift+B` adds the PID baseline; `Shift+P` fair physics; `+/−` laps), then `Enter`.
+- **Race:** ghost cars start from a grid after three start lights. A crashed car restarts where it crashed after 1 s. After the finish a results screen shows medals and the fastest lap; `Enter` races again.
+- **Keys (also on screen, `H` hides them):** `Tab` (or click a leaderboard row) follows the next car · `F` overview · `R` rays · `B` brain panel · `E` effects · `T` all trails · `L` labels · `N` minimap · `M` sound on/off · `Space` pause · `+/−` sim speed · mouse wheel zoom · `Esc` back. Sound is on by default when watching a race (`--no-sound` to start muted).
+- **Brain panel (`B`):** the followed car's inputs as labelled bars, every hidden layer as a grid of neurons (blue negative, orange positive), the steering wheel and pedals, and lines that brighten with activity. Works for PPO, SAC and neuroevolution models; hand-coded and human cars say they have no network.
 - **Physics:** each car uses the physics it was trained with; `--fair` (or `Shift+P`) puts every car on the default physics.
 - **Any model:** each car uses its own inputs and outputs, so models with different sensors, action layouts or algorithms race together. A model the engine can't run yet is shown dimmed in the picker with the reason.
+- **Frame rate:** 112 fps with 20 trained cars and every effect on (`scripts\bench_demo.py --cars 20`).
 
 ### Understand, compare, build and race models (AI Sandbox)
 
@@ -205,8 +214,9 @@ This opens the sandbox in its own window (a small built-in browser, Edge WebView
   - **Results** for every evaluation protocol, plus learning curves from TensorBoard.
   - **Evolution** (neuroevolution models): fitness and validation per generation, and *Save as a model* for any generation's car.
 - **Compare (2–4 models):** only the settings that differ, each with its note, then their shape, results (within one protocol), learning curves and driven lines side by side.
+- **Workbench:** plots from live data. *Registry* (any two metrics against each other, colour by algorithm, CSV), *Compare results* (grouped bars), *Learning curves* (smoothing), *Drive & analyse* (up to 4 drivers drive laps right in the page: lap table, racing line coloured by speed, speed/gas/steering traces with shared zoom, g-g diagram with the grip ring, braking zones, CSV) and *Brain* (scrub a lap and watch the neurons). The Overview has two default plots.
 - **Build & Queue:** start from a trained model's setup or from presets, then change what you want to test:
-  - **Inputs:** a ray table with a live diagram, plus the car's own readings.
+  - **Inputs:** a ray table with a live diagram (tick rays and *Remove* to delete rows), plus the car's own readings.
   - **Network:** outputs, hidden layers and a live parameter count.
   - **Training:** algorithm and hyperparameters, car, reward, track set.
   - **Budget:** steps (1/2/3/5M or custom) and seeds.
@@ -214,7 +224,7 @@ This opens the sandbox in its own window (a small built-in browser, Edge WebView
 
   *Add to queue* reuses an existing input preset, or writes a new `configs\env\sb_<tag>.yaml`. Hyperparameter changes become `train.py --set` arguments. The entry goes into `configs\queue\sandbox.yaml` (git-ignored). *Start queue* opens the overnight queue in its own window, 2 runs at a time; *Stop queue* asks it to stop like `Ctrl+C`. Real runs still need committed code; a new untracked preset doesn't count.
 - **Draw a Track:** draw a closed loop freehand or by clicking points (first point = start line, drawn direction = driving direction). It is smoothed and resized into a valid track and shown with any problem marked in red; *Save* puts it in `tracks\user\`, and *Race on it* opens Launch with that map chosen. This is how a faculty-drawn track gets raced live.
-- **Launch:** pick up to 20 models (or every N-th checkpoint of one run, as an evolution race), a map, laps, the baseline car and same physics for all, then press *Launch*. Each press opens a separate game window named `AI Sandbox #N · …`, so several can run at once; *Stop* closes one.
+- **Launch:** three tabs. *Race chosen models* (up to 20 models, a map, laps, the baseline car, same physics for all), *Evolution race* (one run, which checkpoints) and **Drive it yourself** (your car on a physics preset against chosen models). Each has a Sound checkbox. Each press opens a separate game window named `AI Sandbox #N · …`, so several can run at once; *Stop* closes one.
 - **Presets:** every preset a model is built from (inputs, car, reward, algorithm and network, track sets): its values with notes, the rays drawn to scale or the track previews, and the runs trained with it.
 - **Glossary:** every setting, what it affects and its typical range, searchable.
 
@@ -275,7 +285,9 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |
 | Back up models (after every run) | `scripts\backup_models.py [--run R015] [--dry-run] [--dest <folder>]` (copies what's missing; never overwrites or deletes) |
-| Model Arena | `scripts\demo.py [--track …] [--models … or --run R002 [--every N] or --best] [--baseline] [--laps 3] [--fair] [--title "caption"]` |
+| Game window | `scripts\demo.py [--mode arena\|evolution\|human\|swarm] [--track …] [--models … \| --run R002 [--every N \| --spaced N \| --top N] \| --best] [--baseline] [--human [PHYSICS]] [--swarm N] [--laps 3] [--fair] [--gradient] [--no-sound] [--title "caption"] [--screenshot out.png --frames 600]` |
+| Frame-rate check | `scripts\bench_demo.py [--cars 20] [--frames 600] [--min-fps 60]` |
+| Report plots (PNG) | `scripts\make_plots.py [--out outputs\plots\report] [--track technical] [--models baseline <model_id> …] [--no-drive]` (the Workbench's charts as files) |
 | AI Sandbox | `scripts\sandbox.py [--port 8501] [--browser \| --no-browser]` (localhost only) |
 | Overnight queue | `scripts\queue_overnight.py configs\queue\<queue>.yaml [--parallel 2] [--dry-run] [--retry-failed]` (a `stop.request` file next to its `state.json` stops it like Ctrl+C) |
 | TensorBoard | `-m tensorboard.main --logdir runs` |
@@ -297,10 +309,10 @@ In human mode (`1`) the walls are solid and nothing resets the car; baseline and
 |---|---|
 | `racer/` | `physics`, `track`, `env` (headless, no pygame); `agents`, `registry`, `render` (pygame-ce, demo only); `sandbox` (AI Sandbox: data, explanations + `glossary.yaml`, diagrams, curves, run builder, queue, launcher; Streamlit only in `sandbox/pages/`) |
 | `configs/` | YAML presets: `physics/`, `env/`, `reward/`, `train/`, `track/` (geometry and generator), `trackset/` (what training samples), `eval/` (evaluation protocol), `queue/` (overnight experiment lists; `sandbox.yaml` is git-ignored), `demo/` (render, arena and audio settings), `sandbox/` (AI Sandbox settings) |
-| `scripts/` | train, evaluate, registry, demo (Model Arena), sandbox (AI Sandbox), queue_overnight, drive (debug window), physics sanity, track previews / generation, env benchmark; later record video, plots |
+| `scripts/` | train, evaluate, registry, demo (the game window and its modes), make_plots + bench_demo, sandbox (AI Sandbox), queue_overnight, drive (debug window), physics sanity, track previews / generation, env benchmark; later record video, plots |
 | `tests/` | pytest unit tests; `test_integrity.py` checks that the registry, model folders, eval copies, run notes, docs and pinned packages agree |
 | `tracks/` | `showcase/` and `train/` (the 7 training maps), `test/` (2 test maps) and `heldout/` (generated), both never used in training, `user/` (drawn in the editor). Any other folder works too: a track JSON added at any time is found by name |
-| `docs/` | `SANDBOX_PLAN.md`: design and build plan of the AI Sandbox app; `NEUROEVOLUTION_PLAN.md`: design of the genetic-algorithm trainer (D26) |
+| `docs/` | `DEMO_PLAN.md`: scope and tasks of the demo and Workbench (D28); `SANDBOX_PLAN.md`: design and build plan of the AI Sandbox app; `NEUROEVOLUTION_PLAN.md`: design of the genetic-algorithm trainer (D26) |
 | `models/` | self-contained, immutable model folders; **local only** (git-ignored), back them up by copying the folder |
 | `registry/` | `runs.csv`, `models.csv` → `registry.xlsx`; `run_notes.yaml` (why each run was made and what it showed) |
 | `assets/` | sprites, textures, fonts, sounds; see [assets/LICENSES.md](assets/LICENSES.md) |

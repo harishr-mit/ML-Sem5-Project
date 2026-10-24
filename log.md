@@ -186,7 +186,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T135: `racer/agents/telemetry.py` + `racer/sandbox/plots.py`: racing line, speed trace, g-g diagram, braking zones, registry plots (curves, ablation bars, E10). Done when: unit tests on small data pass.
 * [x] T136: Sandbox *Workbench* page (live plots from the same runtime) + default plots on Overview; Compare links to it. Done when: headless page tests pass.
 * [x] T137: `scripts/make_plots.py`: the PNG report set from the same functions. Done when: it writes the set from the registry.
-* [ ] T138: Docs (PROJECT_CONTEXT §10/§12/§16, README, glossary, `assets/LICENSES.md`), full suite, merge `feat/demo-complete` into `main`, remove the worktree. Done when: the suite passes on `main`.
+* [x] T138: Docs (PROJECT_CONTEXT §10/§12/§16, README, glossary, `assets/LICENSES.md`), full suite, merge `feat/demo-complete` into `main`, remove the worktree. Done when: the suite passes on `main`.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -203,6 +203,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T138: Docs, full suite, browser check
+
+* **Status:** DONE. PROJECT_CONTEXT §4, §10.1-§10.5, §12 and the README describe the finished demo (modes, keys, effects, audio defaults and the M/N key choice, brain panel, measured frame rates, the Workbench, Drive it yourself, make_plots and bench_demo; recorder, slides and highlight video marked dropped). Full suite in the worktree: 358 passed, 10 skipped, 1 failed: `test_integrity::test_model_folders_and_registry_agree`, which needs every registered model folder and the worktree only had four copied in (expected; it runs in `main`). Real-browser check of the sandbox (worktree server on port 8599, stopped afterwards): the Workbench registry plot and a driven baseline lap (table, racing line, traces) and the rays table *Remove* all work. Merge into `main` and worktree removal follow.
+* **Files:** Edited `PROJECT_CONTEXT.md`, `README.md`, `racer/sandbox/plots.py` (lap table rounded), `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T137: PNG report set
 

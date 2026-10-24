@@ -131,12 +131,14 @@ ML Sem5 Project/
 │   ├── registry/ registry.py, export_xlsx.py, record.py (evaluate + record)
 │   ├── sandbox/  data, explain, diagrams, curves, builder, queue, procs, launcher, glossary.yaml,
 │   │             pages/ (AI Sandbox, §10.5; Streamlit is imported only in pages/)
-│   └── render/   debug_view.py (Week 1 debug window), world.py, camera.py, cars.py (tinted sprites),
+│   └── render/   app.py (shell, Context, MODES), menu.py, arena.py (picker + race window), evorace.py, human.py, swarm.py,
+│                 brain_panel.py, dashboard.py, minimap.py, effects.py, scenery.py, textures.py, audio.py + engine_sound.py + gearbox.py,
+│                 debug_view.py (Week 1 debug window), world.py, camera.py, cars.py (tinted sprites),
 │                 effects.py, hud.py, brain_panel.py,
 │                 minimap.py, ui.py (menus/model picker), editor.py,
 │                 audio.py (engine/tyre sound controller), gearbox.py (cosmetic RPM)
 ├── scripts/
-│   ├── train.py  evaluate.py  demo.py  record_video.py  make_plots.py  registry.py
+│   ├── train.py  evaluate.py  demo.py  make_plots.py  bench_demo.py  registry.py   (record_video.py dropped, D28)
 │   ├── queue_overnight.py    # runs a list of experiments one after another
 │   ├── physics_sanity.py     # skidpad / braking / coast-down tests
 │   ├── drive.py              # debug window: keyboard / baseline / model driving
@@ -475,45 +477,43 @@ models/R015_t50_narrow7_s1@4600k/
    - **Physics:** each car uses the physics it was trained with by default. A toggle switches to a common "fair race" preset.
    - **Race rules (D14):** staggered 2-wide grid behind the start line, 3-2-1 countdown, N-lap race (default 3), then a results table. A crash respawns the car on the centreline where it crashed, from standstill after 1 s, and the crash is counted on the leaderboard (no DNF). Gaps are in seconds (time since the leader passed the same distance).
    - **Code (D15, D16):** the race itself is simulation (`racer/env/race.py`, pygame-free); rendering uses `render/world.py` and `camera.py`. Models are picked in a basic in-window registry list (sort, filter, multi-select) or with `--models`.
-2. **Evolution Race:** pick one run, and its checkpoints (e.g. 100k, 300k, 1M, 3M) race together. This shows learning in about 20 seconds.
+2. **Evolution Race (built, T126):** pick one run and its checkpoints (every N-th, N evenly spaced, or the N best by score, then add or remove by click) and they race together, coloured blue (early) to red (late). Shows learning in about 20 seconds. `demo.py --run R0xx --spaced 6`.
 3. **Draw-a-Track:** sketch a track, validate it, and pick models to drive it live. This demonstrates generalisation. **Built as the sandbox's *Draw a Track* page (owner, T119)**, see §6 Editor.
-4. **Human vs AI:** keyboard (WASD or arrow keys; optional gamepad through pygame joystick) against chosen models. Ghost cars, same physics.
-5. **Analysis view:**
-   - racing line compared with the centreline
-   - **telemetry trace** (speed against lap distance, F1-style) comparing 2–4 models
-   - braking zones highlighted
-   - built with matplotlib, rendered into pygame or exported as PNGs
-6. **Swarm view (optional):** many environments from one policy drawn at once. Used for early-training chaos shots and recorded videos.
+4. **Human vs AI (built, T127):** keyboard (WASD or arrows) or gamepad against chosen models. Ghost cars. Your car's physics preset is your choice (Shift+C in the picker); an ABS assist caps the all-or-nothing keyboard brake inside the grip limit (`K` toggles). `demo.py --human [PHYSICS]`. The sandbox's Launch page has *Drive it yourself*.
+5. **Analysis view (built as the sandbox *Workbench*, T135-T137, D28):** racing line coloured by speed, speed/gas/steering traces against lap distance, g-g diagram, braking zones, lap tables, the registry as a plottable data set, training curves and a scrubber showing what the network does at each moment. Charts are interactive (Altair); `scripts/make_plots.py` writes the same figures as PNGs.
+6. **Swarm view (built, T132):** one model (or the baseline) as N cars (default 24, up to 60) scattered over the track at random places and speeds, whole-track view. Early-training chaos shots. `demo.py --swarm 30 --models R0xx`.
 
 ### 10.2 Visual features (all effects code-generated)
 
 | Feature | Details |
 | --- | --- |
-| World | Ground texture tiled across the map. Road texture masked by the road polygon. Red and white kerbs, a checkered start/finish line and the barrier. Drawn **once per track** to a large surface, then blitted every frame. |
+| World | Tiled grass, a gravel run-off band beside the road, asphalt with white edge lines and a slow brightness drift that hides the tiling, red and white kerbs, a chequered start/finish line and a red/white barrier with a shadow. Rasterised from the physics field at 6 px/m **once per track** (3-4 s), then blitted every frame. `configs/demo/render.yaml: textures`; missing files fall back to flat colours. |
 | Car | Kenney sprites (`car_{1..4}_{colour}.png`). For more than 5 distinct colours, use `car_N_tint.png` + `car_N_tint_mask.png` (tint the body only; see `assets/LICENSES.md`). Brake lights glow when braking. Small drop shadow. |
 | Rays | Lines from the car, coloured green → yellow → red by distance, with a dot where each ray hits. Shown for the selected car only (20 cars' rays would be clutter); toggle with `R`. |
 | Trail | Fading trail behind each car, coloured by speed (blue = slow, red = fast). Toggle `T`. |
 | Racing line overlay | Best lap path coloured by speed, with the centreline dashed for comparison. Toggle `L`. |
-| Skid marks | Drawn to a persistent layer when `sliding`. |
-| Smoke and dust | Particles: grey on tarmac when sliding, green/brown dust on grass |
-| HUD | Speed (km/h), gear-style speed bar, steering and throttle/brake bars, lap number, current/last/best lap, lateral g, surface indicator |
-| Brain panel | Live bars for the 13 inputs, plus the 2 outputs shown as a steering wheel and pedal bars. Shows what the network senses and decides. |
-| Camera | Follow the selected car (smooth lerp, zoom with speed), overview mode, cycle cars with `Tab` |
-| Minimap | Corner minimap with coloured dots for all cars |
-| Scenery | Kenney props outside the barrier: grandstands, tents, trees, tyre stacks and barriers along the run-off, and a `start_lights` gantry at the start line (countdown before a race). Placed procedurally from the track geometry and never inside the barrier. |
-| Recording | `record_video.py` renders offscreen (no window) to MP4 with imageio-ffmpeg, for highlight videos |
+| Skid marks | Rear wheels sliding on tarmac leave dark marks, baked into the world surface as they are made (they last for the race). `E` toggles all effects. |
+| Smoke, dust, sparks | Particles: grey smoke when sliding on tarmac, brown dust on grass, orange sparks and a camera kick when the followed car crashes (a pooled numpy field of 700; `arena.yaml: effects`). |
+| HUD | Dashboard of the followed car (rpm arc with redline, speed, gear, lap/last/best, lateral g, gas/brake/steer bars), leaderboard, three-light start sequence, results screen (medals, fastest lap in purple, `Enter` to race again), key list. Fonts: Rajdhani and Orbitron. |
+| Brain panel | `B`: input bars with their labels, each hidden layer as a grid of neurons (one square each, blue negative, orange positive), steering wheel and gas/brake outputs, lines that brighten with activity. Activations come from the real forward pass (`racer/agents/activations.py`). |
+| Camera | Follow the selected car (smooth lerp, looks ahead, zooms out by up to 30 % with speed), overview mode, cycle cars with `Tab`, crash shake |
+| Minimap | `N`: corner minimap with a dot per car |
+| Scenery | Kenney props outside the barrier: grandstands by the start line, tyre walls on the outside of corners, tents and tree clumps, with drop shadows. Placed from the track geometry (deterministic per track, never inside the barrier). The start sequence is three lights in the HUD. |
+| Recording | **Dropped (owner, D28).** The headless `--screenshot` mode stays for captures. |
 
-**Performance target:** 60 FPS with 20 cars. Inference is batched per model and runs every third frame (20 Hz), so it costs almost nothing.
+**Performance target:** 60 FPS with 20 cars. Inference is batched per model and runs every third frame (20 Hz). **Measured (T133, headless, brain panel, effects, minimap and audio on):** 20 trained cars 112 fps, 30 cars 93 fps; 20 baseline cars 215 fps. `scripts/bench_demo.py` repeats it; a test asserts at least 45 fps.
 
 ### 10.3 Controls (summary)
 
-`Tab` cycle car · `R` rays · `T` trails · `L` racing line · `B` brain panel · `M` minimap · `F` follow/overview · `S` sound on/off · `Space` pause · `+/−` speed ×0.25–×4 · `H` key list · `Esc` menu
+`Tab` cycle car · `R` rays · `T` trails · `E` effects · `L` labels · `B` brain panel · `N` minimap · `F` follow/overview · `M` sound on/off · `Space` pause · `+/−` speed ×0.25–×4 · mouse wheel zoom · `Enter` race again after the finish · `H` key list · `Esc` back. Human vs AI adds arrows/WASD to drive and `K` for ABS. **`M` is sound (not `S`, which is the brake in WASD) and `N` is the minimap (D28, T127).**
 
 Every game mode shows its keys on screen (bottom right, toggled with `H`; T82), so the demo never depends on remembering them. The arena list is built next to its key handling, and a test checks that they match.
 
 ### 10.4 Audio (`racer/render/audio.py`, `configs/demo/audio.yaml`)
 
 All clips and their RPM curves are described in `assets/LICENSES.md` and `assets/sounds/engine_map.json`.
+
+**Defaults (owner, D28):** sound is **on when watching a race** (arena, Evolution Race, Human vs AI, swarm), **off for training, the sandbox and analysis**, and toggleable in every game window with `M` (`demo.py --sound/--no-sound`; the sandbox's Launch has a Sound checkbox; headless `--screenshot` runs are silent unless `--sound`). Without an audio device or the asset files the game runs silently. The title screen carries the CC BY 4.0 credit line. Built in `racer/render/{gearbox,engine_sound,audio}.py`, all numbers in `configs/demo/audio.yaml`.
 
 **Whose sound plays:** only the **followed car** (or the human's car) is audible. With 20 cars, everything else stays silent. Audio is mixed with pygame-ce `mixer`, and each clip is decoded once into a numpy array.
 
@@ -538,7 +538,7 @@ All clips and their RPM curves are described in `assets/LICENSES.md` and `assets
 - `tyre_screech_loop` volume follows the slip intensity: lateral sliding speed, or the friction-circle overload when `sliding`. Fade it in and out over about 80 ms.
 - On the **onset** of a short slide or hard braking, play `tyre_screech_short_1` or `_2` at random.
 
-**Recording:** `record_video.py` stays silent by default. Mixing the audio into the MP4 is a *Could*.
+**Recording:** dropped with the video recorder (D28).
 
 ### 10.5 AI Sandbox (D24, owner; plan in `docs/SANDBOX_PLAN.md`)
 
@@ -567,7 +567,9 @@ The sandbox only reads the registry and model folders and writes queue files and
 
 - **Overview:** leaderboard, plus what is running.
 - **Model Explorer:** rays on a straight road and on any map by the model's own sensor, network diagram and layer table, every setting with its glossary note, results for each protocol, learning curves.
-- **Compare**, **Build & Queue**, **Launch**, **Glossary**.
+- **Compare**, **Build & Queue**, **Launch**, **Glossary**. Build & Queue's rays table has a *Remove* column and button (T134).
+- **Workbench (T135-T136, owner, D28):** plots from the same Python runtime, no export step: the registry as a data set (any two metrics, colour by algorithm, CSV), result bars for chosen models, training curves, and fresh laps driven in the page (up to 4 drivers) with a lap table, racing line coloured by speed, traces with shared zoom, g-g diagram, braking zones and CSV; a *Brain* tab scrubs a lap and shows the network's inputs and neurons at each moment. The Overview has default plots. Logic: `racer/agents/telemetry.py`, `racer/sandbox/plots.py`.
+- **Launch** has three tabs: race chosen models, an Evolution race (strategies as in the game) and **Drive it yourself** (a game window with your car on a physics preset against chosen models; Streamlit cannot read 60 Hz keys), each with a Sound checkbox.
 - **Draw a Track (T119, owner, D27):** a drawing canvas (`streamlit-drawable-canvas`), the drawing shown as a validated track, *Save* to `tracks/user/`, *Race on it* (Launch with the track chosen).
 - **Presets (T101, owner):** every model preset (inputs, car, reward, algorithm and network, track sets) with its values and notes, the rays to scale or the track previews, and the runs trained with it.
 - **Explorer → Evolution (T106, owner):** for neuroevolution models, fitness and validation per generation from the lineage, and *Save as a model* for any generation's car. This is the one place where the sandbox writes a model folder: a new one, rebuilt from the lineage; it never edits an existing one.
@@ -661,8 +663,8 @@ Results are one seed per setting unless two are listed. **R015's result doesn't 
 **Priorities (MoSCoW):**
 
 - **Must:** grip physics env, PPO training, registry (CSV and xlsx), load any model, multi-car arena (10–20), rays, trails, HUD, learning curves, showcase tracks, held-out evaluation, map library with a test split (D19), AI Sandbox (D24)
-- **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, highlight video, engine and tyre audio (§10.4)
-- **Could:** brain panel, swarm view, SAC (E7), neuroevolution (E10, D26; built, run: PPO won, §11), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
+- **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, engine and tyre audio (§10.4) (all built; highlight video and slides dropped, D28)
+- **Could:** brain panel (built), swarm view (built), SAC (E7), neuroevolution (E10, D26; built, run: PPO won, §11), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
 - **Won't (this time):** car-to-car collisions, multi-agent competitive training, pixel/CNN observations, 3D
 
 ---

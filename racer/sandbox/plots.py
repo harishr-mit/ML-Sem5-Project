@@ -55,7 +55,7 @@ def lap_summary(tels: Sequence[Telemetry]) -> pd.DataFrame:
             "braking (% of lap)": float(100.0 * (d["brake"] > 0.1).sum() / n),
             "off-road (% of lap)": float(100.0 * (d["offroad"] > 0.0).sum() / n),
             "sliding (% of lap)": float(100.0 * d["sliding"].mean()), "ended": t.termination or "lap done"})
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows).round(2)
 
 
 def telemetry_long(tels: Sequence[Telemetry], channels: Sequence[str], use_lap: bool = True) -> pd.DataFrame:

@@ -22,7 +22,7 @@ Shared context for every agent working in this directory. Read this file **befor
 ## Current Status
 
 * **Last updated:** 2026-10-24 (Claude Opus 5.5). **Where we are:** start of Week 3. M1 and M2 reached; AI Sandbox built (T65–T75, T101, T106); map library + eval protocol v2; upgradable engine (D21–D23). **Neuroevolution (D26) built and merged to `main`** (PR #1, 2026-10-24; 256 tests pass at T107). Best PPO: `R015_t50_narrow7_s1@4600k` (seen 64 %, unseen 88 %, lap ratio 0.97) but it doesn't reproduce (R018, R019). GA σ test: σ 0.02 (S004: seen 100 %, unseen 87.5 %, lap ratio 0.997; one seed). Nothing is running. **Next:** T97 (owner starts `configs/queue/e10_ga.yaml`, then evaluate, back up, record E10); T83 (owner decision: run-to-run variance); **T97 queue ready on `main`** (4 runs incl. GA seed 2 and PPO under GA rules; GA tries start on the start line, T115). T08 / M3 Week 3 visuals (effects, brain panel, minimap, Evolution Race, Draw-a-Track, Human vs AI, video recorder); then T09 / M4. History of earlier status lines: see the Change Log.
-* **E10 done and merged (T121, 2026-10-24):** the queue finished (R020–R023), results are in PROJECT_CONTEXT §11/§16 (PPO under GA rules beat both GA seeds; single seeds), `feat/draw-a-track` is merged into `main` (281 tests pass). Nothing is running. **Next:** remove the dev worktree once the owner decides about `tracks/user/wiggly_wiggly.json` (untracked, in the worktree); T110–T114 (Draw-a-Track in the game window, T112–T114 still open); T83 (variance decision, plus a second PPO seed of R023).
+* **E10 done and merged (T121, 2026-10-24):** the queue finished (R020–R023), results are in PROJECT_CONTEXT §11/§16 (PPO under GA rules beat both GA seeds; single seeds), `feat/draw-a-track` is merged into `main` (281 tests pass). Nothing is running. **Next:** T110–T114 (Draw-a-Track in the game window, T112–T114 still open); T83 (variance decision, plus a second PPO seed of R023).
 * **(Superseded by the merge above) Two working copies, until the worktree is removed (owner, 2026-10-24, T117):**
   - **This folder (`ML Sem5 Project`, branch `main`) runs the E10 queue** (`configs/queue/e10_ga.yaml`). Don't edit `racer/`, `scripts/`, `configs/`, `tracks/` here and don't switch branches: every queue entry refuses to start on uncommitted code and runs whatever is checked out. Check-ins read only `outputs/queue_logs/e10_ga/state.json` and the log tail. The queue writes `registry/*.csv`, `registry/run_notes.yaml`, `outputs/eval/` and `models/` here.
   - **Development happens in the worktree `C:\Users\Jack\Desktop\ML Sem5 Project - dev`** (branch `feat/draw-a-track`). It has its **own `.venv`** (owner, 2026-10-24: Python 3.11.9, same package versions as this folder's, `racer` installed editable from the worktree): run `.venv\Scripts\python ...` there, no `PYTHONPATH` needed. Remove it with the worktree.
@@ -169,7 +169,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T118: Owner (2026-10-24): D27, every feature is reflected in the AI Sandbox; rule in `CLAUDE.md`, PROJECT_CONTEXT §10.5/§16, memory.
 * [x] T119: Draw-a-Track in the sandbox (D27; owner: draw inside the sandbox, save to `tracks/user/`): *Draw a Track* page with a canvas (`streamlit-drawable-canvas` 0.13.0), validated preview, save, *Race on it* → Launch. Done when: headless page test passes (done) and a real browser run works (done).
 * [x] T120: Owner (2026-10-24): own `.venv` in the dev worktree, rebuilt on Python 3.11.9 (the first one was 3.14 and empty); package versions identical to the main venv.
-* [x] T121: E10 queue finished (2026-10-24); backup checked; E10 results recorded (PROJECT_CONTEXT §11/§16, `registry/run_notes.yaml`); `feat/draw-a-track` merged into `main`, full suite 281 passed. Open: remove the dev worktree (owner decision on `tracks/user/wiggly_wiggly.json`).
+* [x] T121: E10 queue finished (2026-10-24); backup checked; E10 results recorded (PROJECT_CONTEXT §11/§16, `registry/run_notes.yaml`); `feat/draw-a-track` merged into `main`, full suite 281 passed. Worktree removed in T122.
+* [x] T122: Remove the dev worktree and copy the drawn track `wiggly_wiggly` to `main` (owner, 2026-10-24).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -186,6 +187,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T122: Dev worktree removed
+
+* **Owner:** remove the worktree and copy `wiggly_wiggly` here. Copied `tracks/user/wiggly_wiggly.json` and `outputs/plots/tracks/wiggly_wiggly.png` into `main` (byte-identical, `cmp`), then `git worktree remove --force` (its only untracked files were those two; its `.venv` went with it) and deleted the merged branch `feat/draw-a-track`. The two new files and the owner's `swiggly` track are untracked in `main`, not committed.
+* **Files:** Created `tracks/user/wiggly_wiggly.json`, `outputs/plots/tracks/wiggly_wiggly.png`; edited `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T121: E10 queue finished, backup checked
 

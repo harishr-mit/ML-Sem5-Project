@@ -34,6 +34,7 @@ class Selection:
     baseline: bool = False
     laps: int = 3
     fair: bool = False
+    gradient: bool = False      # colour cars from blue (first) to red (last): the Evolution Race
 
 
 @dataclass

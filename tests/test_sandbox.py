@@ -941,3 +941,9 @@ def test_queue_list_shows_a_generation_budget(tmp_path):
     assert budget_label(None, 300) == "300 generations" and budget_label(2_000_000, None) == "2M steps"
     assert budget_label(None, None) == "until it stops improving"
 
+
+
+def test_demo_argv_extra_arguments_come_last():
+    from racer.sandbox.launcher import demo_argv
+    argv = demo_argv("x", ["A", "B"], title="T", extra=["--gradient"])
+    assert argv[-1] == "--gradient" and argv[:4] == ["--track", "x", "--models", "A"]

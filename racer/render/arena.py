@@ -138,7 +138,11 @@ def run_race(ctx: Context, sel: Selection) -> str:
     world = TrackWorld(dcfg, colours)
     world.set_track(race.track)
     p0 = race.cars[0].env.params
-    sprites = CarSprites(acfg["palette"], p0.car_length_m, p0.car_width_m)
+    palette = acfg["palette"]
+    if sel.gradient:
+        from racer.render.evorace import gradient_palette
+        palette = gradient_palette(len(race.cars))
+    sprites = CarSprites(palette, p0.car_length_m, p0.car_width_m)
     hud = RaceHud(font, font_big, colours, int(acfg["leaderboard_width"]))
     labels = TextCache(font_small)
     lut = speed_colours()

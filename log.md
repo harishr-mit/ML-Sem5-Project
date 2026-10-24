@@ -174,7 +174,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T123: Owner (2026-10-24): finish all demo and analysis work, then experiment freely. Plan `docs/DEMO_PLAN.md`, decision D28. Worktree `ML Sem5 Project - dev`, branch `feat/demo-complete`. Done when: plan and decisions committed.
 * [x] T124: `demo.py` shell: mode menu (arena, Evolution Race, Human vs AI, swarm), shared window and state. Done when: headless, the menu starts each mode and returns.
 * [ ] T125: Audio (§10.4): `gearbox.py`, `audio.py`, toggle `S` + button in every race window; on when watching a race, off for training/sandbox/analysis; `--sound/--no-sound`; Launch checkbox. Done when: tests for gearbox ratios and RPM→offset (dummy audio driver) and the toggle pass.
-* [ ] T126: Evolution Race: pick a run and checkpoints (every N, evenly spaced, hand-picked, best-validated), labels by step; sandbox Launch option. Done when: a scripted race of 4 checkpoints runs headless.
+* [x] T126: Evolution Race: pick a run and checkpoints (every N, evenly spaced, hand-picked, best-validated), labels by step; sandbox Launch option. Done when: a scripted race of 4 checkpoints runs headless.
 * [ ] T127: Human vs AI: keyboard and gamepad, ABS assist, physics choice; sandbox *Drive it yourself* (a game window). Done when: key events move a car headless and Launch builds the command.
 * [ ] T128: Brain panel: activation capture, network graph, input bars, outputs, key `B`. Done when: labels and finite activations are right for every compatible model.
 * [ ] T129: Effects: trails, skid marks, smoke and dust, brake lights, start lights. Done when: screenshot check and cost measured.
@@ -203,6 +203,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T126: Evolution Race
+
+* **Status:** DONE. Mode `evolution` in the menu: a picker (`racer/render/evorace.py`) lists runs with 2+ raceable checkpoints, preselects them by strategy (every N-th / N evenly spaced / N best by score; `racer/agents/checkpoints.py`), lets you add or remove checkpoints by click, and races them with cars coloured blue (early) to red (late). CLI: `demo.py --run R0xx --spaced 6 | --top 6 | --every 5` (`--gradient` for any race). Sandbox: the Launch page's evolution tab now offers the same strategies and passes `--gradient` (`demo_argv` gained `extra`). Tests: `tests/test_checkpoints.py` (5), picker/gradient/headless race in `tests/test_render.py`, `demo_argv` extra; 74 passed, 7 skipped (render, checkpoints, sandbox).
+* **Files:** Created `racer/agents/checkpoints.py`, `racer/render/evorace.py`, `tests/test_checkpoints.py`; edited `racer/render/app.py`, `arena.py`, `ui.py`, `scripts/demo.py`, `racer/sandbox/launcher.py`, `racer/sandbox/pages/launch.py`, `tests/test_render.py`, `tests/test_sandbox.py`, `log.md`. Four R023 checkpoints were copied into the worktree's git-ignored `models/` for headless checks (delete at merge).
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T124: Demo shell and mode menu
 

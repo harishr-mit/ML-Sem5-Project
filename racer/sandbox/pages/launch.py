@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from racer.agents.checkpoints import STRATEGIES, choose
 from racer.config import load_preset
 from racer.sandbox.launcher import Launcher
 from racer.sandbox.pages._ui import model_label, store, track_names
@@ -94,17 +95,19 @@ def render() -> None:
             run_id = st.selectbox("Run", list(by_id), key="evo_run",
                                   format_func=lambda r: f"{r} · {by_id[r].get('tag', '')}")
             cps = s.checkpoints(run_id)
-            every = st.slider("Take every N-th checkpoint", 1, max(1, len(cps) // 2 or 1), max(1, len(cps) // 8 or 1),
-                              key=f"evo_every_{run_id}") if len(cps) > 2 else 1
+            c_a, c_b = st.columns([3, 2])
+            strategy = c_a.selectbox("Which checkpoints", list(STRATEGIES), key="evo_strategy",
+                                     format_func=lambda k: STRATEGIES[k])
+            count = int(c_b.number_input("N", 1, max(len(cps), 1), min(6, max(len(cps), 1)), key=f"evo_n_{run_id}"))
             track, laps, baseline, fair = _race_options("evo", names, acfg)
-            chosen = [c for c in cps[::every] if not s.problems(c["model_id"])][: max_cars - int(baseline)]
-            if cps and cps[-1] not in chosen and len(chosen) < max_cars - int(baseline):
-                chosen.append(cps[-1])                                   # always end with the last one
+            usable = [c for c in cps if not s.problems(c["model_id"])]
+            chosen = choose(usable, strategy, count)[: max_cars - int(baseline)]
             st.caption(f"{len(chosen)} cars: " + ", ".join(f"{int(c.get('steps') or 0) // 1000}k" for c in chosen))
             st.button("Launch evolution race", type="primary", key="evo_go", disabled=not chosen,
                       on_click=_do_launch, kwargs={"track": track, "models": [c["model_id"] for c in chosen],
                                                    "laps": laps, "baseline": baseline, "fair": fair,
-                                                   "label": f"evolution of {run_id}"})
+                                                   "label": f"evolution of {run_id}",
+                                                   "extra": ["--gradient"]})
 
     st.header("Game windows")
     items = _launcher().instances()

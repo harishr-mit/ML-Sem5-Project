@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 import pygame
 
+from racer.agents.checkpoints import choose, run_checkpoints
 from racer.config import load_preset
 from racer.registry.registry import Registry, typed
 from racer.render.debug_view import load_font
@@ -50,8 +51,14 @@ def _arena(ctx: Context, preset: Selection | None) -> str:
     return run_arena(ctx, preset)
 
 
+def _evolution(ctx: Context, preset: Selection | None) -> str:
+    from racer.render.evorace import run_evolution
+    return run_evolution(ctx, preset)
+
+
 MODES: list[Mode] = [
     Mode("arena", "Model Arena", "Pick up to 20 models and race them on a track.", _arena),
+    Mode("evolution", "Evolution Race", "The checkpoints of one run race: watch it learn.", _evolution),
 ]
 
 
@@ -73,7 +80,7 @@ def build_context(*, track: str, laps: int | None, sim_speed: float, screenshot:
 
 
 def preset_selection(ctx: Context, *, models: list[str] | None, run: str | None, best: bool, every: int,
-                     baseline: bool) -> Selection | None:
+                     baseline: bool, spaced: int | None = None, top: int | None = None) -> Selection | None:
     """The cars the command line asked for, or ``None`` to open the menu. Raises ValueError if empty."""
     if not (models or run or best or baseline):
         return None
@@ -81,8 +88,8 @@ def preset_selection(ctx: Context, *, models: list[str] | None, run: str | None,
     if models:
         ids = list(models)
     elif run:
-        ids = [r["model_id"] for r in sorted((r for r in rows if r["run_id"] == run),
-                                             key=lambda r: r.get("steps") or 0)][::max(every, 1)]
+        strategy, n = ("spaced", spaced) if spaced else ("top", top) if top else ("every", every)
+        ids = [r["model_id"] for r in choose(run_checkpoints(rows, run), strategy, n)]
     elif best:
         ids = [r["model_id"] for r in rows if r.get("is_best") and r.get("path")]
     else:
@@ -90,7 +97,7 @@ def preset_selection(ctx: Context, *, models: list[str] | None, run: str | None,
     ids = ids[: int(ctx.acfg["max_cars"]) - int(baseline)]
     if not ids and not baseline:
         raise ValueError("no models selected")
-    return Selection(ctx.track, ids, baseline, ctx.laps, False)
+    return Selection(ctx.track, ids, baseline, ctx.laps, False, gradient=bool(run))
 
 
 def run(ctx: Context, preset: Selection | None = None, mode: str | None = None) -> int:

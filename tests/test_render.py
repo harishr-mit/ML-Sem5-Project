@@ -148,3 +148,55 @@ def test_preset_selection_from_the_command_line():
         pass
     else:
         raise AssertionError("an empty selection must raise")
+
+
+def test_gradient_palette_runs_from_blue_to_red():
+    from racer.render.evorace import gradient_palette
+    pal = gradient_palette(5)
+    assert len(pal) == 5 and len(set(pal)) == 5
+    first, last = pal[0], pal[-1]
+    assert first[2] > first[0] and last[0] > last[2]            # blue first, red last
+    assert len(gradient_palette(1)) == 1
+
+
+def test_evolution_picker_strategies_and_toggle():
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    from racer.config import load_preset
+    from racer.render.evorace import EvoPicker, raceable_runs
+
+    pygame.init()
+    screen = pygame.display.set_mode((1280, 800))
+    rows = [{"model_id": f"R00{r}_x@{s}k", "run_id": f"R00{r}", "steps": s * 1000, "path": "models/x",
+             "completion_rate": s / 1000, "score": float(s)} for r in (1, 2) for s in (100, 200, 300, 400, 500, 600)]
+    rows.append({"model_id": "R003_y@100k", "run_id": "R003", "steps": 100000, "path": "models/y"})   # one only
+    runs = raceable_runs(rows, blocked={"R002_x@600k": "needs a newer engine"})
+    assert list(runs) == ["R002", "R001"] and len(runs["R002"]) == 5                                  # newest first
+    colours = {k: tuple(v) for k, v in load_preset("demo", "render")["debug"]["colours"].items()}
+    pk = EvoPicker(rows, [("showcase", "technical")], (1280, 800), pygame.font.Font(None, 20), colours,
+                   blocked={"R002_x@600k": "x"}, count=3)
+    key = lambda k: pygame.event.Event(pygame.KEYDOWN, key=k, unicode="", mod=0)     # noqa: E731
+    assert pk.run_id == "R002"
+    assert pk.selected == ["R002_x@100k", "R002_x@300k", "R002_x@500k"]            # spaced 3 of 5
+    pk.handle(key(pygame.K_RIGHT))                                                  # next strategy: top
+    assert pk.strategy == "top" and len(pk.selected) == 3
+    pk.handle(key(pygame.K_LEFT))
+    pk.toggle("R002_x@200k")                                                        # hand-pick one more
+    assert pk.selected == ["R002_x@100k", "R002_x@200k", "R002_x@300k", "R002_x@500k"]
+    pk.handle(key(pygame.K_DOWN))                                                   # next run resets the picks
+    assert pk.run_id == "R001" and len(pk.selected) == 3
+    pk.draw(screen)
+    pk.handle(key(pygame.K_RETURN))
+    assert pk.done is not None and pk.done.gradient and pk.done.track == "training_ground" and len(pk.done.models) == 3
+    pygame.quit()
+
+
+def test_evolution_race_headless_from_the_command_line(tmp_path):
+    """--run with --spaced races a run's checkpoints (skips folders that are missing, as in a fresh checkout)."""
+    out = tmp_path / "evo.png"
+    r = subprocess.run([sys.executable, str(ROOT / "scripts" / "demo.py"), "--run", "R001", "--spaced", "3", "--baseline",
+                        "--track", "technical", "--screenshot", str(out), "--frames", "200"],
+                       capture_output=True, text=True, timeout=300)
+    assert r.returncode == 0, r.stderr[-2000:]
+    assert out.is_file() and out.stat().st_size > 10_000

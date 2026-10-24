@@ -4,7 +4,7 @@
     .venv\\Scripts\\python scripts\\demo.py --mode arena          straight to a mode's model picker
     .venv\\Scripts\\python scripts\\demo.py --track technical --models R001_ppo_rays5_tg@1200k R002_…
                                          [--baseline] [--laps 3] [--fair]
-    .venv\\Scripts\\python scripts\\demo.py --track fast_flow --run R002 [--every 5]   a run's checkpoints
+    .venv\\Scripts\\python scripts\\demo.py --track fast_flow --run R002 [--every 5 | --spaced 6 | --top 6]   a run's checkpoints
     .venv\\Scripts\\python scripts\\demo.py --track technical --best                   every run's best checkpoint
         [--sim-speed 1] [--screenshot out.png --frames 600]                         headless capture
         [--title "window caption"]                                                  (AI Sandbox)
@@ -30,6 +30,9 @@ def main() -> int:
     sel.add_argument("--run", help="race the checkpoints of this run")
     sel.add_argument("--best", action="store_true", help="race every run's best checkpoint")
     ap.add_argument("--every", type=int, default=1, help="--run: take every N-th checkpoint")
+    ap.add_argument("--spaced", type=int, default=None, help="--run: N checkpoints spread evenly over the run")
+    ap.add_argument("--top", type=int, default=None, help="--run: the N best checkpoints by registry score")
+    ap.add_argument("--gradient", action="store_true", help="colour the cars from blue (first) to red (last)")
     ap.add_argument("--baseline", action="store_true", help="add the hand-coded PID baseline car")
     ap.add_argument("--laps", type=int, default=None)
     ap.add_argument("--fair", action="store_true", help="every car on the same physics (arena.yaml fair_physics)")
@@ -51,11 +54,12 @@ def main() -> int:
                             frames=args.frames, title=args.title, direct=direct)
     try:
         preset = app.preset_selection(ctx, models=args.models, run=args.run, best=args.best, every=args.every,
-                                      baseline=args.baseline)
+                                      baseline=args.baseline, spaced=args.spaced, top=args.top)
     except ValueError as e:
         ap.error(str(e))
     if preset is not None:
         preset.fair = args.fair
+        preset.gradient = preset.gradient or args.gradient
     return app.run(ctx, preset, args.mode)
 
 

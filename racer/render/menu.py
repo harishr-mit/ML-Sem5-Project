@@ -15,6 +15,7 @@ class Menu:
     size: tuple[int, int]
     fonts: tuple[pygame.font.Font, pygame.font.Font, pygame.font.Font]
     colours: Mapping[str, Any]
+    credits: str = ""                                 # attribution line (CC BY 4.0 engine sound needs it)
     index: int = 0
     done: str | None = None                           # the chosen mode's key
     quit: bool = False
@@ -64,5 +65,8 @@ class Menu:
             panel(screen, r, (255, 255, 255, 55) if i == self.index else c["hud_bg"])
             screen.blit(self.text.get(f"{i + 1}  {m.title}", c["hud_text"]), (r.x + 18, r.y + 12))
             screen.blit(self.text.get(m.blurb, c["hud_dim"]), (r.x + 18, r.y + 12 + 28))
+        if self.credits:
+            small = TextCache(self.fonts[2]).get(self.credits, c["hud_dim"])
+            screen.blit(small, small.get_rect(midbottom=(w // 2, h - 6)))
         hint = self.text.get("Up/Down or click · Enter opens · Esc quits", c["hud_dim"])
-        screen.blit(hint, hint.get_rect(midbottom=(w // 2, h - 24)))
+        screen.blit(hint, hint.get_rect(midbottom=(w // 2, h - 30)))

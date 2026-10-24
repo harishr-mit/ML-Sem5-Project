@@ -173,7 +173,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T122: Remove the dev worktree and copy the drawn track `wiggly_wiggly` to `main` (owner, 2026-10-24).
 * [x] T123: Owner (2026-10-24): finish all demo and analysis work, then experiment freely. Plan `docs/DEMO_PLAN.md`, decision D28. Worktree `ML Sem5 Project - dev`, branch `feat/demo-complete`. Done when: plan and decisions committed.
 * [x] T124: `demo.py` shell: mode menu (arena, Evolution Race, Human vs AI, swarm), shared window and state. Done when: headless, the menu starts each mode and returns.
-* [ ] T125: Audio (§10.4): `gearbox.py`, `audio.py`, toggle `S` + button in every race window; on when watching a race, off for training/sandbox/analysis; `--sound/--no-sound`; Launch checkbox. Done when: tests for gearbox ratios and RPM→offset (dummy audio driver) and the toggle pass.
+* [x] T125: Audio (§10.4): `gearbox.py`, `audio.py`, toggle `S` + button in every race window; on when watching a race, off for training/sandbox/analysis; `--sound/--no-sound`; Launch checkbox. Done when: tests for gearbox ratios and RPM→offset (dummy audio driver) and the toggle pass.
 * [x] T126: Evolution Race: pick a run and checkpoints (every N, evenly spaced, hand-picked, best-validated), labels by step; sandbox Launch option. Done when: a scripted race of 4 checkpoints runs headless.
 * [ ] T127: Human vs AI: keyboard and gamepad, ABS assist, physics choice; sandbox *Drive it yourself* (a game window). Done when: key events move a car headless and Launch builds the command.
 * [ ] T128: Brain panel: activation capture, network graph, input bars, outputs, key `B`. Done when: labels and finite activations are right for every compatible model.
@@ -203,6 +203,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T125: Audio
+
+* **Status:** DONE. Engine and tyre sound for the followed car, in every race window. Pure logic: `racer/render/gearbox.py` (cosmetic 5-speed box: shifts at 2.85, lands at 2.0, down at 1.4, clutch slip 1.2), `engine_sound.py` (rev_up/high_loop/rev_down/idle state machine with seek-to-rpm, 6 % drift re-seek, hysteresis and a minimum re-seek time so continuous AI gas doesn't chatter; tyre loop volume + one-shots on slide onset or hard braking). `audio.py` runs it on the mixer (clips decoded once, seek by slicing; no device or missing assets → silent, never an error). `configs/demo/audio.yaml` holds every number. Defaults (owner, D28): on when watching a race, off for headless captures unless `--sound`; `--no-sound` starts muted; the `S` key toggles everywhere and the window shows `sound: on · gear N`. Sandbox: a Sound checkbox on both Launch tabs (passes `--no-sound` when off). The title screen carries the CC BY 4.0 credit line. Tests: `tests/test_audio.py` (15, dummy audio device) + render/sandbox additions: 91 passed, 7 skipped (audio, render, sandbox, checkpoints).
+* **Files:** Created `configs/demo/audio.yaml`, `racer/render/gearbox.py`, `engine_sound.py`, `audio.py`, `tests/test_audio.py`; edited `racer/render/app.py`, `arena.py`, `menu.py`, `scripts/demo.py`, `configs/demo/arena.yaml`, `racer/sandbox/pages/launch.py`, `tests/test_render.py`, `tests/test_sandbox.py`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T126: Evolution Race
 

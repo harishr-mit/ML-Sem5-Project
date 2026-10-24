@@ -947,3 +947,8 @@ def test_demo_argv_extra_arguments_come_last():
     from racer.sandbox.launcher import demo_argv
     argv = demo_argv("x", ["A", "B"], title="T", extra=["--gradient"])
     assert argv[-1] == "--gradient" and argv[:4] == ["--track", "x", "--models", "A"]
+
+
+def test_launch_sound_checkbox_adds_no_sound_only_when_unchecked():
+    from racer.sandbox.pages.launch import _sound_args
+    assert _sound_args(True) == [] and _sound_args(False) == ["--no-sound"]

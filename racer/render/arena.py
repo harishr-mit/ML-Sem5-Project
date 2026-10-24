@@ -18,6 +18,7 @@ import pygame
 
 from racer.config import load_preset
 from racer.render.app import Context
+from racer.render.audio import CarAudio
 from racer.render.ui import ModelPicker, Selection
 from racer.track.io import track_folders
 
@@ -83,6 +84,7 @@ def arena_keys(quit_on_esc: bool) -> list[tuple[str, str]]:
         ("Space", "pause"),
         ("+ / −", "sim speed"),
         ("mouse wheel", "zoom"),
+        ("S", "sound on / off"),
         ("H", "hide / show this list"),
         ("Esc", "quit" if quit_on_esc else "back to the picker"),
     ]
@@ -157,6 +159,10 @@ def run_race(ctx: Context, sel: Selection) -> str:
     key_items = arena_keys(quit_on_esc=ctx.direct)
     rows: list = []
     acc = 0.0
+    audio = ctx.audio
+    was_paused = False
+    if audio is not None:
+        audio.reset()
     frame = 0
     frame_ms: list[float] = []
     x, y, _ = race.cars[0].pose
@@ -192,6 +198,8 @@ def run_race(ctx: Context, sel: Selection) -> str:
                     show_labels = not show_labels
                 elif k == pygame.K_h:
                     show_keys = not show_keys
+                elif k == pygame.K_s and ctx.audio is not None:
+                    ctx.audio.toggle()
                 elif k == pygame.K_SPACE:
                     paused = not paused
                 elif k in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
@@ -200,6 +208,7 @@ def run_race(ctx: Context, sel: Selection) -> str:
                     speed_i = max(speed_i - 1, 0)
 
         # ---- simulate whole physics substeps (60 Hz × sim speed)
+        n = 0
         if not paused:
             acc += speeds[speed_i]
             n = int(acc)
@@ -213,6 +222,14 @@ def run_race(ctx: Context, sel: Selection) -> str:
         # ---- draw
         sc = race.cars[selected]
         x, y, th = sc.pose
+        if audio is not None:
+            audio.follow(selected)
+            if paused != was_paused:
+                audio.pause(paused)
+            was_paused = paused
+            if n:
+                c = sc.env.car
+                audio.update(n / 60.0, CarAudio(c.speed, c.throttle, c.brake, c.v_lat, c.sliding))
         cam.update(x, y, sc.env.car.vx, sc.env.car.vy, 0.0 if paused else speeds[speed_i],
                    race.track.field.extent, fit_w)
         world.draw(screen, cam)
@@ -263,6 +280,9 @@ def run_race(ctx: Context, sel: Selection) -> str:
         hud.keys(screen, key_items, show_keys)
         fps = labels.get(f"fps {clock.get_fps():3.0f}", colours["hud_dim"])
         screen.blit(fps, (12, 12))
+        if audio is not None:
+            screen.blit(labels.get(audio.label + (f" · gear {audio.gear}" if audio.enabled else ""),
+                                   colours["hud_dim"]), (82, 12))
 
         pygame.display.flip()
         frame += 1
@@ -278,4 +298,6 @@ def run_race(ctx: Context, sel: Selection) -> str:
         dt_ms = clock.tick(dcfg["fps"] if not ctx.screenshot else 0)
         if ctx.screenshot and race.started and not paused:
             frame_ms.append(dt_ms)       # headless: uncapped frame times while racing (T51)
+    if audio is not None:
+        audio.stop()
     return result

@@ -200,3 +200,10 @@ def test_evolution_race_headless_from_the_command_line(tmp_path):
                        capture_output=True, text=True, timeout=300)
     assert r.returncode == 0, r.stderr[-2000:]
     assert out.is_file() and out.stat().st_size > 10_000
+
+
+def test_title_screen_carries_the_attribution_line():
+    """The CC BY 4.0 engine sound must be credited on the demo's title screen (assets/LICENSES.md)."""
+    from racer.config import load_preset
+    credits = load_preset("demo", "arena")["credits"]
+    assert "skyernaklea" in credits and "CC BY 4.0" in credits

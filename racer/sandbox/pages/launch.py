@@ -76,13 +76,14 @@ def render() -> None:
             with st.expander(f"{len(blocked)} model(s) can't run on this engine and are hidden"):
                 for m, why in blocked.items():
                     st.markdown(f"- `{m}`: {why}")
-        track, laps, baseline, fair = _race_options("ln", names, acfg, pre_track)
+        track, laps, baseline, fair, sound = _race_options("ln", names, acfg, pre_track)
         n_cars = len(picked) + int(baseline)
         too_many = n_cars > max_cars
         if too_many:
             st.error(f"{n_cars} cars: the arena takes at most {max_cars}.")
         st.button("Launch", type="primary", key="ln_go", disabled=not n_cars or too_many, on_click=_do_launch,
-                  kwargs={"track": track, "models": list(picked), "laps": laps, "baseline": baseline, "fair": fair})
+                  kwargs={"track": track, "models": list(picked), "laps": laps, "baseline": baseline, "fair": fair,
+                          "extra": _sound_args(sound)})
 
     with tab_evo:
         st.markdown("The checkpoints of one run race each other: early ones crash, later ones are faster. "
@@ -99,7 +100,7 @@ def render() -> None:
             strategy = c_a.selectbox("Which checkpoints", list(STRATEGIES), key="evo_strategy",
                                      format_func=lambda k: STRATEGIES[k])
             count = int(c_b.number_input("N", 1, max(len(cps), 1), min(6, max(len(cps), 1)), key=f"evo_n_{run_id}"))
-            track, laps, baseline, fair = _race_options("evo", names, acfg)
+            track, laps, baseline, fair, sound = _race_options("evo", names, acfg)
             usable = [c for c in cps if not s.problems(c["model_id"])]
             chosen = choose(usable, strategy, count)[: max_cars - int(baseline)]
             st.caption(f"{len(chosen)} cars: " + ", ".join(f"{int(c.get('steps') or 0) // 1000}k" for c in chosen))
@@ -107,7 +108,7 @@ def render() -> None:
                       on_click=_do_launch, kwargs={"track": track, "models": [c["model_id"] for c in chosen],
                                                    "laps": laps, "baseline": baseline, "fair": fair,
                                                    "label": f"evolution of {run_id}",
-                                                   "extra": ["--gradient"]})
+                                                   "extra": ["--gradient", *_sound_args(sound)]})
 
     st.header("Game windows")
     items = _launcher().instances()
@@ -132,10 +133,14 @@ def render() -> None:
                     st.code(tail, language="text")
 
 
+def _sound_args(sound: bool) -> list[str]:
+    return [] if sound else ["--no-sound"]
+
+
 def _race_options(prefix: str, names: list[str], acfg: dict,
-                  chosen: str | None = None) -> tuple[str, int, bool, bool]:
+                  chosen: str | None = None) -> tuple[str, int, bool, bool, bool]:
     s = store()
-    c1, c2, c3, c4 = st.columns([3, 1.2, 1.4, 1.4])
+    c1, c2, c3, c4, c5 = st.columns([3, 1.2, 1.4, 1.4, 1.0])
     if chosen in names:
         st.session_state.pop(f"{prefix}_track", None)     # the hand-over wins over the last choice
     default = chosen if chosen in names else "technical"
@@ -146,8 +151,10 @@ def _race_options(prefix: str, names: list[str], acfg: dict,
                            help="The hand-coded PID driver (E8), as a reference.")
     fair = c4.checkbox("Same physics for all", key=f"{prefix}_fair",
                        help=f"Every car on the '{acfg['fair_physics']}' physics preset instead of its own.")
+    sound = c5.checkbox("Sound", value=True, key=f"{prefix}_sound",
+                        help="Engine and tyre sound in the game window (S toggles it there). On when watching a race.")
     img = s.track_preview(track)
     if img:
         with st.expander("Map preview"):
             st.image(str(img), width=420)
-    return track, laps, baseline, fair
+    return track, laps, baseline, fair, sound

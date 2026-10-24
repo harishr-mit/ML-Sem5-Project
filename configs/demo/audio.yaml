@@ -1,0 +1,42 @@
+# Audio for the game windows (PROJECT_CONTEXT §10.4, D28): engine with a cosmetic gearbox, tyre screech.
+# Sound plays for the followed car only. It is on when watching a race and off for training,
+# the sandbox and analysis (`demo.py --no-sound`, the sandbox's Sound checkbox, the S key).
+
+default_on: true              # game windows start with sound on (headless screenshot runs: off unless --sound)
+master_volume: 0.8
+
+clips:                        # per-clip gain (0-1); the recordings keep their natural loudness
+  idle_loop: 0.9              # idle is ~20 dB quieter than a full rev
+  rev_up: 0.55
+  high_loop: 0.5
+  rev_down: 0.6
+  tyre_loop: 0.6
+  tyre_short: 0.7
+
+engine:
+  throttle_on: 0.15           # gas above this = throttle pressed (below throttle_off = released)
+  throttle_off: 0.05
+  drift_tol: 0.06             # re-seek when the clip's pitch is more than 6 % (~100 cents) from the car's rpm
+  min_reseek_s: 0.25          # never re-seek more often than this (continuous AI gas would chatter)
+  crossfade_s: 0.04           # crossfade when seeking inside a clip
+  high_crossfade_s: 0.06      # rev_up → high_loop at the top
+  idle_ratio_max: 1.06        # rpm at or below this with the throttle off = idle loop
+  throttle_gain: 0.3          # volume = clip gain × (1 − throttle_gain + throttle_gain × throttle)
+
+gearbox:                      # cosmetic: sound and HUD only, physics has no gears
+  gears: 5
+  top_speed_ms: 70.0          # speed at which the top gear reaches shift_up_ratio
+  shift_up_ratio: 2.85        # the top of rev_up
+  after_shift_ratio: 2.0      # rpm ratio right after an upshift
+  shift_down_ratio: 1.4
+  clutch_min_ratio: 1.2       # 1st gear at very low speed with the throttle pressed (clutch slip)
+  shift_cooldown_s: 0.3
+
+tyres:
+  slip_ref_ms: 4.0            # sideways speed that counts as full slip
+  sliding_floor: 0.6          # intensity while the friction-circle limit is exceeded
+  fade_s: 0.08                # loop volume fade in/out
+  onset: 0.5                  # intensity that starts a short one-shot
+  hard_brake: 0.9             # brake value (with speed above hard_brake_speed_ms) that also starts one
+  hard_brake_speed_ms: 15.0
+  oneshot_cooldown_s: 1.5

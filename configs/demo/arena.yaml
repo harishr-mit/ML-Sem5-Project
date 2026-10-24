@@ -39,4 +39,5 @@ label_offset_m: 4.0           # car label drawn this far above the car
 leaderboard_width: 460
 trail_length: 240             # substeps of trail per car (4 s)
 selected_trail_length: 900    # longer trail for the followed car
+credits: "Engine sound: Delorean DMC-12 V6 PRV engine by skyernaklea (freesound.org/s/623436), CC BY 4.0, edited. Tyres: johnnydekk (CC0). Sprites: Kenney (CC0). Textures: ambientCG (CC0). Fonts: SIL OFL 1.1."   # CC BY 4.0 needs this on the title screen
 show_keys_at_start: true      # key list (bottom right) shown when a race starts; H hides/shows it (T82)

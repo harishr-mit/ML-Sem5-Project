@@ -36,6 +36,7 @@ class Context:
     frames: int = 600
     direct: bool = False                  # the command line chose the cars: Esc quits instead of going back
     models: dict[str, Any] = field(default_factory=dict)    # model id → LoadedModel, loaded once
+    audio: Any = None                     # racer.render.audio.AudioController, or None (no sound at all)
 
 
 @dataclass(frozen=True)
@@ -63,7 +64,7 @@ MODES: list[Mode] = [
 
 
 def build_context(*, track: str, laps: int | None, sim_speed: float, screenshot: str | None, frames: int,
-                  title: str | None, direct: bool) -> Context:
+                  title: str | None, direct: bool, sound: bool | None = None) -> Context:
     """Open the window and load the configs (call after SDL_VIDEODRIVER is set for headless runs)."""
     acfg = load_preset("demo", "arena")
     dcfg = load_preset("demo", "render")["debug"]
@@ -74,9 +75,16 @@ def build_context(*, track: str, laps: int | None, sim_speed: float, screenshot:
     fonts = (load_font(dcfg["font"], int(dcfg["font_size"])), load_font(dcfg["font"], int(dcfg["font_size"] * 3)),
              load_font(dcfg["font"], int(acfg["label_font_size"])))
     rows = [{k: typed(v) for k, v in r.items()} for r in Registry().models()]
-    return Context(screen, pygame.time.Clock(), fonts, colours, acfg, dcfg, rows, track=track,
-                   laps=laps or int(acfg["race"]["laps"]), sim_speed=sim_speed, screenshot=screenshot,
-                   frames=frames, direct=direct)
+    ctx = Context(screen, pygame.time.Clock(), fonts, colours, acfg, dcfg, rows, track=track,
+                  laps=laps or int(acfg["race"]["laps"]), sim_speed=sim_speed, screenshot=screenshot,
+                  frames=frames, direct=direct)
+    # D28: sound is on when watching a race; headless captures stay silent unless asked (--sound).
+    acfg_audio = load_preset("demo", "audio")
+    want = sound if sound is not None else (bool(acfg_audio["default_on"]) and not screenshot)
+    if want or sound is False or not screenshot:
+        from racer.render.audio import AudioController
+        ctx.audio = AudioController(acfg_audio, enabled=want)     # S toggles it in every race window
+    return ctx
 
 
 def preset_selection(ctx: Context, *, models: list[str] | None, run: str | None, best: bool, every: int,
@@ -108,7 +116,7 @@ def run(ctx: Context, preset: Selection | None = None, mode: str | None = None) 
     pick = by_key["arena"] if preset is not None else by_key.get(mode or "")
     while True:
         if pick is None:
-            menu = Menu(MODES, ctx.screen.get_size(), ctx.fonts, ctx.colours)
+            menu = Menu(MODES, ctx.screen.get_size(), ctx.fonts, ctx.colours, credits=str(ctx.acfg.get("credits", "")))
             while menu.done is None and not menu.quit:
                 for ev in pygame.event.get():
                     menu.handle(ev)
@@ -122,5 +130,7 @@ def run(ctx: Context, preset: Selection | None = None, mode: str | None = None) 
         if result == "quit" or ctx.direct or mode is not None or preset is not None:
             break
         pick = None
+    if ctx.audio is not None:
+        ctx.audio.close()
     pygame.quit()
     return 0

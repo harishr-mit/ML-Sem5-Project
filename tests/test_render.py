@@ -82,7 +82,7 @@ def test_arena_key_list_matches_the_key_handling():
         demo = importlib.import_module("demo")
     finally:
         sys.path.pop(0)
-    src = (ROOT / "scripts" / "demo.py").read_text(encoding="utf-8")
+    src = (ROOT / "racer" / "render" / "arena.py").read_text(encoding="utf-8")
     body = src[src.index("def run_race("):]
     handled = set(re.findall(r"pygame\.K_([A-Za-z0-9_]+)", body))
     listed = " ".join(k for k, _ in demo.arena_keys(False)).lower()
@@ -98,3 +98,53 @@ def test_arena_key_list_matches_the_key_handling():
     hud = RaceHud(pygame.font.Font(None, 20), pygame.font.Font(None, 40), colours, 460)
     hud.keys(screen, demo.arena_keys(False), True)
     hud.keys(screen, demo.arena_keys(False), False)
+
+
+def test_mode_menu_navigation():
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    from racer.config import load_preset
+    from racer.render.app import MODES
+    from racer.render.menu import Menu
+
+    pygame.init()
+    screen = pygame.display.set_mode((1280, 800))
+    fonts = (pygame.font.Font(None, 22), pygame.font.Font(None, 60), pygame.font.Font(None, 16))
+    colours = {k: tuple(v) for k, v in load_preset("demo", "render")["debug"]["colours"].items()}
+    menu = Menu(MODES, (1280, 800), fonts, colours)
+    menu.draw(screen)
+    assert len(menu.rects) == len(MODES)
+    key = lambda k: pygame.event.Event(pygame.KEYDOWN, key=k, unicode="", mod=0)     # noqa: E731
+    menu.handle(key(pygame.K_DOWN))
+    assert menu.index == (1 % len(MODES))
+    menu.handle(key(pygame.K_UP))
+    assert menu.index == 0
+    menu.handle(key(pygame.K_UP))
+    assert menu.index == len(MODES) - 1                                     # wraps
+    menu.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=menu.rects[0].center))
+    assert menu.done == MODES[0].key
+    menu2 = Menu(MODES, (1280, 800), fonts, colours)
+    menu2.handle(key(pygame.K_ESCAPE))
+    assert menu2.quit and menu2.done is None
+    pygame.quit()
+
+
+def test_preset_selection_from_the_command_line():
+    from types import SimpleNamespace
+    from racer.render.app import preset_selection
+
+    rows = [{"model_id": f"R001_x@{s}k", "run_id": "R001", "steps": s * 1000, "is_best": s == 200, "path": "m"}
+            for s in (100, 200, 300, 400)]
+    ctx = SimpleNamespace(reg_rows=rows, acfg={"max_cars": 3}, track="technical", laps=2)
+    assert preset_selection(ctx, models=None, run=None, best=False, every=1, baseline=False) is None
+    s = preset_selection(ctx, models=None, run="R001", best=False, every=2, baseline=True)
+    assert s.models == ["R001_x@100k", "R001_x@300k"] and s.baseline and s.track == "technical" and s.laps == 2
+    assert preset_selection(ctx, models=None, run="R001", best=False, every=1, baseline=True).models ==         ["R001_x@100k", "R001_x@200k"]                                      # max_cars leaves room for the baseline
+    assert preset_selection(ctx, models=None, run=None, best=True, every=1, baseline=False).models == ["R001_x@200k"]
+    try:
+        preset_selection(ctx, models=None, run="R999", best=False, every=1, baseline=False)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("an empty selection must raise")

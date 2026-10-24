@@ -172,7 +172,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T121: E10 queue finished (2026-10-24); backup checked; E10 results recorded (PROJECT_CONTEXT §11/§16, `registry/run_notes.yaml`); `feat/draw-a-track` merged into `main`, full suite 281 passed. Worktree removed in T122.
 * [x] T122: Remove the dev worktree and copy the drawn track `wiggly_wiggly` to `main` (owner, 2026-10-24).
 * [x] T123: Owner (2026-10-24): finish all demo and analysis work, then experiment freely. Plan `docs/DEMO_PLAN.md`, decision D28. Worktree `ML Sem5 Project - dev`, branch `feat/demo-complete`. Done when: plan and decisions committed.
-* [ ] T124: `demo.py` shell: mode menu (arena, Evolution Race, Human vs AI, swarm), shared window and state. Done when: headless, the menu starts each mode and returns.
+* [x] T124: `demo.py` shell: mode menu (arena, Evolution Race, Human vs AI, swarm), shared window and state. Done when: headless, the menu starts each mode and returns.
 * [ ] T125: Audio (§10.4): `gearbox.py`, `audio.py`, toggle `S` + button in every race window; on when watching a race, off for training/sandbox/analysis; `--sound/--no-sound`; Launch checkbox. Done when: tests for gearbox ratios and RPM→offset (dummy audio driver) and the toggle pass.
 * [ ] T126: Evolution Race: pick a run and checkpoints (every N, evenly spaced, hand-picked, best-validated), labels by step; sandbox Launch option. Done when: a scripted race of 4 checkpoints runs headless.
 * [ ] T127: Human vs AI: keyboard and gamepad, ABS assist, physics choice; sandbox *Drive it yourself* (a game window). Done when: key events move a car headless and Launch builds the command.
@@ -203,6 +203,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T124: Demo shell and mode menu
+
+* **Status:** DONE. The arena code moved from `scripts/demo.py` into `racer/render/arena.py`; `racer/render/app.py` holds the shared `Context`, the `MODES` registry and the run loop; `racer/render/menu.py` is the mode menu (Up/Down, number keys, click, Esc). `demo.py` is now thin (`--mode` opens a mode directly; the old options work as before). Later modes register in `MODES`. Tests: menu navigation, command-line selection (`tests/test_render.py`, 8 passed, including the headless baseline race).
+* **Files:** Created `racer/render/app.py`, `arena.py`, `menu.py`; edited `scripts/demo.py`, `tests/test_render.py`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T123: Plan for finishing the demo and the analysis workbench (D28)
 

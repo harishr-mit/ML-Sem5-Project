@@ -1,9 +1,10 @@
 """Neuroevolution runs (D26, docs/NEUROEVOLUTION_PLAN.md): the evolution loop, its worker pool,
 the lineage database, pause/resume, and exporting a car as a model folder.
 
-A run lives in ``outputs/evolve/<run_name>/``: ``state.npz`` (the population to drive next;
-deleted when the run finishes), ``lineage.sqlite`` (every car of every generation),
-``snapshot.yaml`` (the run's snapshot, reused on resume) and ``stop.request`` (pause).
+A run lives in ``outputs/evolve/<run_name>/``: ``state.npz`` (the population to drive next; kept
+when the run finishes, so it can be extended, D29), ``lineage.sqlite`` (every car of every
+generation), ``snapshot.yaml`` (the run's snapshot, reused on resume), ``finished.json`` (the
+run has stopped) and ``stop.request`` (pause).
 Generation ``g`` draws its map (and, with ``ga.start: random``, its start) from ``default_rng([seed, g, 0])`` and is bred from
 ``default_rng([seed, g, 1])``, and every car drives alone from a fully specified start, so a
 run is identical however often it was paused and however many workers drove it.
@@ -67,12 +68,15 @@ def training_maps(env_config: Mapping[str, Any]) -> list[str]:
     return [f["track"] for f in tracks["fixed"]]
 
 
-def settings_key(env_config: Mapping[str, Any], train_cfg: Mapping[str, Any]) -> str:
-    """What must match to resume a run: everything except the worker count, the generation budget
-    and which checkpoints are evaluated afterwards."""
+def settings_key(env_config: Mapping[str, Any], train_cfg: Mapping[str, Any], legacy: bool = False) -> str:
+    """What must match to resume a run: everything except the worker count, the generation budget,
+    the patience (they only decide when to stop; D29) and which checkpoints are evaluated afterwards.
+    ``legacy``: the key of states saved before D29, which included the patience."""
     train = json.loads(json.dumps(train_cfg))
     for k in RESUME_FREE:
         train["ga"].pop(k, None)
+    if not legacy:
+        train["ga"].get("validation", {}).pop("patience", None)
     blob = json.dumps({"env": env_config, "train": train}, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()
 
@@ -243,8 +247,9 @@ class Evolution:
 
     def __init__(self, run_dir: Path, env_config: Mapping[str, Any], train_cfg: Mapping[str, Any],
                  obs_dim: int, act_dim: int, checkpoint: Checkpoint | None = None, writer=None,
-                 log: Callable[[str], None] = print) -> None:
+                 log: Callable[[str], None] = print, extend: bool = False) -> None:
         self.run_dir = Path(run_dir)
+        self.extend = extend          # continue a finished run (D29); otherwise it is refused
         self.env_config, self.train_cfg = env_config, train_cfg
         self.p = from_dict(GAParams, train_cfg["ga"], where="train.ga")
         if self.p.start not in ("line", "random"):
@@ -268,16 +273,56 @@ class Evolution:
         key = settings_key(self.env_config, self.train_cfg)
         if self.state_path.is_file():
             st = State.load(self.state_path)
-            if st.settings != key:
+            if st.settings not in (key, settings_key(self.env_config, self.train_cfg, legacy=True)):
                 raise ValueError(f"{self.run_dir.name} was started with different settings; only ga."
-                                 f"{', ga.'.join(RESUME_FREE)} may change when resuming")
+                                 f"{', ga.'.join(RESUME_FREE)} and ga.validation.patience may change when resuming")
+            st.settings = key
             self.log(f"[{self.run_dir.name}] resuming at generation {st.generation} "
                      f"({st.env_steps:,} env steps so far)")
+            return st
+        if self.extend and is_finished(self.run_dir):       # finished before D29: no state was kept
+            st = self.restore_state()
+            self.log(f"[{self.run_dir.name}] state restored from the lineage: resuming at generation "
+                     f"{st.generation} ({st.env_steps:,} env steps so far)")
+            st.save(self.state_path)
             return st
         g0 = ne.first_generation(self.sizes, self.p.population, self._rng(0, _BREED))
         st = State(0, g0.weights, g0.parents, g0.seeds, settings=key)
         st.save(self.state_path)          # from now on a rerun finds and resumes this run, even after a crash
         return st
+
+    def restore_state(self) -> State:
+        """The state a run would have kept when it finished, rebuilt from its lineage (runs that
+        finished before D29 kept none): the last driven generation replayed car by car, bred into
+        the next one, and the validation counters replayed with ``min_gain``."""
+        lin = Lineage(self.run_dir / "lineage.sqlite")
+        try:
+            last = lin.db.execute("SELECT MAX(generation) FROM cars").fetchone()[0]
+            if last is None:
+                raise ValueError(f"{self.run_dir.name} has no driven generation to restore")
+            pop = None
+            for g in range(last + 1):
+                rows = lin.db.execute("SELECT parent, seed FROM cars WHERE generation = ? ORDER BY car", (g,)).fetchall()
+                if g == 0:
+                    pop = np.stack([ne.init_weights(self.sizes, int(s)) for _, s in rows])
+                else:
+                    pop = np.stack([pop[p] if s == ne.NO_NOISE else ne.mutate(pop[p], self.p.sigma, int(s))
+                                    for p, s in rows])
+            scores = np.array([r[0] for r in lin.db.execute(
+                "SELECT fitness FROM cars WHERE generation = ? ORDER BY car", (last,))])
+            env_steps = lin.db.execute("SELECT env_steps FROM generations WHERE generation = ?", (last,)).fetchone()[0]
+            best, gain = None, 0
+            for g, val in lin.db.execute("SELECT generation, validation FROM generations "
+                                         "WHERE validation IS NOT NULL ORDER BY generation"):
+                if best is None or val > best * (1 + float(self.p.validation["min_gain"])):
+                    best, gain = val, g
+        finally:
+            lin.close()
+        done = self.run_dir / FINISHED
+        wall_s = float(json.loads(done.read_text(encoding="utf-8")).get("wall_s", 0.0)) if done.is_file() else 0.0
+        off = ne.next_generation(pop, scores, self.p.n_elite, self.p.sigma, self._rng(last + 1, _BREED))
+        return State(last + 1, off.weights, off.parents, off.seeds, int(env_steps), best, gain, wall_s,
+                     settings_key(self.env_config, self.train_cfg))
 
     def _start(self, generation: int) -> dict[str, Any]:
         """Map and start of a generation, the same for every car."""
@@ -333,7 +378,13 @@ class Evolution:
         ``pause_after``: pause once this many generations are done (tests).
         """
         self.run_dir.mkdir(parents=True, exist_ok=True)
+        finished = is_finished(self.run_dir)
+        if finished and not self.extend:
+            raise RuntimeError(f"{self.run_dir.name} has finished; extend it to continue it (train.py --extend)")
         st = self._initial_state()
+        if finished:
+            (self.run_dir / FINISHED).unlink()      # running again: a crash from now on resumes it as an unfinished run
+        kept: State | None = None
         lineage = Lineage(self.run_dir / "lineage.sqlite")
         lineage.set_meta(sizes=self.sizes, sigma=self.p.sigma, seed=self.seed, population=self.p.population)
         old_handler = signal.signal(signal.SIGINT, self._on_sigint)
@@ -378,6 +429,10 @@ class Evolution:
                                         validation)
                     if done:
                         outcome = "finished"
+                        off = ne.next_generation(st.weights, scores, self.p.n_elite, self.p.sigma,
+                                                 self._rng(g + 1, _BREED))
+                        kept = State(g + 1, off.weights, off.parents, off.seeds, st.env_steps, st.best_validation,
+                                     st.last_gain, st.wall_s, st.settings)       # where an extension continues (D29)
                         reason = "validation plateau" if plateau else "generation budget"
                         self.log(f"[{self.run_dir.name}] finished after generation {g} ({reason}); "
                                  f"best validation {st.best_validation}")
@@ -402,10 +457,11 @@ class Evolution:
             lineage.close()
         if outcome == "finished":
             st.wall_s += time.perf_counter() - t_start
+            kept.wall_s = st.wall_s
+            kept.save(self.state_path)          # before finished.json: a crash in between leaves a resumable run
             (self.run_dir / FINISHED).write_text(json.dumps(
                 {"generations": st.generation + 1, "env_steps": st.env_steps, "wall_s": round(st.wall_s, 1),
                  "best_validation": st.best_validation}), encoding="utf-8")
-            self.state_path.unlink(missing_ok=True)
         self.final = st
         return outcome
 

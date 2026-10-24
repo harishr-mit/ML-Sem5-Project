@@ -25,8 +25,8 @@ def small_run(workers=1, **ga):
     return env_config, train
 
 
-def evolution(run_dir, env_config, train, checkpoint=None):
-    return Evolution(run_dir, env_config, train, obs_dim=10, act_dim=2, checkpoint=checkpoint, log=lambda s: None)
+def evolution(run_dir, env_config, train, checkpoint=None, **kw):
+    return Evolution(run_dir, env_config, train, obs_dim=10, act_dim=2, checkpoint=checkpoint, log=lambda s: None, **kw)
 
 
 def lineage_rows(run_dir):
@@ -99,7 +99,7 @@ def test_validation_plateau_finishes_with_a_final_checkpoint(tmp_path):
     assert ev.run() == "finished"
     assert ev.final.generation == 5                  # first validation after gen 1, plateau 4 generations later
     assert saved == [1, 3, 5]                        # a checkpoint at every validation
-    assert is_finished(tmp_path) and not (tmp_path / "state.npz").exists()
+    assert is_finished(tmp_path) and State.load(tmp_path / "state.npz").generation == 6   # kept: the next generation (D29)
 
 
 def test_generation_budget_finishes_with_a_validated_checkpoint(tmp_path):
@@ -161,6 +161,70 @@ def test_a_new_run_can_be_resumed_from_its_first_generation(tmp_path):
     env_config, train = small_run()
     evolution(tmp_path, env_config, train)._initial_state()
     assert State.load(tmp_path / "state.npz").generation == 0
+
+
+def plateau_run(patience):
+    """Validation every 2 generations, and no gain ever counts after the first: stops `patience` later."""
+    return small_run(validation={"every": 2, "tracks": 1, "stream": 2, "patience": patience, "min_gain": 1e9})
+
+
+def same_state(a, b):
+    assert (a.generation, a.env_steps, a.best_validation, a.last_gain) == (b.generation, b.env_steps,
+                                                                           b.best_validation, b.last_gain)
+    assert np.array_equal(a.weights, b.weights) and np.array_equal(a.parents, b.parents)
+    assert np.array_equal(a.seeds, b.seeds)
+
+
+def test_the_patience_is_not_part_of_the_settings_key():
+    (env_config, short), (_, long), (_, other) = plateau_run(4), plateau_run(1000), plateau_run(4)
+    other["ga"]["validation"]["min_gain"] = 0.05           # last_gain was computed with min_gain: it stays fixed
+    assert settings_key(env_config, short) == settings_key(env_config, long)
+    assert settings_key(env_config, short) != settings_key(env_config, other)
+
+
+def test_a_finished_run_is_only_restarted_by_extending_it(tmp_path):
+    env_config, train = plateau_run(4)
+    assert evolution(tmp_path, env_config, train).run() == "finished"
+    with pytest.raises(RuntimeError, match="finished"):
+        evolution(tmp_path, env_config, train).run()
+    assert is_finished(tmp_path)                          # refusing left it as it was
+
+
+def test_extending_a_finished_run_equals_an_uninterrupted_run_with_the_larger_patience(tmp_path):
+    env_config, short = plateau_run(4)
+    _, long = plateau_run(10)
+    assert evolution(tmp_path / "a", env_config, short).run() == "finished"          # stops at generation 5
+    ext = evolution(tmp_path / "a", env_config, long, extend=True)
+    assert ext.run() == "finished" and not any((tmp_path / "a").glob("*.partial"))
+    full = evolution(tmp_path / "b", env_config, long)
+    assert full.run() == "finished"
+    assert ext.final.generation == full.final.generation > 5
+    same_state(State.load(tmp_path / "a" / "state.npz"), State.load(tmp_path / "b" / "state.npz"))
+    assert lineage_rows(tmp_path / "a") == lineage_rows(tmp_path / "b")
+    assert is_finished(tmp_path / "a")
+
+
+def test_a_crash_during_an_extension_leaves_a_resumable_run(tmp_path):
+    env_config, short = plateau_run(4)
+    _, long = plateau_run(1000)
+    evolution(tmp_path, env_config, short).run()
+    evolution(tmp_path, env_config, long, extend=True).run(pause_after=9)
+    assert not is_finished(tmp_path)                       # unfinished while it runs, so a plain resume continues
+    assert evolution(tmp_path, env_config, long).run(pause_after=11) == "paused"
+    assert State.load(tmp_path / "state.npz").generation == 11
+
+
+def test_a_run_finished_before_d29_is_restored_from_its_lineage(tmp_path):
+    env_config, train = plateau_run(4)
+    assert evolution(tmp_path, env_config, train).run() == "finished"
+    kept = State.load(tmp_path / "state.npz")
+    (tmp_path / "state.npz").unlink()                      # as for R020-R024, which finished without it
+    restored = evolution(tmp_path, env_config, train, extend=True).restore_state()
+    same_state(restored, kept)
+    assert restored.settings == kept.settings and restored.wall_s == pytest.approx(kept.wall_s, abs=0.1)      # finished.json rounds it to 0.1 s
+    _, long = plateau_run(10)
+    assert evolution(tmp_path, env_config, long, extend=True).run() == "finished"      # extend restores by itself
+    assert State.load(tmp_path / "state.npz").generation > 6
 
 
 def test_maps_must_be_named():

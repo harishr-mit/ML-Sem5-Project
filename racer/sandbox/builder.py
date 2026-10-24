@@ -399,3 +399,8 @@ def estimate_minutes(steps: int | None, runs_ahead: int, parallel: int, cfg: Map
     per_m = float(q["minutes_per_million_parallel" if parallel > 1 else "minutes_per_million_alone"])
     run = steps / 1e6 * per_m + steps / 100_000 * float(q["eval_minutes_per_checkpoint"])
     return {"run": run, "queue": run * max(runs_ahead, 1) / max(parallel, 1)}
+
+
+def drop_marked(rows: list[dict[str, Any]], marked: list[bool]) -> list[dict[str, Any]]:
+    """``rows`` without the ones whose flag is true (the Build page's *Remove ticked rays*, T134)."""
+    return [r for r, m in zip(rows, marked) if not m]

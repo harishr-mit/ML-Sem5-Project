@@ -127,14 +127,27 @@ def _inputs(base: B.Plan, v: int) -> list[dict[str, Any]]:
                 "Add or remove rows to change them.")
     use_rays = st.checkbox("Use rays", value="rays" in cur, key=f"bq_userays_{v}")
     if use_rays:
-        rays = cur.get("rays", {}).get("rays") or [{"angle_deg": 0.0, "range_m": 200.0}]
-        df = st.data_editor(pd.DataFrame(rays, columns=["angle_deg", "range_m"]), num_rows="dynamic",
-                            key=f"bq_rays_{v}", hide_index=True,
+        rows_key, n_key = f"bq_raysrows_{v}", f"bq_raysn_{v}"
+        rays = st.session_state.get(rows_key)
+        if rays is None:
+            rays = cur.get("rays", {}).get("rays") or [{"angle_deg": 0.0, "range_m": 200.0}]
+        n_edit = st.session_state.get(n_key, 0)                 # a new editor key after each removal resets its edits
+        table = pd.DataFrame(rays, columns=["angle_deg", "range_m"])
+        table.insert(0, "remove", False)
+        df = st.data_editor(table, num_rows="dynamic", key=f"bq_rays_{v}_{n_edit}", hide_index=True,
                             column_config={
+                                "remove": st.column_config.CheckboxColumn("Remove", default=False,
+                                                                          help="Tick rays to delete, then press the button below."),
                                 "angle_deg": st.column_config.NumberColumn("Angle (°, + = left)", min_value=-180.0,
                                                                            max_value=180.0, step=1.0, required=True),
                                 "range_m": st.column_config.NumberColumn("Range (m)", min_value=1.0, max_value=500.0,
                                                                          step=5.0, required=True)})
+        marked = [bool(m) if pd.notna(m) else False for m in df["remove"]]
+        if st.button(f"Remove {sum(marked)} ticked ray(s)", disabled=not any(marked), key=f"bq_rmrays_{v}"):
+            kept = B.drop_marked([{"angle_deg": r.angle_deg, "range_m": r.range_m} for r in df.itertuples()], marked)
+            st.session_state[rows_key] = [r for r in kept if pd.notna(r["angle_deg"]) and pd.notna(r["range_m"])]
+            st.session_state[n_key] = n_edit + 1
+            st.rerun()
         ray_list = [{"angle_deg": float(r.angle_deg), "range_m": float(r.range_m)} for r in df.itertuples()
                     if pd.notna(r.angle_deg) and pd.notna(r.range_m)]
         ray_list.sort(key=lambda r: r["angle_deg"])

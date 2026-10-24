@@ -182,7 +182,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T131: Menus and HUD: leaderboard, results screen, minimap, key list `H`, camera (speed zoom, overview, cycle cars). Done when: the on-screen key list test passes.
 * [x] T132: Swarm view. Done when: many cars from one policy run at 60 FPS.
 * [x] T133: Performance: 20 cars with all effects and audio at 60 FPS. Done when: a bench script and a test threshold pass.
-* [ ] T134: Rays table: Delete column + *Remove ticked rays* button in Build & Queue. Done when: a page test removes chosen rows.
+* [x] T134: Rays table: Delete column + *Remove ticked rays* button in Build & Queue. Done when: a page test removes chosen rows.
 * [ ] T135: `racer/agents/telemetry.py` + `racer/sandbox/plots.py`: racing line, speed trace, g-g diagram, braking zones, registry plots (curves, ablation bars, E10). Done when: unit tests on small data pass.
 * [ ] T136: Sandbox *Workbench* page (live plots from the same runtime) + default plots on Overview; Compare links to it. Done when: headless page tests pass.
 * [ ] T137: `scripts/make_plots.py`: the PNG report set from the same functions. Done when: it writes the set from the registry.
@@ -203,6 +203,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T134: Delete rows in the rays table
+
+* **Status:** DONE. Build & Queue: the rays table has a Remove column; tick rays and press *Remove N ticked ray(s)* (the table keeps your other edits, the editor resets after each removal). The row logic is `builder.drop_marked` (tested). Streamlit's own row delete stays.
+* **Files:** Edited `racer/sandbox/pages/build.py`, `racer/sandbox/builder.py`, `tests/test_sandbox.py`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T133: Performance
 

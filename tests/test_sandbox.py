@@ -960,3 +960,12 @@ def test_demo_argv_drive_yourself():
     assert demo_argv("x", ["A"], baseline=True, human="default")[-2:] == ["--human", "default"]
     with pytest.raises(ValueError):
         demo_argv("x")
+
+
+def test_drop_marked_removes_only_the_ticked_rows():
+    from racer.sandbox.builder import drop_marked
+    rows = [{"angle_deg": a, "range_m": 100.0} for a in (-30.0, 0.0, 30.0)]
+    assert drop_marked(rows, [False, True, False]) == [rows[0], rows[2]]
+    assert drop_marked(rows, [False, False, False]) == rows
+    assert drop_marked(rows, [True, True, True]) == []
+    assert drop_marked([], []) == []

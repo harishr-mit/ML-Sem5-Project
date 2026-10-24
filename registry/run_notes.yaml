@@ -76,3 +76,15 @@ R019:
     at the barrier, and the policy''s exploration noise collapsed (std 0.04), so it never recovered. Best overall 7 %.
     A different total_steps changes the learning-rate decay from the first update, so "seed 1 again" does not repeat
     R015.'
+R020:
+  why: 'E10 control: neuroevolution on Training Ground only, 300 generations. Does it memorise one track like PPO did (E5: R006/R012, 0 % unseen)?'
+  outcome: 'Yes, it overfits like E5. Best @4015k (v2): seen 14 %, test maps 0 %, held-out 10 %, unseen 6 %, lap ratio 1.02.'
+R021:
+  why: 'E10 main run, seed 1: neuroevolution (rays7_lean, track limits, 7 training maps, one random map per generation, lap starts on the start line) until the validation plateau.'
+  outcome: 'Stopped at generation 919 (46.3M env steps, 45 min), best validation 1.368. Best evaluated checkpoint @46282k (the last one, not the best-validated one): seen 93 %, test maps 50 %, held-out 90 %, unseen 75 %, lap ratio 1.05. Best of 18 evaluated checkpoints, one seed.'
+R022:
+  why: 'E10 main run, seed 2 (owner T116): one seed can be lucky (PPO R015 vs R018/R019).'
+  outcome: 'Stopped at generation 899 (45.3M env steps, 35 min), best validation 1.367. Best evaluated checkpoint @40055k: seen 86 %, test maps 100 %, held-out 90 %, unseen 94 %, lap ratio 1.07. The two seeds differ on the test maps (50 % vs 100 %): single-seed results are not reliable. Best of 18 evaluated checkpoints.'
+R023:
+  why: 'E10 PPO under GA rules: the same 10 inputs (rays7_lean) and track limits on the same 7 maps, 5M steps like R015, so E10 compares the methods only.'
+  outcome: 'Best @1700k: 100 % on seen, test, held-out and unseen, lap ratio 0.975, in 5.0M env steps (46.6 min), about a tenth of the GA runs steps at similar wall-clock. Best of 50 evaluated checkpoints (the max of many noisy checkpoints is optimistic), one seed; R015/R018 showed that PPO results can fail to reproduce.'

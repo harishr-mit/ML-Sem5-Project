@@ -160,6 +160,46 @@ def cast_on_track(name: str, s: float, lateral: float, rays: Sequence[Mapping[st
     return tr, x, y, th, out
 
 
+def _road(ax, tr) -> None:
+    """Grass, the road between its edges, the dashed centreline and the start line (black square)."""
+    ax.set_facecolor(GRASS)
+    outer, inner = tr.edges(-tr.half_width), tr.edges(tr.half_width)
+    ring = np.vstack([outer, outer[:1], inner[::-1], inner[-1:]])
+    codes = ([MplPath.MOVETO] + [MplPath.LINETO] * (len(outer) - 1) + [MplPath.CLOSEPOLY]
+             + [MplPath.MOVETO] + [MplPath.LINETO] * (len(inner) - 1) + [MplPath.CLOSEPOLY])
+    ax.add_patch(PathPatch(MplPath(ring, codes), facecolor=ROAD, edgecolor=EDGE, lw=1.0, zorder=0))
+    cl = tr.centreline.points
+    ax.plot(cl[:, 0], cl[:, 1], color="white", lw=0.8, ls=(0, (6, 6)), zorder=1)
+    ax.plot([cl[0, 0]], [cl[0, 1]], marker="s", color="black", ms=5, zorder=2)
+
+
+def track_figure(tr, problems: Sequence[str] = ()):
+    """A whole track (e.g. just drawn): road, start line, driving direction, and the two
+    sections that are too close, if any, joined in red."""
+    cl = tr.centreline
+    fig, ax = plt.subplots(figsize=(7, 7))
+    _road(ax, tr)
+    p0, t0 = cl.points[0], cl.tangent[0] * max(25.0, cl.length / 40)
+    ax.annotate("", xy=p0 + t0, xytext=p0, arrowprops=dict(color="black", width=2, headwidth=8), zorder=3)
+    clash = tr.closest_sections()
+    if clash and clash[0] < tr.spec.width_m + tr.cfg["validation"]["clearance_m"]:
+        a, b = cl.points[clash[1]], cl.points[clash[2]]
+        ax.plot([a[0], b[0]], [a[1], b[1]], color="red", lw=3, marker="o", zorder=4)
+    k = np.abs(cl.curvature_smooth)
+    if 1.0 / max(k.max(), 1e-9) < tr.cfg["validation"]["min_corner_radius_m"]:
+        q = cl.points[int(np.argmax(k))]
+        ax.plot([q[0]], [q[1]], "o", ms=14, mfc="none", mec="red", mew=3, zorder=4)
+    pad = tr.half_width + tr.runoff
+    ax.set_xlim(cl.points[:, 0].min() - pad, cl.points[:, 0].max() + pad)
+    ax.set_ylim(cl.points[:, 1].min() - pad, cl.points[:, 1].max() + pad)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    title = f"{tr.name}: {cl.length:.0f} m, width {tr.spec.width_m:g} m (arrow = start, driving direction)"
+    ax.set_title("\n".join([title, *problems]), fontsize=9, color="red" if problems else "black")
+    return fig
+
+
 def ray_diagram_map(name: str, s: float, lateral: float,
                     models: Sequence[tuple[str, Sequence[Mapping[str, float]], Mapping[str, Any]]],
                     heading_offset_deg: float = 0.0, view_m: float | None = None):
@@ -170,15 +210,7 @@ def ray_diagram_map(name: str, s: float, lateral: float,
     reach = max((float(d) for *_, (_, _, _, _, ds) in casts for d in ds), default=60.0)
     half = view_m or max(40.0, min(reach * 1.1, 220.0))
     fig, ax = plt.subplots(figsize=(7, 7))
-    ax.set_facecolor(GRASS)
-    outer, inner = tr.edges(-tr.half_width), tr.edges(tr.half_width)
-    ring = np.vstack([outer, outer[:1], inner[::-1], inner[-1:]])
-    codes = ([MplPath.MOVETO] + [MplPath.LINETO] * (len(outer) - 1) + [MplPath.CLOSEPOLY]
-             + [MplPath.MOVETO] + [MplPath.LINETO] * (len(inner) - 1) + [MplPath.CLOSEPOLY])
-    ax.add_patch(PathPatch(MplPath(ring, codes), facecolor=ROAD, edgecolor=EDGE, lw=1.0, zorder=0))
-    cl = tr.centreline.points
-    ax.plot(cl[:, 0], cl[:, 1], color="white", lw=0.8, ls=(0, (6, 6)), zorder=1)
-    ax.plot([cl[0, 0]], [cl[0, 1]], marker="s", color="black", ms=5, zorder=2)
+    _road(ax, tr)
     for k, (label, rays, (_, cx, cy, cth, dists)) in enumerate(casts):
         col = COLOURS[k % len(COLOURS)]
         for r, d in zip(rays, dists):

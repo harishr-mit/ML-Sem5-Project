@@ -24,7 +24,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Last updated:** 2026-10-24 (Claude Opus 5.5). **Where we are:** start of Week 3. M1 and M2 reached; AI Sandbox built (T65–T75, T101, T106); map library + eval protocol v2; upgradable engine (D21–D23). **Neuroevolution (D26) built and merged to `main`** (PR #1, 2026-10-24; 256 tests pass at T107). Best PPO: `R015_t50_narrow7_s1@4600k` (seen 64 %, unseen 88 %, lap ratio 0.97) but it doesn't reproduce (R018, R019). GA σ test: σ 0.02 (S004: seen 100 %, unseen 87.5 %, lap ratio 0.997; one seed). Nothing is running. **Next:** T97 (owner starts `configs/queue/e10_ga.yaml`, then evaluate, back up, record E10); T83 (owner decision: run-to-run variance); **T97 queue ready on `main`** (4 runs incl. GA seed 2 and PPO under GA rules; GA tries start on the start line, T115). T08 / M3 Week 3 visuals (effects, brain panel, minimap, Evolution Race, Draw-a-Track, Human vs AI, video recorder); then T09 / M4. History of earlier status lines: see the Change Log.
 * **⚠ Two working copies until the E10 queue finishes (owner, 2026-10-24, T117):**
   - **This folder (`ML Sem5 Project`, branch `main`) runs the E10 queue** (`configs/queue/e10_ga.yaml`). Don't edit `racer/`, `scripts/`, `configs/`, `tracks/` here and don't switch branches: every queue entry refuses to start on uncommitted code and runs whatever is checked out. Check-ins read only `outputs/queue_logs/e10_ga/state.json` and the log tail. The queue writes `registry/*.csv`, `registry/run_notes.yaml`, `outputs/eval/` and `models/` here.
-  - **Development happens in the worktree `C:\Users\Jack\Desktop\ML Sem5 Project - dev`** (branch `feat/draw-a-track`). Run Python there with this folder's `.venv` and `PYTHONPATH` set to the worktree, so `racer` is imported from the worktree (the editable install points here).
+  - **Development happens in the worktree `C:\Users\Jack\Desktop\ML Sem5 Project - dev`** (branch `feat/draw-a-track`). It has its **own `.venv`** (owner, 2026-10-24: Python 3.11.9, same package versions as this folder's, `racer` installed editable from the worktree): run `.venv\Scripts\python ...` there, no `PYTHONPATH` needed. Remove it with the worktree.
   - **Keep the two mergeable:** the dev branch never edits `registry/`, `outputs/eval/`, `models/` or `configs/queue/e10_ga.yaml`, and never changes what an existing preset/setting means (extend, don't change). In `log.md` it only adds tasks at the bottom and Change Log entries at the top; "Current Status" is rewritten at merge time.
   - **When the queue finishes:** evaluate/back up and record E10 results here on `main` and commit; then merge `feat/draw-a-track` into `main` (resolve `log.md` by keeping both sets of entries), run the full suite, and remove the worktree (`git worktree remove`).
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
@@ -157,14 +157,17 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T107: Docs (PROJECT_CONTEXT, README, plan, glossary) for T103–T106; full suite; review; commit.
 * [x] T108: Owner (2026-10-24): `feat/neuroevolution` merged to `main` (PR #1); "Current Status" rewritten to match.
 * [x] T109: Owner (2026-10-24): `REVIEW_LATER.md` listing every pending owner decision (owner leaning: drop PPO if GA wins; decided after T97).
-* [~] T110: T08 Draw-a-Track mode (owner: first Week 3 feature, PROJECT_CONTEXT §6, §10.1). Branch `feat/draw-a-track`.
-* [ ] T111: `racer/track/sketch.py`: drawn points (metres) → smoothed control points → `TrackSpec`, same validation as the generator; auto-scale a too-small drawing up to the minimum length / corner radius; direction as drawn. Settings in `configs/demo/editor.yaml`. Done when: tests for circle, cw/ccw, small doodle, sharp square, figure-eight, too few points pass.
+* [~] T110: T08 Draw-a-Track mode (owner: first Week 3 feature, PROJECT_CONTEXT §6, §10.1). Branch `feat/draw-a-track`. Drawing → track (T111) and the sandbox page (T119) are done; **open (owner): is the game-window editor (T112–T113) still wanted, now that drawing lives in the sandbox?**
+* [x] T111: `racer/track/sketch.py`: drawn points (metres) → smoothed control points → `TrackSpec`, same validation as the generator; auto-scale a too-small drawing up to the minimum length / corner radius; direction as drawn. Settings in `configs/demo/editor.yaml`. Done when: tests for circle, cw/ccw, small doodle, sharp square, figure-eight, too few points pass.
 * [ ] T112: `racer/render/editor.py`: draw freehand (drag) or click points, undo, clear, width ±, direction flip, live validation message with the clash marked, preview of the built road. Done when: a headless test drives it with synthetic events into a valid track.
 * [ ] T113: `demo.py --draw`: editor → model picker (drawn track preselected) → race; Esc returns to the editor with the drawing kept; `S` saves to `tracks/user/`. Done when: headless screenshot run on a scripted drawing races a model.
 * [ ] T114: Docs (PROJECT_CONTEXT §6/§10.1, README, glossary if needed), full suite, review, commit.
 * [x] T115: Owner (2026-10-24, mid-T110): GA training tries always start on the start/finish line (centred, aligned, standing) on every map, not at a random point. New setting `ga.start: line | random` (`ga_default`: line; missing = random, so older runs resume unchanged). Done when: test shows line starts and an unchanged map sequence; docs (PROJECT_CONTEXT §8, §16, glossary, README). T110 paused meanwhile.
 * [x] T116: Owner decisions for the E10 queue (2026-10-24): control run (TG, 300 gen), GA main seeds 1 and 2 (no generation cap, plateau stop), PPO under GA rules (rays7_lean + track limits, train7, 5M steps) last; σ stays 0.02; commit and merge locally; the owner starts the queue.
 * [x] T117: Owner (2026-10-24): the E10 queue runs in this folder on `main`; development continues in a git worktree (`ML Sem5 Project - dev`, branch `feat/draw-a-track`); both merged when the queue finishes. Rules noted under Current Status.
+* [x] T118: Owner (2026-10-24): D27, every feature is reflected in the AI Sandbox; rule in `CLAUDE.md`, PROJECT_CONTEXT §10.5/§16, memory.
+* [x] T119: Draw-a-Track in the sandbox (D27; owner: draw inside the sandbox, save to `tracks/user/`): *Draw a Track* page with a canvas (`streamlit-drawable-canvas` 0.13.0), validated preview, save, *Race on it* → Launch. Done when: headless page test passes (done) and a real browser run works (done).
+* [x] T120: Owner (2026-10-24): own `.venv` in the dev worktree, rebuilt on Python 3.11.9 (the first one was 3.14 and empty); package versions identical to the main venv.
 * [x] T121: E10 queue finished (2026-10-24); backup checked. Still open (owner, "later"): record the E10 results (GA vs PPO under GA rules) in PROJECT_CONTEXT §11/§16, then merge `feat/draw-a-track` and remove the worktree (see Current Status).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
@@ -190,6 +193,37 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Runs:** R020 `GA_ctrl_tg_s1` (14.4 min); R021 `GA_main_s1` (47.4 min, stopped at generation 919, best validation 1.368, best evaluated `@46282k`); R022 `GA_main_s2` (38.1 min, generation 899, best validation 1.367, best evaluated `@40055k`); R023 `e10_ppo_lean_s1` (5.0M steps in 46.6 min, evaluation 345 s, best `@1700k`: seen/held-out/unseen/overall 100 %).
 * **Files:** Edited `log.md` only.
 * **Notes:** E10 results are not yet compared or written into PROJECT_CONTEXT (owner: "later"). Not yet merged: `feat/draw-a-track` and the worktree. Before the full-suite run on merge, `CLAUDE.md` shows as modified in `git status` (not by this entry).
+
+### 2026-10-24 — Claude Code (Opus 5.5) — T120: Dev worktree venv
+
+* **Owner:** created a `.venv` in the dev worktree. It was Python 3.14.6 and empty; the project is pinned to 3.11.9 (torch 2.14.1+cpu, numba, SB3; §14.1), so it was rebuilt with `py -3.11 -m venv .venv`, then torch (CPU index), `requirements.txt`, `pip install -e .`. Unpinned sub-dependencies came out newer (e.g. python-dateutil 3.0.0) and were set to the main venv's versions: `pip freeze` now identical except the editable `racer` path. `pip check` clean. Local to the worktree, git-ignored (`.venv/`); no global change.
+* **Checks:** `racer` and torch import from the worktree; test_golden/test_sketch/test_sandbox_draw/test_physics: 30 passed, 1 skipped.
+* **Files:** Edited `log.md` (Current Status rule for the worktree, T120, this entry).
+
+### 2026-10-24 — Claude Code (Opus 5.5) — T119: Draw a Track page in the sandbox
+
+* **Owner decisions:** draw inside the sandbox (not a button opening a game editor); save to `tracks/user/`.
+* **Install (project venv only, no global change):** `streamlit-drawable-canvas==0.13.0` (MIT, requires only `streamlit>=1.53`; `pip check` clean). Installed from a wheel downloaded to `%TEMP%`, deleted afterwards. Pinned in `requirements.txt` and PROJECT_CONTEXT §14.1. Plotly (lasso selection) was the alternative but isn't installed either; Altair can't return a freehand path.
+* **Built:** `racer/sandbox/draw.py` (canvas JSON → pixels → metres, file-safe names, save with a preview PNG, never overwrites a name used in any tracks folder), `diagrams.track_figure` (road, start arrow, too-close sections / too-tight corner in red; `_road` shared with the map ray diagram), page `pages/draw.py`, Launch takes a hand-over `launch_track`.
+* **Bugs found on the way (fixed, tested):** Fabric.js 6 names objects `Path`/`Polygon` (capitalised), so nothing was read at first; a straight stroke gave a confusing "corner radius 0.0 m": now refused as "a line, not a loop" (`sketch.min_thickness`); the save message showed off-screen at the top: moved next to the buttons; canvas wider than its column: now 640×420, 1000 m across.
+* **Checked in a real browser (worktree server on port 8599, stopped):** clicked rectangle → valid 3834 m track → saved → *Race on it* opened Launch with it chosen. Headless race on that track (`demo.py --models <R015@4600k folder of the main checkout> --baseline --screenshot`): both cars on lap 1 at 37 s, 0 crashes, 139 fps mean. The throwaway track and preview were deleted.
+* **Tests:** `tests/test_sandbox_draw.py` (7), page list updated in `tests/test_sandbox.py`, 2 line cases added to `tests/test_sketch.py`.
+* **Files:** Created `racer/sandbox/draw.py`, `racer/sandbox/pages/draw.py`, `tests/test_sandbox_draw.py`. Edited `racer/sandbox/diagrams.py`, `racer/sandbox/pages/__init__.py`, `racer/sandbox/pages/launch.py`, `racer/track/sketch.py`, `configs/demo/editor.yaml`, `requirements.txt`, `tests/test_sandbox.py`, `tests/test_sketch.py`, `PROJECT_CONTEXT.md` (§6, §10.1, §10.5, §14.1, §16), `README.md`, `log.md`.
+
+### 2026-10-24 — Claude Code (Opus 5.5) — T118: Every feature in the sandbox (D27)
+
+* **Owner rule:** any feature added must be reflected in the AI Sandbox; noted somewhere seen often.
+* **Status:** DONE. `CLAUDE.md`: new section above *Working with the owner*, workflow step 7, parts table row. PROJECT_CONTEXT §10.5 and §16 (D27). Memory `every-feature-in-sandbox`. T119 added for Draw-a-Track's sandbox part.
+* **Files:** Edited `CLAUDE.md`, `PROJECT_CONTEXT.md`, `log.md`.
+
+### 2026-10-24 — Claude Code (Opus 5.5) — T111: Drawing → track (`racer/track/sketch.py`)
+
+* **Status:** DONE (not committed yet; commit with T114). Worktree `ML Sem5 Project - dev`, branch `feat/draw-a-track`.
+* **How it works:** `sketch_track(points_m, name, cfg["sketch"])` → `(Track without field | None, problems)`. The drawing is a closed loop starting at the first point, direction as drawn; resampled to 1000 points, smoothed with a window that is a fraction of the loop (so drawing size and hand jitter scale together), scaled into [800, 4000] m and thinned to a control point every 40 m. Up to 10 fix steps: scale up for length / corner radius / section gaps (shape is fixed, so scaling widens corners), double the smoothing (capped at 20 % of the loop) when corners are too sharp for any allowed size. Unfixable problems (figure-eight) are returned.
+* **Found on the way:** a fixed smoothing window in metres failed: jitter grows with the scale; unbounded smoothing collapsed spiky shapes to < 3 control points (now capped, regression test).
+* **Measured:** 191/200 random jagged polygons valid (the rest: corners still < 15 m, reported); 0.12 s mean, 0.58 s worst per conversion.
+* **Tests:** `tests/test_sketch.py` (12). Also ran test_integrity, test_sandbox, test_config, test_presets: 125 passed, 10 skipped.
+* **Files:** Created `racer/track/sketch.py`, `configs/demo/editor.yaml`, `tests/test_sketch.py`. Edited `log.md`.
 
 ### 2026-10-24 — Claude Code (Opus 5.5) — T117: Queue folder and dev worktree
 

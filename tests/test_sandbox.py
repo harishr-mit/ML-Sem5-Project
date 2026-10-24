@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PAGE_KEYS = ["overview", "explorer", "compare", "build", "presets", "launch", "glossary"]
+PAGE_KEYS = ["overview", "explorer", "compare", "build", "presets", "draw", "launch", "glossary"]
 
 
 @pytest.fixture(autouse=True)

@@ -213,6 +213,7 @@ This opens the sandbox in its own window (a small built-in browser, Edge WebView
   - **Why:** a required note on what the run should show.
 
   *Add to queue* reuses an existing input preset, or writes a new `configs\env\sb_<tag>.yaml`. Hyperparameter changes become `train.py --set` arguments. The entry goes into `configs\queue\sandbox.yaml` (git-ignored). *Start queue* opens the overnight queue in its own window, 2 runs at a time; *Stop queue* asks it to stop like `Ctrl+C`. Real runs still need committed code; a new untracked preset doesn't count.
+- **Draw a Track:** draw a closed loop freehand or by clicking points (first point = start line, drawn direction = driving direction). It is smoothed and resized into a valid track and shown with any problem marked in red; *Save* puts it in `tracks\user\`, and *Race on it* opens Launch with that map chosen. This is how a faculty-drawn track gets raced live.
 - **Launch:** pick up to 20 models (or every N-th checkpoint of one run, as an evolution race), a map, laps, the baseline car and same physics for all, then press *Launch*. Each press opens a separate game window named `AI Sandbox #N · …`, so several can run at once; *Stop* closes one.
 - **Presets:** every preset a model is built from (inputs, car, reward, algorithm and network, track sets): its values with notes, the rays drawn to scale or the track previews, and the runs trained with it.
 - **Glossary:** every setting, what it affects and its typical range, searchable.

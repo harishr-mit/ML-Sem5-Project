@@ -22,3 +22,4 @@ pytest==9.1.1              # unit tests in tests/ (dev only)
 streamlit==1.65.0          # AI Sandbox (scripts/sandbox.py, D24); adds no change to the pins above
 psutil==7.2.2              # AI Sandbox: process checks (queue, trainings, game windows)
 pywebview==6.2.1           # AI Sandbox window (D25): Edge WebView2; adds bottle, cffi, clr_loader, proxy_tools, pycparser, pythonnet
+streamlit-drawable-canvas==0.13.0  # Draw-a-Track in the sandbox (D27, T119): MIT, needs only streamlit>=1.53; no change to the pins above

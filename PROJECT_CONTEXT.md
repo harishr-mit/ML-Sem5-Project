@@ -15,11 +15,13 @@
 ## 1. Summary
 
 A 2D top-down racing game written from scratch, with a car that learns to drive with **reinforcement learning (PPO)**. A genetic algorithm (neuroevolution, D26) trains the same kind of network without gradients, as a comparison (E10).
+
 - **What the car senses:** 5 distance rays to the edge of the road, its heading relative to the track, its speed, and a few physics readings. It does not see the map.
 - **What it outputs:** steering in [−1, 1] and gas in [−1, 1], where a negative value means brake.
 - **What makes a racing line appear:** the physics has mass, momentum, gravity and a grip limit that depends on the surface. Taking a corner too fast makes the car slide, so the agent has to learn to brake before corners, take the apex, use the full track width and accelerate out.
 
 **Main goal: the demo has to look impressive.** The plan is:
+
 - a live game in which **any trained version** can be loaded from a spreadsheet-style registry
 - **10–20 chosen models racing together** at the same time, as ghost cars that pass through each other
 - an "evolution race" between checkpoints of one run
@@ -32,7 +34,7 @@ A 2D top-down racing game written from scratch, with a car that learns to drive 
 ## 2. Goals and constraints
 
 | # | Goal | Requirement |
-|---|------|-------------|
+| --- | ------ | ------------- |
 | G1 | Show RL learning | Learning curves; the same car shown early, mid and late in training |
 | G2 | Show a real racing line | Speed-coloured trajectory compared with the centreline; braking zones visible |
 | G3 | Live demo | A pygame app with several modes, steady at 60 FPS with 20 cars |
@@ -44,6 +46,7 @@ A 2D top-down racing game written from scratch, with a car that learns to drive 
 **Constraints:** solo, 3–4 weeks, zero budget. Any library is allowed.
 
 **Hardware:**
+
 - i5-10200H (4 cores, 8 threads)
 - 16 GB DDR4-2666
 - GTX 1650 4 GB
@@ -56,7 +59,7 @@ The GPU is not needed for training. PPO with a small MLP is faster on the CPU (s
 ## 3. Key design decisions
 
 | Decision | Choice | Why |
-|---|---|---|
+| --- | --- | --- |
 | Game | **Write our own**, don't adapt an existing game | Existing games have no `reset()` or `step()`, tie the game loop to rendering and run at real-time speed. Our own engine runs headless and fast. |
 | RL interface | **Gymnasium** `Env` | Standard; works directly with Stable-Baselines3 |
 | Algorithm | **PPO** (Stable-Baselines3); SAC and neuroevolution (D26) as comparisons | PPO is robust, simple and works well with parallel environments |
@@ -197,7 +200,7 @@ class Kerb(Road):         # thin band at road edges on corners
 **State:** `pos (x, y)`, `heading θ`, `vel (vx, vy)` in world coordinates (this is the momentum), `steer_angle`, `sliding` flag.
 
 | Parameter | Default | Notes |
-|---|---|---|
+| --- | --- | --- |
 | mass `m` | 1000 kg | |
 | gravity `g` | 9.81 m/s² | constant |
 | wheelbase `L` | 2.6 m | car is 4.5 m × 1.9 m |
@@ -260,6 +263,7 @@ pos += vel*dt
 This produces momentum (velocity persists), understeer when entering a corner too fast, drifting when sliding, slow driving on grass, and braking limited by grip.
 
 ### 5.5 Physics sanity tests (`scripts/physics_sanity.py`)
+
 1. **Skidpad:** a constant-radius circle at increasing speed. The car loses the line at `a_lat ≈ μ·g` (about 10.8 m/s² on road).
 2. **Braking:** with **threshold braking** (≈ 90 % brake, just under the grip limit), the stopping distance from 30 m/s ≈ v²/(2μg) ≈ 42 m. Full brake (12000 N) exceeds static grip (μ·m·g ≈ 10 800 N), so the wheels lock, kinetic μ applies and the car stops in ≈ 49 m. Learning threshold braking is part of the racing-line skill.
 3. **Coast-down:** speed decays smoothly to 0, with no oscillation and no reversing.
@@ -289,11 +293,10 @@ This produces momentum (velocity persists), understeer when entering a corner to
 - **Held-out set:** about 10 generated tracks with fixed seeds, saved in `tracks/heldout/`. **Never** used in training, only to test generalisation. Together with the 2 test maps, this is the "unseen" set.
 - **Open track library (owner):** tracks can be added at any time in the project. Any valid track JSON dropped into a `tracks/<folder>/` is picked up by name everywhere (training track sets, evaluation, demo). Training may mix any non-held-out tracks, and new hand-made or generated tracks may be added for variety. Adding a track never changes an existing model (each model's snapshot lists what it trained on).
 - **Final showcase (owner):** faculty members draw a track, it is converted into a track JSON (Draw-a-Track, §10.1), and the trained models drive it live. This is the strongest generalisation demo, so held-out performance is the metric that matters most.
-- **Editor (draw-a-track):**
-  1. Click points, or drag to sketch freehand. Freehand input is smoothed and simplified down to control points.
-  2. Run the same validation as the generator.
-  3. Press Enter and the AI drives it.
-  4. Optionally save it to `tracks/user/`.
+- **Editor (draw-a-track; built in the AI Sandbox, T111/T119, owner):**
+  1. Draw freehand, or click points (click the first point again to close the loop). The first point is the start/finish line; the cars drive the way it was drawn.
+  2. `racer/track/sketch.py` smooths the drawing (a window that is a fraction of the loop, so the drawing size doesn't matter), scales it into 800–4000 m and thins it to control points; a corner still too tight gets more smoothing. Then the generator's validation; what can't be fixed (crossings, sections too close) is marked in red. A line instead of a loop is refused. Settings: `configs/demo/editor.yaml`.
+  3. Save it to `tracks/user/` (a preview PNG goes to `outputs/plots/tracks/`), then *Race on it* opens Launch with the track chosen.
 
 ---
 
@@ -302,7 +305,7 @@ This produces momentum (velocity persists), understeer when entering a corner to
 ### 7.1 Observation (default spec `rays5`, all values scaled to about [−1, 1] or [0, 1])
 
 | Feature | Dims | Notes |
-|---|---|---|
+| --- | --- | --- |
 | Ray distances to the road edge | 5 | angles −90°, −45°, 0°, +45°, +90° relative to the car. Range: **200 m** for the forward ray (braking from 65 m/s to 17 m/s needs about 180 m), 60 m for the side rays. Value = distance / range. |
 | Heading error vs the track tangent | 2 | sin and cos of the angle (avoids the wrap-around jump at ±180°) |
 | Forward speed | 1 | `v_long / v_max` |
@@ -314,6 +317,7 @@ This produces momentum (velocity persists), understeer when entering a corner to
 That's **13 dimensions** in total.
 
 **Frozen details of `obs_spec` v1** (they live in `configs/env/rays5.yaml`, not in the physics config, so later physics changes can't change what v1 means):
+
 - Rays start at the car's centre. A ray's distance is the first road-edge crossing along it: leaving the road when the car is on-road, entering it when off-road. Value = distance / range, clipped to [0, 1].
 - Scales: `v_long / 70`, `v_lat / 10`, `yaw_rate / 3 rad/s`, each clipped to [−1, 1]. Kerbs count as road for the on-road fraction.
 - World axes: x right, y up; angles are counter-clockwise, so a ray at −90° points to the car's right.
@@ -322,6 +326,7 @@ That's **13 dimensions** in total.
 - **Implementation:** ray casting uses a precomputed **signed-distance grid** of the road (0.5 m cells) with sphere tracing, or vectorised ray–segment intersection with numba. Target **at least 3k env steps per second per core**.
 
 **`obs_spec` v2: features as building blocks (D21).** v1 stays frozen for the models that use it. v2 is an ordered list of named features, each with its own parameters:
+
 ```yaml
 obs_spec:
   version: 2
@@ -332,19 +337,23 @@ obs_spec:
     - {feature: v_long, scale: 70.0}
     - {feature: prev_action}
 ```
+
 - Features live in a registry (`racer/env/features.py`). Each one declares its size, bounds, labels for the brain panel, and a one-line description (shown in the AI Sandbox). The observation is the concatenation in list order.
 - **Adding or removing an input = editing the list.** A new kind of input = a new registered feature name. A feature's meaning never changes once a model uses it; a changed behaviour gets a new name.
 - Features available at first: `rays`, `heading_sincos`, `v_long`, `v_lat`, `yaw_rate`, `onroad_frac`, `prev_action` (same maths as v1), plus `steer_angle` (current wheel angle) and `curvature_ahead` (track curvature at given distances ahead: map knowledge, E6).
 
 ### 7.2 Action
+
 `Box([-1,-1], [1,1])` → `[steer, gas]`. A negative gas value means brake. There is no reverse gear.
 
 **Action layouts (D22).** The layout is part of each model's snapshot (`action_spec: {layout: …}`); an old snapshot without it means `steer_gas`.
+
 - `steer_gas` (default, all models so far): `[steer, gas]` as above.
 - `steer_throttle_brake`: 3 outputs in [−1, 1]; throttle and brake are mapped to [0, 1] and the car receives `gas = throttle − brake`.
 - New layouts are added to a registry (`racer/env/actions.py`); `prev_action` and the reward's steering term read the layout, so they work for any layout.
 
 ### 7.3 Reward (`configs/reward/progress.yaml`)
+
 ```
 r = 1.0  * Δs_metres                      # progress along the centreline (main signal)
   − 0.05 * dt_agent                       # time pressure (each 1/20 s step)
@@ -353,9 +362,11 @@ r = 1.0  * Δs_metres                      # progress along the centreline (main
   + 5.0  on lap completion
   − 20   on crash / termination
 ```
+
 The `speed_naive.yaml` variant (reward = speed) exists **only** to show reward hacking (circling or weaving) in the presentation.
 
 ### 7.4 Episode rules
+
 - **Start:** a random point along the track, with small random offsets in lateral position and heading, and a random starting speed of 0–15 m/s. This stops the agent learning only the first corner.
 - **Episode ends (with a penalty) if:**
   - the car touches the barrier
@@ -446,6 +457,7 @@ models/R015_t50_narrow7_s1@4600k/
 (`completion_rate` = showcase episodes in v1, training-map episodes in v2; `heldout_completion` = generated held-out episodes; `test_completion` = test-map episodes (v2); `unseen_completion` = test + held-out (v2); `overall_completion` = all; `lap_ratio` = best lap ÷ the baseline's, averaged over the lap tracks the model lapped; `mean_speed` in m/s. Columns are only ever appended.)
 
 **`registry/registry.xlsx`:** generated by `export_xlsx.py` (openpyxl)
+
 - **Sheets:** `Runs`, `Models`, a leaderboard sheet for each showcase track, and `Ablations` (pivot-style summary).
 - **Formatting:** frozen header, filters, conditional formatting (green for the best lap time), hyperlinks to model folders and thumbnails.
 - The CSVs stay the source of truth; the xlsx is regenerated, never edited by hand (and git-ignored, D11). Rows are upserted by id (evaluation updates them). Scratch runs use a separate registry in `outputs/scratch/registry/`.
@@ -455,6 +467,7 @@ models/R015_t50_narrow7_s1@4600k/
 ## 10. Demo application (`scripts/demo.py`, pygame-ce)
 
 ### 10.1 Modes (menu launcher)
+
 1. **Model Arena (the centrepiece)**
    - Pick a track, then pick **1–20 models** from a registry browser (searchable and sortable, showing each model's metrics and thumbnail).
    - All the chosen cars race at once as ghost cars with no collisions. Each car gets a distinct colour and label.
@@ -463,7 +476,7 @@ models/R015_t50_narrow7_s1@4600k/
    - **Race rules (D14):** staggered 2-wide grid behind the start line, 3-2-1 countdown, N-lap race (default 3), then a results table. A crash respawns the car on the centreline where it crashed, from standstill after 1 s, and the crash is counted on the leaderboard (no DNF). Gaps are in seconds (time since the leader passed the same distance).
    - **Code (D15, D16):** the race itself is simulation (`racer/env/race.py`, pygame-free); rendering uses `render/world.py` and `camera.py`. Models are picked in a basic in-window registry list (sort, filter, multi-select) or with `--models`.
 2. **Evolution Race:** pick one run, and its checkpoints (e.g. 100k, 300k, 1M, 3M) race together. This shows learning in about 20 seconds.
-3. **Draw-a-Track:** sketch a track, validate it, and pick models to drive it live. This demonstrates generalisation.
+3. **Draw-a-Track:** sketch a track, validate it, and pick models to drive it live. This demonstrates generalisation. **Built as the sandbox's *Draw a Track* page (owner, T119)**, see §6 Editor.
 4. **Human vs AI:** keyboard (WASD or arrow keys; optional gamepad through pygame joystick) against chosen models. Ghost cars, same physics.
 5. **Analysis view:**
    - racing line compared with the centreline
@@ -475,7 +488,7 @@ models/R015_t50_narrow7_s1@4600k/
 ### 10.2 Visual features (all effects code-generated)
 
 | Feature | Details |
-|---|---|
+| --- | --- |
 | World | Ground texture tiled across the map. Road texture masked by the road polygon. Red and white kerbs, a checkered start/finish line and the barrier. Drawn **once per track** to a large surface, then blitted every frame. |
 | Car | Kenney sprites (`car_{1..4}_{colour}.png`). For more than 5 distinct colours, use `car_N_tint.png` + `car_N_tint_mask.png` (tint the body only; see `assets/LICENSES.md`). Brake lights glow when braking. Small drop shadow. |
 | Rays | Lines from the car, coloured green → yellow → red by distance, with a dot where each ray hits. Shown for the selected car only (20 cars' rays would be clutter); toggle with `R`. |
@@ -493,6 +506,7 @@ models/R015_t50_narrow7_s1@4600k/
 **Performance target:** 60 FPS with 20 cars. Inference is batched per model and runs every third frame (20 Hz), so it costs almost nothing.
 
 ### 10.3 Controls (summary)
+
 `Tab` cycle car · `R` rays · `T` trails · `L` racing line · `B` brain panel · `M` minimap · `F` follow/overview · `S` sound on/off · `Space` pause · `+/−` speed ×0.25–×4 · `H` key list · `Esc` menu
 
 Every game mode shows its keys on screen (bottom right, toggled with `H`; T82), so the demo never depends on remembering them. The arena list is built next to its key handling, and a test checks that they match.
@@ -504,11 +518,13 @@ All clips and their RPM curves are described in `assets/LICENSES.md` and `assets
 **Whose sound plays:** only the **followed car** (or the human's car) is audible. With 20 cars, everything else stays silent. Audio is mixed with pygame-ce `mixer`, and each clip is decoded once into a numpy array.
 
 **Cosmetic gearbox (`gearbox.py`):** the physics engine has no gears (it is power-limited, §5.2). The gearbox exists **only for sound and the HUD**, and doesn't affect physics or RL.
+
 - `rpm_ratio` (idle = 1.0) comes from speed and the current gear: 5 gears up to about 70 m/s.
 - It shifts up when `rpm_ratio` reaches **2.85** (the top of `engine_rev_up`), and the ratio steps are chosen so `rpm_ratio` lands at about 2.0 after a shift. It shifts down at about 1.4.
 - At standstill or very low speed in 1st gear, `rpm_ratio = max(1.2, speed-derived)` (clutch slip).
 
 **Engine logic (what the user described):**
+
 1. **Throttle pressed from standstill:** play `engine_rev_up` from the start, so it rises from idle.
 2. **Throttle pressed again while moving:** play `engine_rev_up` from the offset whose ratio in `engine_map.json` equals the current `rpm_ratio`, i.e. from somewhere in the middle. It rises from there.
 3. **Reaching the top** of `rev_up`: crossfade (about 60 ms) into `engine_high_loop` and hold at redline.
@@ -518,6 +534,7 @@ All clips and their RPM curves are described in `assets/LICENSES.md` and `assets
 7. **Volume:** use per-clip gains from config, because the clips keep their natural loudness (idle is about 20 dB below a full rev). Scale volume slightly with throttle.
 
 **Tyres:**
+
 - `tyre_screech_loop` volume follows the slip intensity: lateral sliding speed, or the friction-circle overload when `sliding`. Fade it in and out over about 80 ms.
 - On the **onset** of a short slide or hard braking, play `tyre_screech_short_1` or `_2` at random.
 
@@ -526,13 +543,16 @@ All clips and their RPM curves are described in `assets/LICENSES.md` and `assets
 ### 10.5 AI Sandbox (D24, owner; plan in `docs/SANDBOX_PLAN.md`)
 
 A **standalone** local app (Streamlit, `scripts/sandbox.py`), separate from the game, shown in **its own desktop window** (D25: pywebview, a "mini browser" on Edge WebView2; `--browser` opens a browser tab instead). Its main purpose is to **understand a model**:
+
 - **Model explorer:** pick any registered model and see what it was trained with: its inputs (ray diagram, feature list), network size, physics, reward terms, track set and hyperparameters. Each parameter has a short "what it affects" note, and each run its notes on why it was made.
 - **Compare:** 2–4 models side by side: config differences highlighted, evaluation metrics, learning curves and thumbnails.
 - **Configure and queue:** build a new run from presets (add or remove inputs, network size, steps, track set, …), see the resulting input count and parameter count, and add it to a queue file. The queue still runs through `queue_overnight.py`.
 - **Launch:** pick models from the trained list and press *Launch* to open a game window (`demo.py`) racing them. Several game windows can run at once, each a separate process.
-The sandbox only reads the registry and model folders and writes queue files (and, on request, a new model folder exported from a GA lineage, registered in the registry); it never edits a model.
+**Every feature shows in the sandbox (D27, owner):** any feature added to the project gets a way to see, explain or launch it here; a feature isn't done until it does.
+The sandbox only reads the registry and model folders and writes queue files and drawn tracks (`tracks/user/`, T119) (and, on request, a new model folder exported from a GA lineage, registered in the registry); it never edits a model.
 
 **Owner decisions (2026-10-11, T65):**
+
 - Streamlit 1.65.0. It needs no change to the existing pins.
 - **Localhost only**, with no telemetry and nothing written to the user profile. Run it with `.venv\Scripts\python scripts\sandbox.py`.
 - The sandbox **may start the queue**: *Start queue* opens `queue_overnight.py` in its own console. It is refused while another queue or training is running.
@@ -544,13 +564,16 @@ The sandbox only reads the registry and model folders and writes queue files (an
   - **Outcome notes can be edited** in the Explorer.
 
 **Built (T66–T72, 2026-10-11).** Pages:
+
 - **Overview:** leaderboard, plus what is running.
 - **Model Explorer:** rays on a straight road and on any map by the model's own sensor, network diagram and layer table, every setting with its glossary note, results for each protocol, learning curves.
 - **Compare**, **Build & Queue**, **Launch**, **Glossary**.
+- **Draw a Track (T119, owner, D27):** a drawing canvas (`streamlit-drawable-canvas`), the drawing shown as a validated track, *Save* to `tracks/user/`, *Race on it* (Launch with the track chosen).
 - **Presets (T101, owner):** every model preset (inputs, car, reward, algorithm and network, track sets) with its values and notes, the rays to scale or the track previews, and the runs trained with it.
 - **Explorer → Evolution (T106, owner):** for neuroevolution models, fitness and validation per generation from the lineage, and *Save as a model* for any generation's car. This is the one place where the sandbox writes a model folder: a new one, rebuilt from the lineage; it never edits an existing one.
 
 How it is built:
+
 - All logic lives in `racer/sandbox/` without Streamlit, so it is unit-tested; the pages are tested headless with `streamlit.testing`.
 - Explanations come from one glossary (`racer/sandbox/glossary.yaml`) plus the code registries. A test fails if any key of any preset or saved snapshot has no explanation.
 - **Queue runner:** writes `runner.json` while it runs, records each entry's PID, and stops a run's whole process tree.
@@ -563,7 +586,7 @@ How it is built:
 ## 11. Experiments and analysis (for the report and slides)
 
 | # | Experiment | Expected story |
-|---|---|---|
+| --- | --- | --- |
 | E1 | Main run: PPO, rays5, grip on, curriculum | Learning curves; lap time falls; a racing line appears |
 | E2 | **Grip limit off** (`no_grip_limit`) | Flat-out everywhere and no braking, so no real racing line. **Shows that the physics is what creates the behaviour.** |
 | E3 | **Naive speed reward** | Reward hacking: circling or weaving. A funny video with a serious lesson. |
@@ -578,7 +601,7 @@ How it is built:
 **Runs so far (registry ids; best checkpoint by D9, evaluated with protocol v2: seen = 7 training maps, unseen = 2 test maps + 10 generated held-out tracks; lap ratio vs the PID baseline over the maps the model laps):**
 
 | Run(s) | Experiment | Setting | Seen | Unseen | Lap ratio | Note |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | BASE_pid | E8 | hand-coded centreline + speed plan (sees the map) | 100 % | 100 % | 1.00 | reference |
 | R001 | M1 | rays5, Training Ground only | 29 % | 19 % | 0.94 | fast on its own track only |
 | R002 | D8 stage 2 | fine-tune of R001 on generated wide tracks | 21 % | 6 % | 1.11 | negative result |
@@ -598,11 +621,13 @@ How it is built:
 **Neuroevolution, first results (T96, scratch runs S004/S005, 2026-10-15; not in the registry):** σ 0.02 vs 0.05, 10M env steps each (≈ 30 min each on 5 processes, rays7_lean, 7 training maps, track limits on). σ 0.02 won: best checkpoint (S004@8738k, generation 199) **100 % seen, 87.5 % unseen, lap ratio 0.997**, against 86 % / 62.5 % / 1.083 for σ 0.05; on average 28 of 50 cars finished their lap in the last 50 generations (σ 0.05: 16). One seed each, and the best checkpoint varies a lot from one checkpoint to the next (S004@10017k: 36 % seen), so these are early, single-seed numbers. The real runs (control + main) are queued in `configs/queue/e10_ga.yaml` (T97).
 
 Results are one seed per setting unless two are listed. **R015's result doesn't reproduce reliably (R018, R019, 2026-10-11).**
+
 - **Seed 2 (R018):** the same setup matches R015 on the seen maps (64 %) and the generated held-out tracks (100 %), at the baseline's lap time. But it finishes none of the test-map episodes at its best checkpoints (2 of its 50 checkpoints manage 17–33 %), where R015 managed 67 %.
 - **8M steps (R019, seed 1):** a longer schedule changes the learning-rate decay from the first update, so it doesn't repeat R015's path either. It got stuck early: episode reward ≈ 500–600 against R015's > 1700, and about half its episodes ended at the barrier. Its exploration noise then collapsed (policy std 0.04) and it never recovered.
 - So narrow rays on the map library *can* reach the T50 target, but the result varies strongly between runs. Claims need several seeds.
 
 **Plots (`make_plots.py`):**
+
 - reward and lap time against training steps (mean ± std over seeds where possible)
 - completion rate on held-out tracks
 - a bar chart of the ablations
@@ -615,7 +640,7 @@ Results are one seed per setting unless two are listed. **R015's result doesn't 
 ## 12. Timeline (4 weeks) and priorities
 
 | Week | Focus | Milestone |
-|---|---|---|
+| --- | --- | --- |
 | **1** (Oct 10–16) | Physics, surfaces, spline tracks, generator, progress, sensors, Gymnasium env, physics sanity tests, minimal debug renderer, first PPO run | **M1:** the car completes laps on a showcase track |
 | **2** (Oct 17–23) | Config system, train/evaluate scripts, checkpoints, **registry and xlsx export**, loader, curriculum and multi-track training, **basic Model Arena with 20 cars** | **M2:** load any 20 models from the registry and race them |
 | **3** (Oct 24–30) | **First: AI Sandbox (§10.5, owner priority, right after M2, T50 and T51; built 2026-10-11, T66–T72).** Then textures, effects, HUD, brain panel, minimap, camera, Evolution Race, Draw-a-Track, Human vs AI, video recorder | **M3:** full live demo |
@@ -624,6 +649,7 @@ Results are one seed per setting unless two are listed. **R015's result doesn't 
 **Keep the CPU busy every night from week 2:** queue the experiment runs.
 
 **Priorities (MoSCoW):**
+
 - **Must:** grip physics env, PPO training, registry (CSV and xlsx), load any model, multi-car arena (10–20), rays, trails, HUD, learning curves, showcase tracks, held-out evaluation, map library with a test split (D19), AI Sandbox (D24)
 - **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, highlight video, engine and tyre audio (§10.4)
 - **Could:** brain panel, swarm view, SAC (E7), neuroevolution (E10, D26; built, runs pending), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
@@ -634,10 +660,10 @@ Results are one seed per setting unless two are listed. **R015's result doesn't 
 ## 13. Risks and mitigations
 
 | Risk | Mitigation |
-|---|---|
+| --- | --- |
 | Reward hacking (backwards laps, exploits at the start line) | Signed `Δs` with wrap-around handling; wrong-way termination; watch videos of every new run |
 | Agent learns to stop or crawl | Time penalty, no-progress termination, random starting speed |
-| Twitchy steering looks bad | Steering rate limit, `|Δsteer|` penalty, previous action in the observation |
+| Twitchy steering looks bad | Steering rate limit, ` | Δsteer | ` penalty, previous action in the observation |
 | Physics unstable at low speed | Force-based sideslip removal (no slip-angle division by v); clamp at v ≈ 0; sanity tests |
 | Training too slow | SDF ray casting / numba, profile `env.step`, 20 Hz decisions with action repeat |
 | Overfits to one track | Generated tracks, random direction and mirroring, held-out evaluation |
@@ -650,6 +676,7 @@ Results are one seed per setting unless two are listed. **R015's result doesn't 
 ## 14. Setup: software and assets
 
 ### 14.1 Software (Windows)
+
 - **Python 3.11** (64-bit, "Add to PATH" ticked). 3.12 also works.
 - **VS Code** with the **Claude Code** extension and the Python extension
 - **Git for Windows** (and optionally a GitHub account for the public repo and README GIFs)
@@ -671,6 +698,7 @@ pip install -e .
 - `.vscode/settings.json` points VS Code at `.venv`.
 
 `requirements.txt`: the packages below, **pinned to exact versions** (the set verified on 2026-10-10 with Python 3.11.9). This keeps saved models loadable (rule in §9). Change a pin only on purpose, and log it.
+
 ```
 gymnasium==1.4.0
 stable-baselines3==2.9.0   # NOT [extra]: it pulls in classic pygame, which conflicts with pygame-ce
@@ -690,6 +718,7 @@ pytest==9.1.1
 streamlit==1.65.0    # AI Sandbox (T66, 2026-10-11): +26 packages, no change to the pins above
 psutil==7.2.2        # AI Sandbox process checks
 pywebview==6.2.1     # AI Sandbox window (D25, T75): Edge WebView2, ships with Windows 11; +6 packages, no change to the pins above
+streamlit-drawable-canvas==0.13.0  # Draw a Track page (T119): MIT, needs only streamlit>=1.53; no change to the pins above
 # torch==2.14.1+cpu is installed separately from the CPU index (above)
 ```
 
@@ -698,7 +727,7 @@ pywebview==6.2.1     # AI Sandbox window (D25, T75): Edge WebView2, ships with W
 The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the manifest:** it lists every file, its source and licence, how it was cut or modified, and how to use it. Read it before writing rendering or audio code.
 
 | Folder | Contents |
-|---|---|
+| --- | --- |
 | `sprites/cars/` | `car_{1..4}_{black,blue,green,orange,yellow}.png` (Kenney, facing up) + `car_N_tint.png` / `car_N_tint_mask.png` (tintable) |
 | `sprites/props/` | barriers, tyre stacks, cones, trees, grandstands, tents, `start_lights` |
 | `textures/ground/` | `asphalt.jpg` (stains removed, seamless), `grass.jpg`, `gravel.jpg`, `sand.jpg`: 1024², seamless, ambientCG CC0 |
@@ -732,7 +761,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 ## 16. Decisions log and open questions
 
 | Date | Decision / note |
-|---|---|
+| --- | --- |
 | 2026-10-10 | Build a custom environment instead of adapting an open-source game. PPO (SB3) on CPU. |
 | 2026-10-10 | Inputs: 5 rays + heading (relative to the track) + speed (+ lateral velocity, yaw rate, on-road fraction, previous action). Outputs: steer and gas in [−1, 1]; negative gas = brake, no reverse. |
 | 2026-10-10 | Physics: mass, momentum, constant gravity, friction-circle grip `μ·m·g`, per-wheel surfaces with `Surface` (grass) → `Road` → `Kerb` inheritance. |
@@ -767,8 +796,25 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-15 | **σ = 0.02 (T96):** at the same 10M-step budget it beat 0.05 on every measure (100 % vs 86 % seen, 87.5 % vs 62.5 % unseen, lap ratio 0.997 vs 1.083); `ga_default.yaml` keeps 0.02. |
 | 2026-10-15 | **D26 built (T92–T95); owner decisions for the runs (T96):** the σ test runs now, as two scratch runs with the same env-step budget (10M each, ≈ 200–300 generations; equal compute is the fairer comparison than equal generations); the control and main runs go into a queue file the owner starts. **E10 judging:** GA checkpoints are evaluated and raced under their own rules (track limits on), i.e. stricter than PPO, which may cut onto the grass for up to 1 s; the E10 write-up states this. |
 | 2026-10-24 | **D26 start rule (owner, T115):** GA training tries always start on the start/finish line (centred, aligned, standing) on every map, instead of a random point, offset and speed. New setting `ga.start` (`line` in `ga_default`; a snapshot without it means `random`, so older runs resume unchanged); the map is still drawn at random each generation, so the map sequence is unchanged. PPO training starts are unchanged (§7.4). |
+| 2026-10-24 | **D27 (owner): every feature is reflected in the AI Sandbox** (a page, launch option or glossary entry, with a headless page test); a feature isn't done until it is. Rule in `CLAUDE.md` (its own section, the workflow and the parts table) and §10.5. |
+| 2026-10-24 | **Draw-a-Track in the sandbox (owner, T119):** drawn *inside* the sandbox on a canvas (`streamlit-drawable-canvas` 0.13.0, a new pinned package) rather than a button opening a game-window editor; saved to `tracks/user/` (only the old `final_mix` trains on that folder; `maps7`/`train7` don't). The drawing → track logic is `racer/track/sketch.py` (T111), pygame-free, so a game-window editor can reuse it. |
+
+---
+
+name: every-feature-in-sandbox
+description: Owner rule (D27) — every feature added to the RL racing project must be reflected in the AI Sandbox before it counts as done
+metadata:
+  type: feedback
+---
+
+Any feature added to the project must show up in the AI Sandbox (Streamlit app, `racer/sandbox`): a way to see, explain or launch it, plus a headless page test.
+
+**Why:** the owner uses the sandbox as the one place to understand and drive everything; a feature only reachable from the CLI or the game is invisible to them.
+
+**How to apply:** when planning a feature in log.md, add its sandbox part as its own task; don't mark the feature done without it. Recorded as D27 in PROJECT_CONTEXT §10.5/§16 and in CLAUDE.md. Related: [[e10-queue-worktree]].
 
 **Open questions:**
+
 - `final_mix` trains on every track in `tracks/user/`, so a track drawn and saved in the demo becomes training data for later `final_mix` runs. `maps7` leaves `user/` out. Should `final_mix` stay as it is (its meaning is frozen in old snapshots either way), and should faculty-drawn tracks be saved to `tracks/test/` instead? Currently: unchanged; use `maps7` for new runs.
 - Faculty track: drawn in the Draw-a-Track editor, or on paper and converted from a photo? Currently: the editor (Week 3); photo import is a possible extension.
 - Should rays also detect the barrier, or only the road edge? Currently: road edge only.

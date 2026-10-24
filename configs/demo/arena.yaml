@@ -39,6 +39,20 @@ label_offset_m: 4.0           # car label drawn this far above the car
 leaderboard_width: 460
 trail_length: 240             # substeps of trail per car (4 s)
 selected_trail_length: 900    # longer trail for the followed car
+effects:                      # skid marks, smoke, dust, crash sparks (T129); E toggles them
+  default_on: true
+  max_particles: 700
+  max_skid_segments: 6000
+  skid_life_s: 45.0
+  skid_alpha: 150
+  skid_min_speed_ms: 4.0
+  dust_min_speed_ms: 7.0
+  dust_rate: 0.5          # particles per wheel per 1/60 s
+  dust_life_s: 1.1
+  smoke_rate: 0.8
+  smoke_life_s: 1.3
+  crash_sparks: 28
+  crash_shake_m: 1.5
 brain:                        # brain panel of the followed car (T128); B toggles it
   default_on: true
   width: 640

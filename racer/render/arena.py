@@ -22,6 +22,7 @@ from racer.agents.activations import ActivationProbe
 from racer.agents.loader import LoadedModel
 from racer.render.audio import CarAudio
 from racer.render.brain_panel import BrainPanel, ModelInfo, model_info
+from racer.render.effects import Effects
 from racer.render.ui import ModelPicker, Selection
 from racer.track.io import track_folders
 
@@ -85,6 +86,7 @@ def arena_keys(quit_on_esc: bool, human: bool = False) -> list[tuple[str, str]]:
         ("R", "rays of the followed car"),
         ("B", "brain panel (network activity)"),
         ("T", "trails of all cars"),
+        ("E", "tyre smoke, skid marks, sparks"),
         ("L", "car labels"),
         ("Space", "pause"),
         ("+ / −", "sim speed"),
@@ -168,6 +170,8 @@ def run_race(ctx: Context, sel: Selection) -> str:
     brain = BrainPanel(ctx.fonts, colours, (int(acfg["brain"]["width"]), int(acfg["brain"]["height"])),
                        float(acfg["brain"]["smoothing"]))
     show_brain, brain_car = bool(acfg["brain"]["default_on"]), -1
+    fx = Effects(acfg["effects"], seed=1)
+    show_fx = bool(acfg["effects"]["default_on"])
     show_keys = bool(acfg["show_keys_at_start"])
     key_items = arena_keys(quit_on_esc=ctx.direct, human=human is not None)
     rows: list = []
@@ -209,6 +213,8 @@ def run_race(ctx: Context, sel: Selection) -> str:
                     all_trails = not all_trails
                 elif k == pygame.K_b:
                     show_brain = not show_brain
+                elif k == pygame.K_e:
+                    show_fx = not show_fx
                 elif k == pygame.K_l:
                     show_labels = not show_labels
                 elif k == pygame.K_h:
@@ -242,6 +248,8 @@ def run_race(ctx: Context, sel: Selection) -> str:
         # ---- draw
         sc = race.cars[selected]
         x, y, th = sc.pose
+        if show_fx and n:
+            fx.step(n / 60.0, race.cars, follow=selected)
         if audio is not None:
             audio.follow(selected)
             if paused != was_paused:
@@ -252,7 +260,13 @@ def run_race(ctx: Context, sel: Selection) -> str:
                 audio.update(n / 60.0, CarAudio(c.speed, c.throttle, c.brake, c.v_lat, c.sliding))
         cam.update(x, y, sc.env.car.vx, sc.env.car.vy, 0.0 if paused else speeds[speed_i],
                    race.track.field.extent, fit_w)
+        if fx.shake.amplitude_m and not cam.overview:
+            ox, oy = fx.shake.offset(fx.rng)
+            cam.cx += ox
+            cam.cy += oy
         world.draw(screen, cam)
+        if show_fx:
+            fx.draw_under(screen, cam)
         for car, tr in zip(race.cars, trails):
             if car.index == selected:
                 prev = None
@@ -288,6 +302,8 @@ def run_race(ctx: Context, sel: Selection) -> str:
                 lx, ly = cam.to_screen(px, py + float(acfg["label_offset_m"]))
                 if 0 <= lx < size[0] and 0 <= ly < size[1]:
                     screen.blit(img, img.get_rect(midbottom=(int(lx), int(ly))))
+        if show_fx:
+            fx.draw_over(screen, cam)
         title = f"{race.track.name} · {race.rules.laps} laps · ×{speeds[speed_i]:g}" + (" · PAUSED" if paused else "") \
             + (" · fair physics" if sel.fair else "")
         if race.over:

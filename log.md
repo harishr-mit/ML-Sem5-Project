@@ -177,8 +177,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T126: Evolution Race: pick a run and checkpoints (every N, evenly spaced, hand-picked, best-validated), labels by step; sandbox Launch option. Done when: a scripted race of 4 checkpoints runs headless.
 * [x] T127: Human vs AI: keyboard and gamepad, ABS assist, physics choice; sandbox *Drive it yourself* (a game window). Done when: key events move a car headless and Launch builds the command.
 * [x] T128: Brain panel: activation capture, network graph, input bars, outputs, key `B`. Done when: labels and finite activations are right for every compatible model.
-* [ ] T129: Effects: trails, skid marks, smoke and dust, brake lights, start lights. Done when: screenshot check and cost measured.
-* [ ] T130: Visuals: textures, kerbs, start line, barrier, scenery, shadows, tinted cars. Done when: screenshots on 3 tracks look right.
+* [x] T129: Effects: trails, skid marks, smoke and dust, brake lights, start lights. Done when: screenshot check and cost measured.
+* [x] T130: Visuals: textures, kerbs, start line, barrier, scenery, shadows, tinted cars. Done when: screenshots on 3 tracks look right.
 * [ ] T131: Menus and HUD: leaderboard, results screen, minimap, key list `H`, camera (speed zoom, overview, cycle cars). Done when: the on-screen key list test passes.
 * [ ] T132: Swarm view. Done when: many cars from one policy run at 60 FPS.
 * [ ] T133: Performance: 20 cars with all effects and audio at 60 FPS. Done when: a bench script and a test threshold pass.
@@ -203,6 +203,16 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T129: Race effects
+
+* **Status:** DONE. `racer/render/effects.py`: skid marks (rear wheels sliding on tarmac, drawn as fading lines), tyre smoke (sliding), grass dust (wheels on grass), crash sparks plus a camera kick on the followed car; a pooled numpy particle field (700) and a capped segment list (6000); key `E` toggles them. All numbers in `arena.yaml: effects`. Tests: `tests/test_effects.py` (7: pool cap and expiry, skid chaining, shake decay, tarmac vs grass emission, crash, headless drawing). Brake lights existed already.
+* **Files:** Created `racer/render/effects.py`, `tests/test_effects.py`; edited `racer/render/arena.py`, `configs/demo/arena.yaml`, `log.md`.
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T130: Textured world, barrier and scenery
+
+* **Status:** DONE. The pre-rendered world now has tiled textures (grass, a gravel run-off band next to the road, asphalt with edge lines and slow brightness drift to hide the tiling), kerbs as before, a thicker red/white barrier with a shadow, an `outside` colour that matches the grass beyond the barrier, and trackside scenery placed from the track geometry (`racer/render/scenery.py`: grandstands by the start line, tyre walls on the outside of corners, tents, tree clumps; deterministic per track, never inside the barrier). `world_px_per_m` is 6 (builds take 3-4 s per track). Cars have drop shadows. A missing texture or sprite falls back (flat colours / noise), `textures.enabled: false` gives the old flat world. All numbers are in `configs/demo/render.yaml` (`textures`, `scenery`). Tests: `tests/test_world.py` (9).
+* **Files:** Created `racer/render/textures.py`, `racer/render/scenery.py`, `tests/test_world.py`; edited `racer/render/world.py`, `racer/render/cars.py`, `configs/demo/render.yaml`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T128: Brain panel
 

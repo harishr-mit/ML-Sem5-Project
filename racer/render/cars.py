@@ -35,6 +35,9 @@ class CarSprites:
         self.length, self.width = car_length_m, car_width_m
         self._src: dict[int, pygame.Surface | None] = {}
         self._scaled: dict[tuple[int, int], pygame.Surface] = {}
+        self._shadows: dict[tuple[int, int], pygame.Surface] = {}
+        self.shadow_m = 0.45         # drop shadow offset (down-right on screen)
+        self.shadow_alpha = 85
 
     def colour(self, i: int) -> tuple[int, int, int]:
         return self.palette[i % len(self.palette)]
@@ -63,6 +66,18 @@ class CarSprites:
                 self._scaled.clear()
         return self._scaled[key]
 
+    def _shadow(self, i: int, zoom: float, spr: pygame.Surface) -> pygame.Surface:
+        key = (i, int(round(zoom * 20)))
+        sh = self._shadows.get(key)
+        if sh is None:
+            sh = spr.copy()
+            sh.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MIN)       # black silhouette
+            sh.set_alpha(self.shadow_alpha)
+            if len(self._shadows) > 400:
+                self._shadows.clear()
+            self._shadows[key] = sh
+        return sh
+
     def draw(self, screen: pygame.Surface, cam: Camera, i: int, x: float, y: float, theta: float,
              braking: bool = False, ghost: bool = False) -> None:
         z = cam.view_zoom
@@ -74,6 +89,10 @@ class CarSprites:
             img = pygame.transform.rotate(spr, math.degrees(theta) - 90.0)
             if ghost:
                 img.set_alpha(90)
+            else:
+                shadow = pygame.transform.rotate(self._shadow(i, z, spr), math.degrees(theta) - 90.0)
+                off = int(self.shadow_m * z)
+                screen.blit(shadow, shadow.get_rect(center=(int(sx) + off, int(sy) + off)))
             screen.blit(img, img.get_rect(center=(int(sx), int(sy))))
         else:
             c, s = math.cos(theta), math.sin(theta)

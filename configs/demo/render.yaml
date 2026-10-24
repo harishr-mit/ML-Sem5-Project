@@ -4,7 +4,7 @@
 debug:
   window: [1280, 800]
   fps: 60
-  world_px_per_m: 4.0         # resolution of the pre-rendered track surface
+  world_px_per_m: 6.0         # resolution of the pre-rendered track surface (4 is faster to build, 6 is crisper at the default zoom)
   zoom_px_per_m: 8.0          # initial camera zoom
   zoom_min: 0.5
   zoom_max: 20.0
@@ -24,6 +24,39 @@ debug:
     enabled: true             # initial state; toggle with K
     margin: 0.97              # fraction of the available grip to use
     min_brake: 0.25           # never brake less than this while the key is held (even mid-slide)
+  # Ground textures (assets/textures/ground, tile sizes from assets/LICENSES.md) and trackside scenery. The
+  # photographic textures are darkened and desaturated to sit next to Kenney's flat sprites. enabled: false (or a
+  # missing file) falls back to the flat colours below.
+  textures:
+    enabled: true
+    ground:
+      grass:   {file: grass.jpg,   tile_m: 8.0,  darken: 0.30, desaturate: 0.25}
+      gravel:  {file: gravel.jpg,  tile_m: 4.0,  darken: 0.32, desaturate: 0.20}
+      asphalt: {file: asphalt.jpg, tile_m: 6.0,  darken: -1.00, desaturate: 0.15}   # the photo is very dark: brightened x2
+    outside_darken: 0.38        # grass beyond the barrier is darker, so the scenery stands out
+    gravel_band_m: 5.0          # run-off next to the road is gravel (visual only: it is grass physics)
+    edge_line_m: 0.28           # white line along the road edge (not on kerbs)
+    edge_line_colour: [214, 214, 208]
+    barrier_a: [226, 226, 230]
+    barrier_b: [196, 48, 48]
+    barrier_block_m: 4.0
+    variation: {cell_m: 45.0, strength: 0.10}   # slow brightness drift that hides the tiling
+  scenery:
+    enabled: true
+    spacing_m: 24.0             # one placement attempt per side every this many metres
+    barrier_gap_m: 2.5          # nothing closer than this to the barrier
+    straight_curvature: 0.004   # |1/radius| below this counts as a straight
+    grandstand_span_m: 120.0    # grandstands within this distance of the start line
+    grandstand_width_m: 22.0
+    grandstand_depth_m: 10.0
+    grandstand_gap_m: 1.5
+    tyre_wall_chance: 0.45      # on the outside of corners
+    tent_chance: 0.10
+    tree_chance: 0.55
+    tree_clump: 3
+    tree_depth_m: 14.0
+    shadow_m: 0.9               # drop shadow offset
+    shadow_alpha: 90
   sim_speeds: [0.25, 0.5, 1.0, 2.0, 4.0]
   car_sprite: car_1_blue.png  # in assets/sprites/cars/; falls back to a rectangle
   font: share_tech_mono.ttf   # in assets/fonts/; falls back to pygame's default font

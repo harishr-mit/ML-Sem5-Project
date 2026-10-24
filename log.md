@@ -179,7 +179,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T128: Brain panel: activation capture, network graph, input bars, outputs, key `B`. Done when: labels and finite activations are right for every compatible model.
 * [x] T129: Effects: trails, skid marks, smoke and dust, brake lights, start lights. Done when: screenshot check and cost measured.
 * [x] T130: Visuals: textures, kerbs, start line, barrier, scenery, shadows, tinted cars. Done when: screenshots on 3 tracks look right.
-* [ ] T131: Menus and HUD: leaderboard, results screen, minimap, key list `H`, camera (speed zoom, overview, cycle cars). Done when: the on-screen key list test passes.
+* [x] T131: Menus and HUD: leaderboard, results screen, minimap, key list `H`, camera (speed zoom, overview, cycle cars). Done when: the on-screen key list test passes.
 * [ ] T132: Swarm view. Done when: many cars from one policy run at 60 FPS.
 * [ ] T133: Performance: 20 cars with all effects and audio at 60 FPS. Done when: a bench script and a test threshold pass.
 * [ ] T134: Rays table: Delete column + *Remove ticked rays* button in Build & Queue. Done when: a page test removes chosen rows.
@@ -203,6 +203,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T131: Menus, HUD, minimap and camera
+
+* **Status:** DONE. Fonts: Rajdhani for the HUD, Orbitron for big numbers and titles (`render.yaml: fonts`). Dashboard for the followed car (`dashboard.py`: rpm arc with redline, speed, gear from the cosmetic gearbox, lap/last/best, lateral g, gas/brake/steer bars). Minimap (`minimap.py`, key N). Start lights (three reds, then green) instead of a number. Results screen on top of everything with medals, the fastest lap in purple, and Enter to race again (`run_race` restarts). The camera zooms out with speed (`camera_speed_zoom`, up to 30 % at 70 m/s) and eases back. Mode menu with an animated track-and-cars background, the wrapped credit line, accent bars. Tests: dashboard, minimap, camera and menu in `tests/test_render.py`; 71 passed in the demo test files.
+* **Files:** Created `racer/render/dashboard.py`, `racer/render/minimap.py`; edited `racer/render/hud.py`, `camera.py`, `arena.py`, `app.py`, `menu.py`, `configs/demo/render.yaml`, `tests/test_render.py`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T129: Race effects
 

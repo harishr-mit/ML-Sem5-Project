@@ -11,6 +11,9 @@ debug:
   zoom_step: 1.15             # per key press
   camera_lerp: 0.12           # fraction of the gap to the car closed per frame
   camera_lead_s: 0.4          # camera looks this many seconds ahead of the car
+  camera_speed_zoom: 0.30     # zoom out by up to this fraction at camera_speed_ref (a sense of speed)
+  camera_speed_ref: 70.0      # m/s
+  camera_speed_ease: 0.04     # fraction of the gap to the target zoom closed per frame
   kerb_stripe_m: 3.0          # length of each red / white kerb stripe
   centreline_dash_m: 4.0
   start_square_m: 1.0         # chequered start/finish line square size
@@ -59,8 +62,12 @@ debug:
     shadow_alpha: 90
   sim_speeds: [0.25, 0.5, 1.0, 2.0, 4.0]
   car_sprite: car_1_blue.png  # in assets/sprites/cars/; falls back to a rectangle
-  font: share_tech_mono.ttf   # in assets/fonts/; falls back to pygame's default font
+  font: share_tech_mono.ttf   # debug window font (in assets/fonts/; falls back to pygame's default font)
   font_size: 17
+  fonts:                      # game windows (T131): body, display (big numbers, countdown, title) and small labels
+    body: {file: rajdhani_semibold.ttf, size: 20}
+    display: {file: orbitron_bold.ttf, size: 34}
+    small: {file: rajdhani_medium.ttf, size: 16}
   colours:
     outside: [30, 32, 36]
     grass: [62, 110, 55]

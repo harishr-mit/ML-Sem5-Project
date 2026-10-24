@@ -79,8 +79,9 @@ def build_context(*, track: str, laps: int | None, sim_speed: float, screenshot:
     pygame.init()
     screen = pygame.display.set_mode(tuple(dcfg["window"]))
     pygame.display.set_caption(title or "RL Racing Line")
-    fonts = (load_font(dcfg["font"], int(dcfg["font_size"])), load_font(dcfg["font"], int(dcfg["font_size"] * 3)),
-             load_font(dcfg["font"], int(acfg["label_font_size"])))
+    fc = dcfg["fonts"]
+    fonts = (load_font(fc["body"]["file"], int(fc["body"]["size"])), load_font(fc["display"]["file"], int(fc["display"]["size"])),
+             load_font(fc["small"]["file"], int(fc["small"]["size"])))
     rows = [{k: typed(v) for k, v in r.items()} for r in Registry().models()]
     ctx = Context(screen, pygame.time.Clock(), fonts, colours, acfg, dcfg, rows, track=track,
                   laps=laps or int(acfg["race"]["laps"]), sim_speed=sim_speed, screenshot=screenshot,

@@ -1,4 +1,5 @@
 """The simulation never imports pygame, and the debug window runs headless."""
+import pytest
 import subprocess
 import sys
 from pathlib import Path
@@ -87,7 +88,7 @@ def test_arena_key_list_matches_the_key_handling():
     handled = set(re.findall(r"pygame\.K_([A-Za-z0-9_]+)", body))
     listed = " ".join(k for k, _ in demo.arena_keys(False, human=True)).lower()
     names = {"ESCAPE": "esc", "TAB": "tab", "SPACE": "space", "PLUS": "+", "EQUALS": "+", "KP_PLUS": "+",
-             "MINUS": "−", "KP_MINUS": "−"}
+             "MINUS": "−", "KP_MINUS": "−", "RETURN": "enter", "KP_ENTER": "enter"}
     missing = [k for k in handled if names.get(k, k.lower()) not in listed]
     assert not missing, f"keys handled but not listed: {missing}"
     assert demo.arena_keys(True)[-1] == ("Esc", "quit")
@@ -207,3 +208,75 @@ def test_title_screen_carries_the_attribution_line():
     from racer.config import load_preset
     credits = load_preset("demo", "arena")["credits"]
     assert "skyernaklea" in credits and "CC BY 4.0" in credits
+
+
+def test_camera_zooms_out_with_speed_and_back_in():
+    from racer.config import load_preset
+    from racer.render.camera import Camera
+    cfg = load_preset("demo", "render")["debug"]
+    cam = Camera((1280, 800), cfg)
+    base = cam.view_zoom
+    for _ in range(300):
+        cam.update(0.0, 0.0, 70.0, 0.0)                                  # flat out
+    assert cam.view_zoom == pytest.approx(base * (1 - cfg["camera_speed_zoom"]), rel=0.02)
+    for _ in range(300):
+        cam.update(0.0, 0.0, 0.0, 0.0)
+    assert cam.view_zoom == pytest.approx(base, rel=0.02)
+    cam.overview = True
+    cam.zoom_fit = 3.0
+    assert cam.view_zoom == 3.0                                          # the overview ignores the speed zoom
+
+
+def test_minimap_maps_the_track_into_its_box_and_marks_cars():
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    from types import SimpleNamespace
+    import numpy as np
+    from racer.config import load_preset
+    from racer.render.minimap import Minimap
+
+    pygame.init()
+    screen = pygame.display.set_mode((640, 480))
+    colours = {k: tuple(v) for k, v in load_preset("demo", "render")["debug"]["colours"].items()}
+    th = np.linspace(0, 2 * np.pi, 80, endpoint=False)
+    pts = np.stack([300 * np.cos(th), 120 * np.sin(th)], axis=1)                     # a 600 x 240 m ellipse
+    track = SimpleNamespace(centreline=SimpleNamespace(points=pts), key="ellipse")
+    mm = Minimap(colours, size=(250, 170), margin=12)
+    mm.set_track(track)
+    xs, ys = zip(*(mm.to_map(x, y) for x, y in pts))
+    assert 12 - 1 <= min(xs) and max(xs) <= 250 - 12 + 1 and 12 - 1 <= min(ys) and max(ys) <= 170 - 12 + 1
+    assert mm.to_map(0.0, 100.0)[1] < mm.to_map(0.0, -100.0)[1]                      # north is up on screen
+    cars = [SimpleNamespace(index=0, pose=(300.0, 0.0, 0.0)), SimpleNamespace(index=1, pose=(-300.0, 0.0, 0.0))]
+    before = pygame.image.tobytes(screen, "RGB")
+    mm.draw(screen, (10, 10), cars, 0, lambda i: (255, 0, 0) if i == 0 else (0, 0, 255))
+    assert pygame.image.tobytes(screen, "RGB") != before
+    pygame.quit()
+
+
+def test_dashboard_draws_gauge_text_and_bars():
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    from types import SimpleNamespace
+    from racer.config import load_preset
+    from racer.render.dashboard import Dashboard, arc_points
+
+    pts = arc_points(0.0, 0.0, 10.0, 225.0, -45.0, 4)
+    assert pts[0][0] < 0 < pts[-1][0] and pts[0][1] > 0 > 0 - 1                      # starts bottom-left, ends bottom-right
+    pygame.init()
+    screen = pygame.display.set_mode((800, 600))
+    fonts = (pygame.font.Font(None, 22), pygame.font.Font(None, 40), pygame.font.Font(None, 16))
+    colours = {k: tuple(v) for k, v in load_preset("demo", "render")["debug"]["colours"].items()}
+    dash = Dashboard(fonts, colours)
+    phys = SimpleNamespace(speed=30.0, a_lat=9.81, throttle=0.7, brake=0.0, steer=0.2)
+    car = SimpleNamespace(label="R000_x@1k", env=SimpleNamespace(car=phys), lap_times=[61.2], state="racing",
+                          crashes=1, last_crash=None)
+    race = SimpleNamespace(lap_of=lambda c: 2, rules=SimpleNamespace(laps=3), current_lap_time=lambda c: 12.3)
+    for rpm in (1.0, 2.0, 3.5):                                                       # beyond the redline is clamped
+        rect = dash.draw(screen, race, car, (255, 0, 0), rpm, 3)
+    assert rect.w == dash.size[0] and rect.bottom <= 600
+    car.state = "respawn"
+    car.last_crash = "off_road"
+    dash.draw(screen, race, car, (255, 0, 0), 1.0, 1)
+    pygame.quit()

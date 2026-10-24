@@ -116,29 +116,59 @@ class RaceHud:
             screen.blit(self.text.get(s, col), (20, top + 6 + k * lh))
 
     def countdown(self, screen: pygame.Surface, race: Race) -> None:
-        if race.started:
-            if race.t < 1.0:
-                self._centre(screen, "GO!", self.c["hud_good"])
+        """Start lights: one more red light each second, all green at the start."""
+        if race.started and race.t >= 1.0:
             return
-        self._centre(screen, str(int(-race.t) + 1), self.c["hud_text"])
+        n = 3
+        left = int(-race.t) + 1 if not race.started else 0           # seconds to go (3, 2, 1) or 0
+        lit = n - left + 1 if left else n
+        w, r, gap = 3 * 54 + 28, 20, 54
+        bar = pygame.Rect(0, 0, w, 64)
+        bar.midtop = (screen.get_width() // 2, 14)
+        pygame.draw.rect(screen, (14, 16, 20), bar, border_radius=12)
+        pygame.draw.rect(screen, (70, 74, 84), bar, 2, border_radius=12)
+        for i in range(n):
+            on = i < lit if left else True
+            col = (235, 50, 45) if left else (70, 225, 110)
+            colour = col if on else (48, 28, 28)
+            centre = (bar.x + 14 + r + i * gap + 6, bar.centery)
+            if on:
+                glow = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
+                pygame.draw.circle(glow, (*col, 60), (r * 2, r * 2), r * 2)
+                screen.blit(glow, glow.get_rect(center=centre))
+            pygame.draw.circle(screen, colour, centre, r)
+        if not left:
+            self._centre(screen, "GO!", self.c["hud_good"])
 
     def results(self, screen: pygame.Surface, race: Race, colour_of) -> None:
         cars = race.standings()
         lh = self.font.get_linesize() + 4
-        w = 620
-        h = lh * (len(cars) + 3)
+        w = 720
+        title_h = self.big.font.get_linesize()
+        h = lh * (len(cars) + 2) + title_h + 24
         x0, y0 = (screen.get_width() - w) // 2, max((screen.get_height() - h) // 2, 10)
-        panel(screen, pygame.Rect(x0, y0, w, h), (10, 12, 16, 220))
+        panel(screen, screen.get_rect(), (0, 0, 0, 140))                       # dim everything behind
+        panel(screen, pygame.Rect(x0, y0, w, h), (10, 12, 16, 245))
         t = self.text
-        screen.blit(t.get(f"RESULTS — {race.rules.laps} laps   (Esc: back)", self.c["hud_text"]), (x0 + 16, y0 + 8))
-        y = y0 + 8 + lh * 2
+        screen.blit(self.big.get("RESULTS", self.c["hud_text"]), (x0 + 20, y0 + 10))
+        lapw = "lap" if race.rules.laps == 1 else "laps"
+        screen.blit(t.get(f"{race.rules.laps} {lapw}   ·   Enter: race again   ·   Esc: back", self.c["hud_dim"]),
+                    (x0 + 20, y0 + 10 + title_h + 2))
+        y = y0 + 10 + title_h + 2 + lh * 2
+        fastest = min((min(c.lap_times) for c in cars if c.lap_times), default=None)
+        medals = ((255, 205, 60), (200, 205, 215), (205, 135, 70))
         for pos, car in enumerate(cars, 1):
+            if pos <= 3 and car.finished_t is not None:
+                pygame.draw.circle(screen, medals[pos - 1], (x0 + 26, y + lh // 2 - 2), 9)
             pygame.draw.rect(screen, colour_of(car.index), (x0 + 46, y + 3, 12, lh - 10))
             total = fmt_time(car.finished_t) if car.finished_t is not None else "DNF"
             best = fmt_time(min(car.lap_times)) if car.lap_times else "-"
-            for s, cx in ((str(pos), x0 + 16), (car.label, x0 + 66), (total, x0 + 350), (f"best {best}", x0 + 440),
-                          (f"{car.crashes} crash" if car.crashes else "", x0 + 548)):
-                screen.blit(t.get(s, self.c["hud_text"]), (cx, y))
+            purple = fastest is not None and car.lap_times and min(car.lap_times) == fastest
+            for s, cx, col in ((str(pos), x0 + 16, self.c["hud_text"]), (car.label, x0 + 66, self.c["hud_text"]),
+                               (total, x0 + 380, self.c["hud_text"]),
+                               (f"best {best}", x0 + 480, (200, 130, 255) if purple else self.c["hud_text"]),
+                               (f"{car.crashes} crash" if car.crashes else "", x0 + 620, self.c["hud_dim"])):
+                screen.blit(t.get(s, col), (cx, y))
             y += lh
 
     def keys(self, screen: pygame.Surface, items: Sequence[tuple[str, str]], shown: bool) -> None:

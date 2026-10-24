@@ -22,7 +22,10 @@ from racer.agents.activations import ActivationProbe
 from racer.agents.loader import LoadedModel
 from racer.render.audio import CarAudio
 from racer.render.brain_panel import BrainPanel, ModelInfo, model_info
+from racer.render.dashboard import Dashboard
 from racer.render.effects import Effects
+from racer.render.gearbox import Gearbox
+from racer.render.minimap import Minimap
 from racer.render.ui import ModelPicker, Selection
 from racer.track.io import track_folders
 
@@ -88,17 +91,27 @@ def arena_keys(quit_on_esc: bool, human: bool = False) -> list[tuple[str, str]]:
         ("T", "trails of all cars"),
         ("E", "tyre smoke, skid marks, sparks"),
         ("L", "car labels"),
+        ("N", "minimap"),
         ("Space", "pause"),
         ("+ / −", "sim speed"),
         ("mouse wheel", "zoom"),
         ("M", "sound on / off"),
+        ("Enter", "race again (after the finish)"),
         ("H", "hide / show this list"),
         ("Esc", "quit" if quit_on_esc else "back to the picker"),
     ]
 
 
 def run_race(ctx: Context, sel: Selection) -> str:
-    """Run one race until Esc ("back") or the window closes ("quit")."""
+    """Run races of ``sel`` until Esc (``"back"``) or the window closes (``"quit"``); Enter after a finish restarts."""
+    while True:
+        result = _run_race_once(ctx, sel)
+        if result != "again":
+            return result
+
+
+def _run_race_once(ctx: Context, sel: Selection) -> str:
+    """One race; returns ``"back"``, ``"quit"`` or ``"again"``."""
     screen, clock, models = ctx.screen, ctx.clock, ctx.models
     acfg, dcfg, colours, fonts = ctx.acfg, ctx.dcfg, ctx.colours, ctx.fonts
 
@@ -170,6 +183,12 @@ def run_race(ctx: Context, sel: Selection) -> str:
     brain = BrainPanel(ctx.fonts, colours, (int(acfg["brain"]["width"]), int(acfg["brain"]["height"])),
                        float(acfg["brain"]["smoothing"]))
     show_brain, brain_car = bool(acfg["brain"]["default_on"]), -1
+    dash = Dashboard(fonts, colours)
+    gearbox = Gearbox(load_preset("demo", "audio")["gearbox"])
+    gearbox_car = -1
+    minimap = Minimap(colours)
+    minimap.set_track(race.track)
+    show_map = True
     fx = Effects(acfg["effects"], seed=1)
     show_fx = bool(acfg["effects"]["default_on"])
     show_keys = bool(acfg["show_keys_at_start"])
@@ -215,6 +234,10 @@ def run_race(ctx: Context, sel: Selection) -> str:
                     show_brain = not show_brain
                 elif k == pygame.K_e:
                     show_fx = not show_fx
+                elif k == pygame.K_n:
+                    show_map = not show_map
+                elif k in (pygame.K_RETURN, pygame.K_KP_ENTER) and race.over:
+                    result = "again"
                 elif k == pygame.K_l:
                     show_labels = not show_labels
                 elif k == pygame.K_h:
@@ -307,12 +330,17 @@ def run_race(ctx: Context, sel: Selection) -> str:
         title = f"{race.track.name} · {race.rules.laps} laps · ×{speeds[speed_i]:g}" + (" · PAUSED" if paused else "") \
             + (" · fair physics" if sel.fair else "")
         if race.over:
-            hud.results(screen, race, sprites.colour)
             rows = []
         else:
             rows = hud.leaderboard(screen, race, sprites.colour, selected, title)
             hud.countdown(screen, race)
-        hud.car_readout(screen, race, sc, sprites.colour(selected))
+        if gearbox_car != selected:
+            gearbox.reset()
+            gearbox_car = selected
+        rpm, _ = gearbox.update(n / 60.0, sc.env.car.speed, sc.env.car.throttle > 0.05)
+        dash_rect = dash.draw(screen, race, sc, sprites.colour(selected), rpm, gearbox.gear)
+        if show_map:
+            minimap.draw(screen, (12, dash_rect.y - minimap.size[1] - 10), race.cars, selected, sprites.colour)
         if show_brain:
             if brain_car != selected:
                 brain.reset()
@@ -326,6 +354,8 @@ def run_race(ctx: Context, sel: Selection) -> str:
             else:
                 brain.draw(screen, (12, 56), ModelInfo(sc.label, [], [], ""), None)
         hud.keys(screen, key_items, show_keys)
+        if race.over:
+            hud.results(screen, race, sprites.colour)
         fps = labels.get(f"fps {clock.get_fps():3.0f}", colours["hud_dim"])
         screen.blit(fps, (12, 12))
         if audio is not None:

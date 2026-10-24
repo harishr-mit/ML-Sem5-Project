@@ -1,6 +1,7 @@
 """2D camera: world metres (x right, y up) ↔ screen pixels. Follow a car or show the whole track."""
 from __future__ import annotations
 
+import math
 from typing import Any, Mapping
 
 
@@ -12,11 +13,12 @@ class Camera:
         self.cx = self.cy = 0.0
         self.overview = False
         self.zoom_fit = self.zoom
+        self.dyn = 1.0                      # speed-dependent zoom factor (1 = none)
 
     @property
     def view_zoom(self) -> float:
         """Pixels per metre currently on screen (the fitted zoom in overview)."""
-        return self.zoom_fit if self.overview else self.zoom
+        return self.zoom_fit if self.overview else self.zoom * self.dyn
 
     def to_screen(self, x: float, y: float) -> tuple[float, float]:
         z = self.view_zoom
@@ -46,6 +48,11 @@ class Camera:
             if extent is not None:
                 self.fit(extent, fit_width)
             return
+        k = float(self.cfg.get("camera_speed_zoom", 0.0))
+        if k > 0.0:
+            target = 1.0 - k * min(math.hypot(vx, vy) / float(self.cfg["camera_speed_ref"]), 1.0)
+            ease = 1.0 - (1.0 - float(self.cfg["camera_speed_ease"])) ** max(sim_speed, 0.0)
+            self.dyn += (target - self.dyn) * ease
         lead = self.cfg["camera_lead_s"]
         tx, ty = x + vx * lead, y + vy * lead
         a = 1.0 - (1.0 - self.cfg["camera_lerp"]) ** max(sim_speed, 0.0)

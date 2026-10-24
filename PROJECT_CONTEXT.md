@@ -617,8 +617,18 @@ How it is built:
 | R017 | T50 follow-up | fine-tune of R015@4600k on `maps7` | 57 % | 88 % | 0.97 | no gain over its parent |
 | R018 | R015 reliability (seed 2) | rays7_narrow, `maps7`, 5M | 64 % | 63 % (test maps 0 %) | 1.00 | held-out 100 %, but never finishes the test maps |
 | R019 | R015 reliability (seed 1, 8M) | rays7_narrow, `maps7`, 8M | 14 % | 0 % | 0.92 | failed to learn: stuck at ~50 % barrier crashes |
+| R020 | E10 control | GA, Training Ground only, 300 generations (track limits on) | 14 % | 6 % | 1.02 | overfits like E5 |
+| R021 | E10 | GA seed 1, `rays7_lean`, 7 maps, 46.3M steps (gen 919) | 93 % | 75 % | 1.05 | test maps 50 % |
+| R022 | E10 | GA seed 2, 45.3M steps (gen 899) | 86 % | 94 % | 1.07 | test maps 100 % |
+| **R023** | E10 | **PPO under GA rules** (`rays7_lean`, track limits, 7 maps), 5M steps | **100 %** | **100 %** | **0.975** | one seed; best of 50 checkpoints |
 
-**Neuroevolution, first results (T96, scratch runs S004/S005, 2026-10-15; not in the registry):** σ 0.02 vs 0.05, 10M env steps each (≈ 30 min each on 5 processes, rays7_lean, 7 training maps, track limits on). σ 0.02 won: best checkpoint (S004@8738k, generation 199) **100 % seen, 87.5 % unseen, lap ratio 0.997**, against 86 % / 62.5 % / 1.083 for σ 0.05; on average 28 of 50 cars finished their lap in the last 50 generations (σ 0.05: 16). One seed each, and the best checkpoint varies a lot from one checkpoint to the next (S004@10017k: 36 % seen), so these are early, single-seed numbers. The real runs (control + main) are queued in `configs/queue/e10_ga.yaml` (T97).
+**Neuroevolution, first results (T96, scratch runs S004/S005, 2026-10-15; not in the registry):** σ 0.02 vs 0.05, 10M env steps each (≈ 30 min each on 5 processes, rays7_lean, 7 training maps, track limits on). σ 0.02 won: best checkpoint (S004@8738k, generation 199) **100 % seen, 87.5 % unseen, lap ratio 0.997**, against 86 % / 62.5 % / 1.083 for σ 0.05; on average 28 of 50 cars finished their lap in the last 50 generations (σ 0.05: 16). One seed each, and the best checkpoint varies a lot from one checkpoint to the next (S004@10017k: 36 % seen), so these are early, single-seed numbers. The real runs were then run through `configs/queue/e10_ga.yaml` (T97); results below.
+
+**E10 results (2026-10-24, queue `e10_ga`, evaluated with protocol v2 under each model's own rules: track limits on for all four runs; registry R020–R023):**
+- **PPO beat the GA.** R023 (PPO, same 10 inputs, same rules, same 7 maps) reached 100 % seen and unseen with lap ratio 0.975 at its best checkpoint (@1700k), against 93 % / 75 % / 1.05 (R021) and 86 % / 94 % / 1.07 (R022) for the GA seeds. PPO used 5M env steps (46.6 min); the GA runs stopped on their validation plateau after about 46M and 45M steps (45 and 35 min). So the GA needed about 9× more env steps for similar wall-clock time, because its steps are cheap (no gradient updates), and still drove slower laps.
+- **Control (R020):** GA on Training Ground only overfits as PPO did in E5: 14 % seen, 0 % on the test maps, 10 % on held-out.
+- **Caveats:** one seed per method. The two GA seeds disagree on the test maps (50 % vs 100 %), which repeats the lesson of R015/R018. Each model's best checkpoint was picked from many evaluated ones (GA 18, PPO 50), so the numbers are optimistic, PPO's slightly more so. The GA's best evaluated checkpoint (R021@46282k) was its last one, not the best-validated one, so validation did not predict evaluation, as in S004. GA tries start on the start line (T115) and PPO's at random points; evaluation is the same for both. R015 (no track limits, `rays7_narrow`) is not a like-for-like comparator.
+- **Open question for the owner:** more seeds (a second PPO seed of R023 is the cheapest test of whether PPO's 100 % is luck).
 
 Results are one seed per setting unless two are listed. **R015's result doesn't reproduce reliably (R018, R019, 2026-10-11).**
 
@@ -652,7 +662,7 @@ Results are one seed per setting unless two are listed. **R015's result doesn't 
 
 - **Must:** grip physics env, PPO training, registry (CSV and xlsx), load any model, multi-car arena (10–20), rays, trails, HUD, learning curves, showcase tracks, held-out evaluation, map library with a test split (D19), AI Sandbox (D24)
 - **Should:** Evolution Race, textures and effects, Draw-a-Track, Human vs AI, ablations E2–E5, telemetry trace, highlight video, engine and tyre audio (§10.4)
-- **Could:** brain panel, swarm view, SAC (E7), neuroevolution (E10, D26; built, runs pending), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
+- **Could:** brain panel, swarm view, SAC (E7), neuroevolution (E10, D26; built, run: PPO won, §11), curvature (E6), downforce (E9), trackside scenery, audio in recorded videos, gamepad
 - **Won't (this time):** car-to-car collisions, multi-agent competitive training, pixel/CNN observations, 3D
 
 ---
@@ -798,6 +808,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-24 | **D26 start rule (owner, T115):** GA training tries always start on the start/finish line (centred, aligned, standing) on every map, instead of a random point, offset and speed. New setting `ga.start` (`line` in `ga_default`; a snapshot without it means `random`, so older runs resume unchanged); the map is still drawn at random each generation, so the map sequence is unchanged. PPO training starts are unchanged (§7.4). |
 | 2026-10-24 | **D27 (owner): every feature is reflected in the AI Sandbox** (a page, launch option or glossary entry, with a headless page test); a feature isn't done until it is. Rule in `CLAUDE.md` (its own section, the workflow and the parts table) and §10.5. |
 | 2026-10-24 | **Draw-a-Track in the sandbox (owner, T119):** drawn *inside* the sandbox on a canvas (`streamlit-drawable-canvas` 0.13.0, a new pinned package) rather than a button opening a game-window editor; saved to `tracks/user/` (only the old `final_mix` trains on that folder; `maps7`/`train7` don't). The drawing → track logic is `racer/track/sketch.py` (T111), pygame-free, so a game-window editor can reuse it. |
+| 2026-10-24 | **E10 results (T121):** under identical inputs and rules, PPO (R023, 5M steps) beat neuroevolution (R021/R022, about 46M steps): unseen 100 % vs 75 % / 94 %, lap ratio 0.975 vs 1.05 / 1.07. Single seeds, best-of-many checkpoints, so claims need more seeds (§11). No design rule changes. |
 
 ---
 

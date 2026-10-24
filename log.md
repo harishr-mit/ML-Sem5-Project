@@ -208,6 +208,7 @@ Shared context for every agent working in this directory. Read this file **befor
 
 * **Status:** DONE. `feat/demo-complete` (T124–T138) merged into `main` (fast-forward). Full suite on `main`: 373 passed (after adding the R024 run notes). Dev worktree removal: see below.
 * **R024 (the owner's GA run with `rays6_narrow`, finished 21:26 in `main`):** committed its registry rows, eval copies and `configs/env/sb_rays6_narrow.yaml`, and added its entry to `registry/run_notes.yaml` (`test_run_notes_match_the_runs` failed without it). Best checkpoint @11999k: unseen 62.5 %, lap ratio 1.41.
+* **Backup after the queue and the merge:** `backup_models.py` copied 292 files (13.2 MB), 34 new model folders (R024) and 3 lineage files; no CONFLICT lines. Worktree `ML Sem5 Project - dev` and branch `feat/demo-complete` removed (T122 had copied `wiggly_wiggly` earlier).
 * **Persistence rules (owner, new in `CLAUDE.md`):** created `DECISIONS.md` and `user.md`, updated `REVIEW_LATER.md` (E10 result, editor dropped). Plans stay in `docs/` (`DEMO_PLAN.md`).
 * **Files:** Created `DECISIONS.md`, `user.md`; edited `REVIEW_LATER.md`, `registry/run_notes.yaml`, `log.md`; committed the owner's `CLAUDE.md` edit (Persistence section).
 

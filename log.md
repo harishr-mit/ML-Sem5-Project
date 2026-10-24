@@ -158,11 +158,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T107: Docs (PROJECT_CONTEXT, README, plan, glossary) for T103–T106; full suite; review; commit.
 * [x] T108: Owner (2026-10-24): `feat/neuroevolution` merged to `main` (PR #1); "Current Status" rewritten to match.
 * [x] T109: Owner (2026-10-24): `REVIEW_LATER.md` listing every pending owner decision (owner leaning: drop PPO if GA wins; decided after T97).
-* [~] T110: T08 Draw-a-Track mode (owner: first Week 3 feature, PROJECT_CONTEXT §6, §10.1). Branch `feat/draw-a-track`. Drawing → track (T111) and the sandbox page (T119) are done; **open (owner): is the game-window editor (T112–T113) still wanted, now that drawing lives in the sandbox?**
+* [x] T110 (editor part dropped by the owner, D28; sandbox page done in T119): T08 Draw-a-Track mode (owner: first Week 3 feature, PROJECT_CONTEXT §6, §10.1). Branch `feat/draw-a-track`. Drawing → track (T111) and the sandbox page (T119) are done; **open (owner): is the game-window editor (T112–T113) still wanted, now that drawing lives in the sandbox?**
 * [x] T111: `racer/track/sketch.py`: drawn points (metres) → smoothed control points → `TrackSpec`, same validation as the generator; auto-scale a too-small drawing up to the minimum length / corner radius; direction as drawn. Settings in `configs/demo/editor.yaml`. Done when: tests for circle, cw/ccw, small doodle, sharp square, figure-eight, too few points pass.
-* [ ] T112: `racer/render/editor.py`: draw freehand (drag) or click points, undo, clear, width ±, direction flip, live validation message with the clash marked, preview of the built road. Done when: a headless test drives it with synthetic events into a valid track.
-* [ ] T113: `demo.py --draw`: editor → model picker (drawn track preselected) → race; Esc returns to the editor with the drawing kept; `S` saves to `tracks/user/`. Done when: headless screenshot run on a scripted drawing races a model.
-* [ ] T114: Docs (PROJECT_CONTEXT §6/§10.1, README, glossary if needed), full suite, review, commit.
+* [!] T112 (dropped by the owner, D28): `racer/render/editor.py`: draw freehand (drag) or click points, undo, clear, width ±, direction flip, live validation message with the clash marked, preview of the built road. Done when: a headless test drives it with synthetic events into a valid track.
+* [!] T113 (dropped by the owner, D28): `demo.py --draw`: editor → model picker (drawn track preselected) → race; Esc returns to the editor with the drawing kept; `S` saves to `tracks/user/`. Done when: headless screenshot run on a scripted drawing races a model.
+* [!] T114 (dropped by the owner, D28): Docs (PROJECT_CONTEXT §6/§10.1, README, glossary if needed), full suite, review, commit.
 * [x] T115: Owner (2026-10-24, mid-T110): GA training tries always start on the start/finish line (centred, aligned, standing) on every map, not at a random point. New setting `ga.start: line | random` (`ga_default`: line; missing = random, so older runs resume unchanged). Done when: test shows line starts and an unchanged map sequence; docs (PROJECT_CONTEXT §8, §16, glossary, README). T110 paused meanwhile.
 * [x] T116: Owner decisions for the E10 queue (2026-10-24): control run (TG, 300 gen), GA main seeds 1 and 2 (no generation cap, plateau stop), PPO under GA rules (rays7_lean + track limits, train7, 5M steps) last; σ stays 0.02; commit and merge locally; the owner starts the queue.
 * [x] T117: Owner (2026-10-24): the E10 queue runs in this folder on `main`; development continues in a git worktree (`ML Sem5 Project - dev`, branch `feat/draw-a-track`); both merged when the queue finishes. Rules noted under Current Status.
@@ -171,6 +171,22 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T120: Owner (2026-10-24): own `.venv` in the dev worktree, rebuilt on Python 3.11.9 (the first one was 3.14 and empty); package versions identical to the main venv.
 * [x] T121: E10 queue finished (2026-10-24); backup checked; E10 results recorded (PROJECT_CONTEXT §11/§16, `registry/run_notes.yaml`); `feat/draw-a-track` merged into `main`, full suite 281 passed. Worktree removed in T122.
 * [x] T122: Remove the dev worktree and copy the drawn track `wiggly_wiggly` to `main` (owner, 2026-10-24).
+* [x] T123: Owner (2026-10-24): finish all demo and analysis work, then experiment freely. Plan `docs/DEMO_PLAN.md`, decision D28. Worktree `ML Sem5 Project - dev`, branch `feat/demo-complete`. Done when: plan and decisions committed.
+* [ ] T124: `demo.py` shell: mode menu (arena, Evolution Race, Human vs AI, swarm), shared window and state. Done when: headless, the menu starts each mode and returns.
+* [ ] T125: Audio (§10.4): `gearbox.py`, `audio.py`, toggle `S` + button in every race window; on when watching a race, off for training/sandbox/analysis; `--sound/--no-sound`; Launch checkbox. Done when: tests for gearbox ratios and RPM→offset (dummy audio driver) and the toggle pass.
+* [ ] T126: Evolution Race: pick a run and checkpoints (every N, evenly spaced, hand-picked, best-validated), labels by step; sandbox Launch option. Done when: a scripted race of 4 checkpoints runs headless.
+* [ ] T127: Human vs AI: keyboard and gamepad, ABS assist, physics choice; sandbox *Drive it yourself* (a game window). Done when: key events move a car headless and Launch builds the command.
+* [ ] T128: Brain panel: activation capture, network graph, input bars, outputs, key `B`. Done when: labels and finite activations are right for every compatible model.
+* [ ] T129: Effects: trails, skid marks, smoke and dust, brake lights, start lights. Done when: screenshot check and cost measured.
+* [ ] T130: Visuals: textures, kerbs, start line, barrier, scenery, shadows, tinted cars. Done when: screenshots on 3 tracks look right.
+* [ ] T131: Menus and HUD: leaderboard, results screen, minimap, key list `H`, camera (speed zoom, overview, cycle cars). Done when: the on-screen key list test passes.
+* [ ] T132: Swarm view. Done when: many cars from one policy run at 60 FPS.
+* [ ] T133: Performance: 20 cars with all effects and audio at 60 FPS. Done when: a bench script and a test threshold pass.
+* [ ] T134: Rays table: Delete column + *Remove ticked rays* button in Build & Queue. Done when: a page test removes chosen rows.
+* [ ] T135: `racer/agents/telemetry.py` + `racer/sandbox/plots.py`: racing line, speed trace, g-g diagram, braking zones, registry plots (curves, ablation bars, E10). Done when: unit tests on small data pass.
+* [ ] T136: Sandbox *Workbench* page (live plots from the same runtime) + default plots on Overview; Compare links to it. Done when: headless page tests pass.
+* [ ] T137: `scripts/make_plots.py`: the PNG report set from the same functions. Done when: it writes the set from the registry.
+* [ ] T138: Docs (PROJECT_CONTEXT §10/§12/§16, README, glossary, `assets/LICENSES.md`), full suite, merge `feat/demo-complete` into `main`, remove the worktree. Done when: the suite passes on `main`.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -187,6 +203,13 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T123: Plan for finishing the demo and the analysis workbench (D28)
+
+* **Owner decisions (answers to my questions):** finish the demo and analysis first, then experiment freely. In: mode menu, Evolution Race (top priority), Human vs AI, swarm view, brain panel as a live network graph, audio everywhere a race is watched (on for races, off for training/sandbox/analysis, toggle in every window), real polish (car and track visuals, effects, menus and HUD, camera and feel), a sandbox Workbench for live plots, *Drive it yourself* from the sandbox, a Delete option for the rays table. Out: the game-window drawing editor, the video recorder, slides and the highlight video.
+* **Worktree:** `ML Sem5 Project - dev`, branch `feat/demo-complete` (from `main` @ `7202ac8`), because the sandbox queue (`R024_GA_rays6_narrow_s1`) runs in `main` and real runs refuse uncommitted code. Python: the main `.venv` with `PYTHONPATH` set to the worktree (checked).
+* **Files:** Created `docs/DEMO_PLAN.md`. Edited `log.md` (T110, T112–T114 closed as dropped, T123–T138 added, this entry), `PROJECT_CONTEXT.md` (§16, D28).
+* **Notes:** merge rules are in `docs/DEMO_PLAN.md` §5.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T122: Dev worktree removed
 

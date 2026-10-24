@@ -18,7 +18,10 @@ import pygame
 
 from racer.config import load_preset
 from racer.render.app import Context
+from racer.agents.activations import ActivationProbe
+from racer.agents.loader import LoadedModel
 from racer.render.audio import CarAudio
+from racer.render.brain_panel import BrainPanel, ModelInfo, model_info
 from racer.render.ui import ModelPicker, Selection
 from racer.track.io import track_folders
 
@@ -80,6 +83,7 @@ def arena_keys(quit_on_esc: bool, human: bool = False) -> list[tuple[str, str]]:
         ("click a row", "follow that car"),
         ("F", "overview / follow"),
         ("R", "rays of the followed car"),
+        ("B", "brain panel (network activity)"),
         ("T", "trails of all cars"),
         ("L", "car labels"),
         ("Space", "pause"),
@@ -97,7 +101,6 @@ def run_race(ctx: Context, sel: Selection) -> str:
     acfg, dcfg, colours, fonts = ctx.acfg, ctx.dcfg, ctx.colours, ctx.fonts
 
     from racer.agents.baseline import BaselineController
-    from racer.agents.loader import LoadedModel
     from racer.env.race import Entry, Race
     from racer.env.racing_env import make_env_config
     from racer.env.sensors import cast_rays
@@ -162,6 +165,9 @@ def run_race(ctx: Context, sel: Selection) -> str:
     speed_i = speeds.index(ctx.sim_speed) if ctx.sim_speed in speeds else speeds.index(1.0)
     selected = 0
     show_rays, all_trails, show_labels, paused = True, False, True, False
+    brain = BrainPanel(ctx.fonts, colours, (int(acfg["brain"]["width"]), int(acfg["brain"]["height"])),
+                       float(acfg["brain"]["smoothing"]))
+    show_brain, brain_car = bool(acfg["brain"]["default_on"]), -1
     show_keys = bool(acfg["show_keys_at_start"])
     key_items = arena_keys(quit_on_esc=ctx.direct, human=human is not None)
     rows: list = []
@@ -201,6 +207,8 @@ def run_race(ctx: Context, sel: Selection) -> str:
                     show_rays = not show_rays
                 elif k == pygame.K_t:
                     all_trails = not all_trails
+                elif k == pygame.K_b:
+                    show_brain = not show_brain
                 elif k == pygame.K_l:
                     show_labels = not show_labels
                 elif k == pygame.K_h:
@@ -289,6 +297,18 @@ def run_race(ctx: Context, sel: Selection) -> str:
             rows = hud.leaderboard(screen, race, sprites.colour, selected, title)
             hud.countdown(screen, race)
         hud.car_readout(screen, race, sc, sprites.colour(selected))
+        if show_brain:
+            if brain_car != selected:
+                brain.reset()
+                brain_car = selected
+            m = sc.entry.key
+            if isinstance(m, LoadedModel):
+                probe = ctx.probes.get(m.model_id)
+                if probe is None:
+                    probe = ctx.probes[m.model_id] = ActivationProbe(m.policy.policy, m.normalise)
+                brain.draw(screen, (12, 56), model_info(m), probe.capture(sc.obs), sc.obs)
+            else:
+                brain.draw(screen, (12, 56), ModelInfo(sc.label, [], [], ""), None)
         hud.keys(screen, key_items, show_keys)
         fps = labels.get(f"fps {clock.get_fps():3.0f}", colours["hud_dim"])
         screen.blit(fps, (12, 12))

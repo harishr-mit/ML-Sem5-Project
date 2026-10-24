@@ -176,7 +176,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T125: Audio (§10.4): `gearbox.py`, `audio.py`, toggle `S` + button in every race window; on when watching a race, off for training/sandbox/analysis; `--sound/--no-sound`; Launch checkbox. Done when: tests for gearbox ratios and RPM→offset (dummy audio driver) and the toggle pass.
 * [x] T126: Evolution Race: pick a run and checkpoints (every N, evenly spaced, hand-picked, best-validated), labels by step; sandbox Launch option. Done when: a scripted race of 4 checkpoints runs headless.
 * [x] T127: Human vs AI: keyboard and gamepad, ABS assist, physics choice; sandbox *Drive it yourself* (a game window). Done when: key events move a car headless and Launch builds the command.
-* [ ] T128: Brain panel: activation capture, network graph, input bars, outputs, key `B`. Done when: labels and finite activations are right for every compatible model.
+* [x] T128: Brain panel: activation capture, network graph, input bars, outputs, key `B`. Done when: labels and finite activations are right for every compatible model.
 * [ ] T129: Effects: trails, skid marks, smoke and dust, brake lights, start lights. Done when: screenshot check and cost measured.
 * [ ] T130: Visuals: textures, kerbs, start line, barrier, scenery, shadows, tinted cars. Done when: screenshots on 3 tracks look right.
 * [ ] T131: Menus and HUD: leaderboard, results screen, minimap, key list `H`, camera (speed zoom, overview, cycle cars). Done when: the on-screen key list test passes.
@@ -203,6 +203,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T128: Brain panel
+
+* **Status:** DONE. Key `B` (on by default, `arena.yaml: brain`) shows the followed car's network live: input bars with their labels, one square per neuron for each hidden layer (blue negative, orange positive, brighter = stronger; 16×16 for 256 neurons), steering wheel and gas/brake outputs, and lines between the columns that brighten with activity. `racer/agents/activations.py` runs the real `policy._predict` with hooks on the hidden activations (PPO, GA and SAC shapes; an unknown shape still shows inputs and outputs; hand-coded and human cars say they have no network); colours are smoothed over frames. Labels come from the model's manifest. The sandbox part (a live brain view in the Workbench) is T136. Tests: `tests/test_brain.py` (7: probe vs the real action for PPO and SAC, tanh/ReLU ranges, normaliser, unknown shape, grid and colours, drawing); 24 passed (brain, render, human).
+* **Files:** Created `racer/agents/activations.py`, `racer/render/brain_panel.py`, `tests/test_brain.py`; edited `racer/render/arena.py`, `racer/render/app.py`, `configs/demo/arena.yaml`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T127: Human vs AI and Drive it yourself
 

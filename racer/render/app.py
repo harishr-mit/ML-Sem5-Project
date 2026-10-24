@@ -36,6 +36,7 @@ class Context:
     frames: int = 600
     direct: bool = False                  # the command line chose the cars: Esc quits instead of going back
     models: dict[str, Any] = field(default_factory=dict)    # model id → LoadedModel, loaded once
+    probes: dict[str, Any] = field(default_factory=dict)    # model id → ActivationProbe (brain panel)
     audio: Any = None                     # racer.render.audio.AudioController, or None (no sound at all)
 
 

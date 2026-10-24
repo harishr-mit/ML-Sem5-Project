@@ -39,6 +39,11 @@ label_offset_m: 4.0           # car label drawn this far above the car
 leaderboard_width: 460
 trail_length: 240             # substeps of trail per car (4 s)
 selected_trail_length: 900    # longer trail for the followed car
+brain:                        # brain panel of the followed car (T128); B toggles it
+  default_on: true
+  width: 640
+  height: 300
+  smoothing: 0.45             # 0 = instant colours, towards 1 = slow (avoids flicker at 20 Hz decisions)
 human:                        # Human vs AI (T127)
   physics: default            # your car's physics preset unless you pick another (Shift+C)
   deadzone: 0.15              # gamepad stick / trigger dead zone

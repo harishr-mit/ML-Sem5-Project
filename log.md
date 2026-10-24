@@ -190,8 +190,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T139: Owner (2026-10-24): finished GA runs must be resumable long after they finish; sandbox gets a way to continue a run and a better model export. Worktree `ML Sem5 Project - dev` recreated on `feat/ga-extend` (the old one was merged and removed). Plan `docs/GA_EXTEND_PLAN.md`, decision D29 (PROJECT_CONTEXT §8/§16, `DECISIONS.md`). Done when: plan and decision are committed.
 * [x] T140: Engine: a finishing run breeds the next generation, saves `state.npz` and keeps it (finished = `finished.json` present); `Evolution` refuses a finished run unless asked to extend. Tests first. Done when: finish then extend with a larger patience equals an uninterrupted run with that patience (weights and lineage rows).
 * [x] T141: Restore a run's state from its lineage (runs finished before T140: R020-R024): rebuild the last generation's cars, re-breed, replay the `min_gain` rule for `best_validation`/`last_gain`. Done when: a restored state equals the kept `state.npz` of a finished test run, and a copy of R021's real lineage restores to its last checkpoint's weights.
-* [~] T142: Extend from the command line: `train.py --extend` (new `ga.validation.patience` and/or `max_generations`), patience allowed to change on resume without locking out older paused runs (legacy settings key still accepted), the extension stored in the run folder so a later plain resume keeps it. Done when: tests for extend, pause, plain resume and a legacy-key run pass.
-* [ ] T143: Backup: a finished run's `state.npz` is copied with its lineage (existing rule); an extended run reports CONFLICT for the files that grew (additive rule unchanged); the open question (versioned copies?) goes to `REVIEW_LATER.md`. Update the old-rule tests. Done when: backup tests pass.
+* [x] T142: Extend from the command line: `train.py --extend` (new `ga.validation.patience` and/or `max_generations`), patience allowed to change on resume without locking out older paused runs (legacy settings key still accepted), the extension stored in the run folder so a later plain resume keeps it. Done when: tests for extend, pause, plain resume and a legacy-key run pass.
+* [~] T143: Backup: a finished run's `state.npz` is copied with its lineage (existing rule); an extended run reports CONFLICT for the files that grew (additive rule unchanged); the open question (versioned copies?) goes to `REVIEW_LATER.md`. Update the old-rule tests. Done when: backup tests pass.
 * [ ] T144: Sandbox (D27): Explorer → Evolution *Continue this run* (patience, generation budget, workers) writes a queue entry; the restore itself stays in `train.py`; glossary entry for the new settings. Done when: a headless page test adds the entry.
 * [ ] T145: Sandbox (D27): improve *Save as a model*: save a range of generations (every N, best-validated elite each) in one go, and point to it from Launch → Evolution Race. Done when: headless page tests save a range and show the pointer.
 * [ ] T146: Docs (PROJECT_CONTEXT §8/§10.5/§16, `CLAUDE.md` D26 backup bullet, README, `docs/NEUROEVOLUTION_PLAN.md`, `evolve.py` docstring), full suite, review, commit. Merging into `main` and extending R021 for real wait for the owner (clean tree, D12).
@@ -211,6 +211,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T142: `train.py --extend`
+
+* **Task:** continue a finished GA run from the command line with a new patience or budget; the extension must survive a later plain resume.
+* **Status:** DONE. `tests/test_evolve.py` (extended snapshot and its history, `--extend` refused for PPO). Real CLI smoke on a scratch run (`S001_GA_ext_smoke`): finished at a 2-generation budget; a rerun without `--extend` was refused with the hint; `--extend --generations 4 --set ga.validation.patience=900` resumed at generation 2, finished at 3, and `snapshot.yaml` now holds patience 900 and an `extensions` history entry.
+* **Files:** Edited `racer/agents/evolve.py` (`extended_snapshot`, `write_snapshot`), `scripts/train.py` (`--extend`, the finished-run message, docstring), `tests/test_evolve.py`, `log.md`.
+* **Details:** only the stopping rules come from an extending command (patience, generation budget, workers, evaluate); `min_gain` and everything else stay the run's. Without `--extend` the command's patience is ignored and reported, so a plain resume keeps the extended value.
+* **Notes / Errors:** the scratch run lives in this worktree's git-ignored `outputs/scratch/`; removed at the end of the session (T146).
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T140, T141: finished GA runs keep their state; restore from the lineage
 

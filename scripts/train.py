@@ -28,7 +28,9 @@ model ids R###_GA_<tag>@<env steps>k; a checkpoint (the best-validated elite) at
 validation and at the end; afterwards the ``ga.evaluate`` best-validated and latest checkpoints
 are evaluated. Budget: ``--generations N`` (PPO/SAC: ``--steps``).
 Ctrl+C or a stop.request file pauses it after the current generation (exit code 3); running the
-same command again resumes the paused run with that tag.
+same command again resumes the paused run with that tag. A finished run keeps its state: add
+``--extend`` (and a larger ``--set ga.validation.patience=N`` or ``--generations N``) to continue it;
+the new patience is stored in the run's snapshot.yaml (D29).
 """
 from __future__ import annotations
 
@@ -152,8 +154,8 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
     import numpy as np
     from torch.utils.tensorboard import SummaryWriter
 
-    from racer.agents.evolve import (EVOLVE_DIR, PAUSED_EXIT, RESUME_FREE, Evolution, find_run, is_finished,
-                                     write_model_folder)
+    from racer.agents.evolve import (EVOLVE_DIR, PAUSED_EXIT, RESUME_FREE, Evolution, extended_snapshot, find_run,
+                                     is_finished, write_model_folder, write_snapshot)
     from racer.env.racing_env import RacingEnv
     from racer.registry.record import evaluate_and_record, registry_for
     from racer.registry.registry import register_folder, run_row
@@ -163,8 +165,12 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
     prefix = "S" if args.scratch else "R"
     reg = registry_for(args.scratch)
     existing = find_run(prefix, args.tag, evolve_root)
-    if existing is not None and is_finished(existing):
-        print(f"[{existing.name}] this run has already finished; evaluate its checkpoints with "
+    if args.extend and existing is None:
+        print(f"no neuroevolution run with the tag {args.tag!r} to extend", flush=True)
+        return 2
+    if existing is not None and is_finished(existing) and not args.extend:
+        print(f"[{existing.name}] this run has already finished; continue it with --extend (and a larger "
+              "--set ga.validation.patience=N or --generations N), evaluate its checkpoints with "
               f"scripts\\evaluate.py --run {existing.name.split('_', 1)[0]}{' --scratch' if args.scratch else ''}, "
               "or start a new run with another tag",
               flush=True)
@@ -174,11 +180,19 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
         base_snapshot = load_yaml(run_dir / "snapshot.yaml")
         run_id = base_snapshot["run_id"]
         # The run keeps its own settings (a track set may list more maps by now); only the ga
-        # settings in RESUME_FREE come from this command.
+        # settings in RESUME_FREE come from this command, and with --extend its patience (D29),
+        # which is then stored in the snapshot for every later resume.
         free = {k: train_cfg["ga"][k] for k in RESUME_FREE}
         differ = sorted(k for k in _diff_keys({"train": base_snapshot["train"], "env_config": base_snapshot["env_config"]},
                                               {"train": train_cfg, "env_config": env_config})
-                        if k.split(".")[:3] not in [["train", "ga", f] for f in RESUME_FREE])
+                        if k.split(".")[:3] not in [["train", "ga", f] for f in RESUME_FREE]
+                        and not (args.extend and k == "train.ga.validation.patience"))
+        if args.extend:
+            base_snapshot = extended_snapshot(base_snapshot, train_cfg, dt.datetime.now().isoformat(timespec="seconds"))
+            write_snapshot(run_dir, base_snapshot)
+            print(f"[{run_dir.name}] extending: patience {base_snapshot['train']['ga']['validation']['patience']}, "
+                  f"{('up to %s generations' % free['max_generations']) if free['max_generations'] else 'no generation cap'}",
+                  flush=True)
         train_cfg = base_snapshot["train"]
         train_cfg["ga"].update(free)
         env_config, manifest = base_snapshot["env_config"], base_snapshot["manifest"]
@@ -229,7 +243,8 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
           f"{manifest['obs_dim']} inputs, {manifest['action_dim']} outputs, {manifest['n_params']:,} weights. "
           f"Pause: Ctrl+C or {(run_dir / 'stop.request').relative_to(PROJECT_ROOT)}", flush=True)
     ev = Evolution(run_dir, env_config, train_cfg, manifest["obs_dim"], manifest["action_dim"],
-                   checkpoint=save_checkpoint, writer=writer, log=lambda s: print(s, flush=True))
+                   checkpoint=save_checkpoint, writer=writer, log=lambda s: print(s, flush=True),
+                   extend=args.extend)
     try:
         outcome = ev.run()
     except KeyboardInterrupt:
@@ -272,6 +287,9 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=None, help="PPO/SAC: env steps to train (overrides total_steps)")
     ap.add_argument("--generations", type=int, default=None,
                     help="neuroevolution: stop after this many generations (default: at the validation plateau)")
+    ap.add_argument("--extend", action="store_true",
+                    help="neuroevolution: continue the run with this tag even though it finished (D29), with the "
+                         "patience from --set ga.validation.patience=N and/or --generations N")
     ap.add_argument("--train", default="ppo_default")
     ap.add_argument("--physics", default="default")
     ap.add_argument("--env", default="rays5")
@@ -337,6 +355,8 @@ def main() -> int:
         ap.error(str(e))
 
     parent_dir, parent_id = None, None
+    if args.extend and algo.name != "ga":
+        ap.error("--extend is for neuroevolution runs")
     if args.generations is not None and algo.name != "ga":
         ap.error(f"--generations is for neuroevolution; {algo.name.upper()} runs are budgeted with --steps")
     if algo.name == "ga":

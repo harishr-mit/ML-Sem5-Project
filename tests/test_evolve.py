@@ -182,6 +182,24 @@ def test_the_patience_is_not_part_of_the_settings_key():
     assert settings_key(env_config, short) != settings_key(env_config, other)
 
 
+def test_an_extension_is_stored_in_the_snapshot_so_a_plain_resume_keeps_it(tmp_path):
+    from racer.agents.evolve import extended_snapshot, write_snapshot
+    env_config, run_train = plateau_run(500)
+    snapshot = {"run_id": "R030", "train": run_train}
+    _, command = plateau_run(1500)
+    command["ga"]["validation"]["min_gain"] = 0.5               # the stopping rules only: min_gain stays the run's
+    command["ga"]["max_generations"] = 3000
+    new = extended_snapshot(snapshot, command, "2026-10-24T20:00:00")
+    assert new["train"]["ga"]["validation"] == dict(run_train["ga"]["validation"], patience=1500)
+    assert new["extensions"] == [{"at": "2026-10-24T20:00:00", "patience": 1500, "max_generations": 3000}]
+    assert snapshot["train"]["ga"]["validation"]["patience"] == 500 and "extensions" not in snapshot   # a copy
+    again = extended_snapshot(new, plateau_run(2500)[1], "2026-10-25T08:00:00")
+    assert [e["patience"] for e in again["extensions"]] == [1500, 2500]
+    write_snapshot(tmp_path, again)
+    assert yaml.safe_load((tmp_path / "snapshot.yaml").read_text(encoding="utf-8")) == again
+    assert not list(tmp_path.glob("*.partial"))
+
+
 def test_a_finished_run_is_only_restarted_by_extending_it(tmp_path):
     env_config, train = plateau_run(4)
     assert evolution(tmp_path, env_config, train).run() == "finished"
@@ -371,6 +389,7 @@ def test_export_breaks_validation_ties_like_the_checkpoint(tmp_path):
     (["--train", "ga_default", "--tracks", "training_ground", "--env", "rays7_lean", "--steps", "1000"], "--generations"),
     (["--train", "ga_default", "--tracks", "training_ground", "--env", "rays7_lean", "--generations", "0"], "at least 1"),
     (["--tracks", "training_ground", "--generations", "10"], "budgeted with --steps"),
+    (["--tracks", "training_ground", "--extend"], "--extend is for neuroevolution"),
 ])
 def test_each_algorithm_refuses_the_other_budget(argv, message, monkeypatch, capsys):
     import sys

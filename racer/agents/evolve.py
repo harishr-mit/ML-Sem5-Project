@@ -11,6 +11,7 @@ run is identical however often it was paused and however many workers drove it.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -79,6 +80,25 @@ def settings_key(env_config: Mapping[str, Any], train_cfg: Mapping[str, Any], le
         train["ga"].get("validation", {}).pop("patience", None)
     blob = json.dumps({"env": env_config, "train": train}, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def extended_snapshot(snapshot: Mapping[str, Any], command_train: Mapping[str, Any], when: str) -> dict[str, Any]:
+    """A run's snapshot with an extension's stopping rules (D29): the command's patience, kept in the
+    snapshot so a later plain resume doesn't fall back to the old one, and a history of extensions.
+    Everything else, ``min_gain`` included, stays the run's own."""
+    new = copy.deepcopy(dict(snapshot))
+    ga = command_train["ga"]
+    new["train"]["ga"]["validation"]["patience"] = int(ga["validation"]["patience"])
+    new.setdefault("extensions", []).append({"at": when, "patience": int(ga["validation"]["patience"]),
+                                             "max_generations": ga.get("max_generations")})
+    return new
+
+
+def write_snapshot(run_dir: Path, snapshot: Mapping[str, Any]) -> None:
+    tmp = run_dir / "snapshot.yaml.partial"
+    with tmp.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(dict(snapshot), f, sort_keys=False, allow_unicode=True)
+    os.replace(tmp, run_dir / "snapshot.yaml")
 
 
 def find_run(prefix: str, tag: str, root: Path = EVOLVE_DIR) -> Path | None:

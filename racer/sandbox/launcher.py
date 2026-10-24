@@ -30,12 +30,12 @@ def settings() -> dict[str, Any]:
 
 def demo_argv(track: str, models: Sequence[str] = (), run: str | None = None, every: int = 1, laps: int | None = None,
               baseline: bool = False, fair: bool = False, title: str | None = None,
-              extra: Sequence[str] = ()) -> list[str]:
+              extra: Sequence[str] = (), human: str | None = None) -> list[str]:
     """``demo.py`` arguments for one race (``models`` or a ``run``'s checkpoints)."""
     if models and run:
         raise ValueError("give models or a run, not both")
-    if not (models or run or baseline):
-        raise ValueError("nothing to race: choose models, a run or the baseline")
+    if not (models or run or baseline or human):
+        raise ValueError("nothing to race: choose models, a run, the baseline or drive yourself")
     argv = ["--track", track]
     if models:
         argv += ["--models", *models]
@@ -47,6 +47,8 @@ def demo_argv(track: str, models: Sequence[str] = (), run: str | None = None, ev
         argv.append("--baseline")
     if fair:
         argv.append("--fair")
+    if human:
+        argv += ["--human", human]
     if title:
         argv += ["--title", title]
     return argv + list(extra)
@@ -94,13 +96,13 @@ class Launcher:
     # ----------------------------------------------------------- start / stop
     def launch(self, track: str, models: Sequence[str] = (), run: str | None = None, every: int = 1,
                laps: int | None = None, baseline: bool = False, fair: bool = False,
-               label: str | None = None, extra: Sequence[str] = ()) -> dict[str, Any]:
+               label: str | None = None, extra: Sequence[str] = (), human: str | None = None) -> dict[str, Any]:
         """Open a game window racing ``models`` (or a run's checkpoints) on ``track``."""
         cfg = settings()["launch"]
         items = self.instances()
         n = max([int(it["id"]) for it in items], default=0) + 1
-        title = f"AI Sandbox #{n} · {track} · {label or _describe(models, run, baseline)}"
-        argv = demo_argv(track, models, run, every, laps, baseline, fair, title, extra)
+        title = f"AI Sandbox #{n} · {track} · {label or _describe(models, run, baseline, human)}"
+        argv = demo_argv(track, models, run, every, laps, baseline, fair, title, extra, human)
         log = self.dir / "logs" / f"game_{n:03d}.log"
         log.parent.mkdir(parents=True, exist_ok=True)
         slot = len([it for it in items if it["running"]]) % int(cfg["cascade_slots"])
@@ -149,9 +151,11 @@ class Launcher:
             return ""
 
 
-def _describe(models: Sequence[str], run: str | None, baseline: bool) -> str:
+def _describe(models: Sequence[str], run: str | None, baseline: bool, human: str | None = None) -> str:
     if run:
         return f"evolution of {run}"
+    if human:
+        return f"you ({human}) vs {len(models) + int(baseline)} car(s)"
     shown = [m.split("_", 1)[0] + "@" + m.rpartition("@")[2] if "@" in m else m for m in models[:3]]
     extra = f" +{len(models) - 3}" if len(models) > 3 else ""
     return ", ".join(shown) + extra + (" + baseline" if baseline else "")

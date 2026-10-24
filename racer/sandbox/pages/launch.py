@@ -5,6 +5,7 @@ import streamlit as st
 
 from racer.agents.checkpoints import STRATEGIES, choose
 from racer.config import load_preset
+from racer.sandbox.builder import preset_names
 from racer.sandbox.launcher import Launcher
 from racer.sandbox.pages._ui import model_label, store, track_names
 
@@ -46,7 +47,7 @@ def render() -> None:
 
     pre = st.session_state.pop("launch_models", None)
     pre_track = st.session_state.pop("launch_track", None)           # handed over by Draw a Track
-    tab_models, tab_evo = st.tabs(["Race chosen models", "Evolution race (one run)"])
+    tab_models, tab_evo, tab_drive = st.tabs(["Race chosen models", "Evolution race (one run)", "Drive it yourself"])
     names = track_names()
     with tab_models:
         c1, c2 = st.columns([5, 1.4])
@@ -110,6 +111,20 @@ def render() -> None:
                                                    "label": f"evolution of {run_id}",
                                                    "extra": ["--gradient", *_sound_args(sound)]})
 
+    with tab_drive:
+        st.markdown("Drive a car yourself in a game window (arrows or WASD, or a gamepad) against the models you pick "
+                    "above. Hard braking is assisted by ABS (K toggles it in the game). Your car uses the physics you choose, "
+                    "so you can feel what a model was trained on.")
+        physics_names = preset_names("physics")
+        physics = st.selectbox("Your car's physics", physics_names, key="dr_physics",
+                               index=physics_names.index("default") if "default" in physics_names else 0)
+        opponents = st.multiselect("Opponents (from the models listed in the first tab)", list(rows), key="dr_models",
+                                   max_selections=max_cars - 1, format_func=lambda m: model_label(rows[m]))
+        track, laps, baseline, fair, sound = _race_options("dr", names, acfg)
+        st.button("Drive!", type="primary", key="dr_go", on_click=_do_launch,
+                  kwargs={"track": track, "models": list(opponents), "laps": laps, "baseline": baseline, "fair": fair,
+                          "extra": _sound_args(sound), "human": physics})
+
     st.header("Game windows")
     items = _launcher().instances()
     live = [it for it in items if it["running"]]
@@ -152,7 +167,7 @@ def _race_options(prefix: str, names: list[str], acfg: dict,
     fair = c4.checkbox("Same physics for all", key=f"{prefix}_fair",
                        help=f"Every car on the '{acfg['fair_physics']}' physics preset instead of its own.")
     sound = c5.checkbox("Sound", value=True, key=f"{prefix}_sound",
-                        help="Engine and tyre sound in the game window (S toggles it there). On when watching a race.")
+                        help="Engine and tyre sound in the game window (M toggles it there). On when watching a race.")
     img = s.track_preview(track)
     if img:
         with st.expander("Map preview"):

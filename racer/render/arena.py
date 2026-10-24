@@ -72,9 +72,10 @@ def run_arena(ctx: Context, preset: Selection | None) -> str:
             return result
 
 
-def arena_keys(quit_on_esc: bool) -> list[tuple[str, str]]:
+def arena_keys(quit_on_esc: bool, human: bool = False) -> list[tuple[str, str]]:
     """The race's key list (T82); must match the key handling in :func:`run_race`."""
-    return [
+    drive = [("arrows / WASD", "drive your car"), ("K", "ABS on / off")] if human else []
+    return drive + [
         ("Tab / Shift+Tab", "follow next / previous car"),
         ("click a row", "follow that car"),
         ("F", "overview / follow"),
@@ -84,7 +85,7 @@ def arena_keys(quit_on_esc: bool) -> list[tuple[str, str]]:
         ("Space", "pause"),
         ("+ / −", "sim speed"),
         ("mouse wheel", "zoom"),
-        ("S", "sound on / off"),
+        ("M", "sound on / off"),
         ("H", "hide / show this list"),
         ("Esc", "quit" if quit_on_esc else "back to the picker"),
     ]
@@ -124,6 +125,12 @@ def run_race(ctx: Context, sel: Selection) -> str:
                 continue
         m = models[mid]
         entries.append(Entry(m.model_id, m.env_config, lambda obs, envs, m=m: m.act_batch(obs), key=m))
+    human = None
+    if sel.human:
+        from racer.render.human import HumanDriver, human_entry, poll_pad
+        human = HumanDriver(acfg["human"])
+        entries.insert(0, human_entry(sel.track, sel.human, human))
+        pad = pygame.joystick.Joystick(0) if pygame.joystick.get_count() else None
     if sel.baseline:
         ctrl = BaselineController(load_preset("train", "baseline"))
         entries.append(Entry("PID baseline", make_env_config([sel.track]),
@@ -156,7 +163,7 @@ def run_race(ctx: Context, sel: Selection) -> str:
     selected = 0
     show_rays, all_trails, show_labels, paused = True, False, True, False
     show_keys = bool(acfg["show_keys_at_start"])
-    key_items = arena_keys(quit_on_esc=ctx.direct)
+    key_items = arena_keys(quit_on_esc=ctx.direct, human=human is not None)
     rows: list = []
     acc = 0.0
     audio = ctx.audio
@@ -198,8 +205,10 @@ def run_race(ctx: Context, sel: Selection) -> str:
                     show_labels = not show_labels
                 elif k == pygame.K_h:
                     show_keys = not show_keys
-                elif k == pygame.K_s and ctx.audio is not None:
+                elif k == pygame.K_m and ctx.audio is not None:
                     ctx.audio.toggle()
+                elif k == pygame.K_k and human is not None:
+                    human.toggle_abs()
                 elif k == pygame.K_SPACE:
                     paused = not paused
                 elif k in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
@@ -207,6 +216,9 @@ def run_race(ctx: Context, sel: Selection) -> str:
                 elif k in (pygame.K_MINUS, pygame.K_KP_MINUS):
                     speed_i = max(speed_i - 1, 0)
 
+        if human is not None:
+            from racer.render.human import read_input
+            human.set_input(*read_input(pygame.key.get_pressed(), poll_pad(pad, acfg["human"]), acfg["human"]))
         # ---- simulate whole physics substeps (60 Hz × sim speed)
         n = 0
         if not paused:
@@ -283,6 +295,10 @@ def run_race(ctx: Context, sel: Selection) -> str:
         if audio is not None:
             screen.blit(labels.get(audio.label + (f" · gear {audio.gear}" if audio.enabled else ""),
                                    colours["hud_dim"]), (82, 12))
+        if human is not None:
+            abs_txt = "ABS off (K)" if not human.abs_on else ("ABS ACTIVE" if human.abs_active else "ABS on (K)")
+            screen.blit(labels.get(abs_txt, colours["abs_active"] if human.abs_active else colours["hud_dim"]),
+                        (12, 34))
 
         pygame.display.flip()
         frame += 1

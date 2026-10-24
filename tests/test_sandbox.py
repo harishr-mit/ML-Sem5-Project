@@ -952,3 +952,11 @@ def test_demo_argv_extra_arguments_come_last():
 def test_launch_sound_checkbox_adds_no_sound_only_when_unchecked():
     from racer.sandbox.pages.launch import _sound_args
     assert _sound_args(True) == [] and _sound_args(False) == ["--no-sound"]
+
+
+def test_demo_argv_drive_yourself():
+    from racer.sandbox.launcher import demo_argv
+    assert demo_argv("x", human="downforce", title="T") == ["--track", "x", "--human", "downforce", "--title", "T"]
+    assert demo_argv("x", ["A"], baseline=True, human="default")[-2:] == ["--human", "default"]
+    with pytest.raises(ValueError):
+        demo_argv("x")

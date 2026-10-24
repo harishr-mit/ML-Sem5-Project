@@ -1,6 +1,6 @@
 # Audio for the game windows (PROJECT_CONTEXT §10.4, D28): engine with a cosmetic gearbox, tyre screech.
 # Sound plays for the followed car only. It is on when watching a race and off for training,
-# the sandbox and analysis (`demo.py --no-sound`, the sandbox's Sound checkbox, the S key).
+# the sandbox and analysis (`demo.py --no-sound`, the sandbox's Sound checkbox, the M key).
 
 default_on: true              # game windows start with sound on (headless screenshot runs: off unless --sound)
 master_volume: 0.8

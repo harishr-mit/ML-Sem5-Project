@@ -116,7 +116,7 @@ class AudioController:
     def label(self) -> str:
         if not self.available:
             return "sound: no device"
-        return "sound: on" if self.enabled else "sound: off (S)"
+        return "sound: on" if self.enabled else "sound: off (M)"
 
     @property
     def gear(self) -> int:

@@ -24,6 +24,7 @@ class Menu:
     def __post_init__(self) -> None:
         self.text = TextCache(self.fonts[0])
         self.big = TextCache(self.fonts[1])
+        self.small = TextCache(self.fonts[2])
 
     def handle(self, ev: pygame.event.Event) -> None:
         if ev.type == pygame.QUIT:
@@ -66,7 +67,7 @@ class Menu:
             screen.blit(self.text.get(f"{i + 1}  {m.title}", c["hud_text"]), (r.x + 18, r.y + 12))
             screen.blit(self.text.get(m.blurb, c["hud_dim"]), (r.x + 18, r.y + 12 + 28))
         if self.credits:
-            small = TextCache(self.fonts[2]).get(self.credits, c["hud_dim"])
+            small = self.small.get(self.credits, c["hud_dim"])
             screen.blit(small, small.get_rect(midbottom=(w // 2, h - 6)))
         hint = self.text.get("Up/Down or click · Enter opens · Esc quits", c["hud_dim"])
         screen.blit(hint, hint.get_rect(midbottom=(w // 2, h - 30)))

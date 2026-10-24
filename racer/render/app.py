@@ -57,9 +57,15 @@ def _evolution(ctx: Context, preset: Selection | None) -> str:
     return run_evolution(ctx, preset)
 
 
+def _human(ctx: Context, preset: Selection | None) -> str:
+    from racer.render.human import run_human
+    return run_human(ctx, preset)
+
+
 MODES: list[Mode] = [
     Mode("arena", "Model Arena", "Pick up to 20 models and race them on a track.", _arena),
     Mode("evolution", "Evolution Race", "The checkpoints of one run race: watch it learn.", _evolution),
+    Mode("human", "Human vs AI", "Drive a car yourself against the models (keyboard or gamepad).", _human),
 ]
 
 
@@ -83,14 +89,15 @@ def build_context(*, track: str, laps: int | None, sim_speed: float, screenshot:
     want = sound if sound is not None else (bool(acfg_audio["default_on"]) and not screenshot)
     if want or sound is False or not screenshot:
         from racer.render.audio import AudioController
-        ctx.audio = AudioController(acfg_audio, enabled=want)     # S toggles it in every race window
+        ctx.audio = AudioController(acfg_audio, enabled=want)     # M toggles it in every race window
     return ctx
 
 
 def preset_selection(ctx: Context, *, models: list[str] | None, run: str | None, best: bool, every: int,
-                     baseline: bool, spaced: int | None = None, top: int | None = None) -> Selection | None:
+                     baseline: bool, spaced: int | None = None, top: int | None = None,
+                     human: str | None = None) -> Selection | None:
     """The cars the command line asked for, or ``None`` to open the menu. Raises ValueError if empty."""
-    if not (models or run or best or baseline):
+    if not (models or run or best or baseline or human):
         return None
     rows = ctx.reg_rows
     if models:
@@ -102,10 +109,10 @@ def preset_selection(ctx: Context, *, models: list[str] | None, run: str | None,
         ids = [r["model_id"] for r in rows if r.get("is_best") and r.get("path")]
     else:
         ids = []                                       # --baseline alone
-    ids = ids[: int(ctx.acfg["max_cars"]) - int(baseline)]
-    if not ids and not baseline:
+    ids = ids[: int(ctx.acfg["max_cars"]) - int(baseline) - int(bool(human))]
+    if not ids and not baseline and not human:
         raise ValueError("no models selected")
-    return Selection(ctx.track, ids, baseline, ctx.laps, False, gradient=bool(run))
+    return Selection(ctx.track, ids, baseline, ctx.laps, False, gradient=bool(run), human=human)
 
 
 def run(ctx: Context, preset: Selection | None = None, mode: str | None = None) -> int:

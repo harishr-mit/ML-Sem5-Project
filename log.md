@@ -175,7 +175,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T124: `demo.py` shell: mode menu (arena, Evolution Race, Human vs AI, swarm), shared window and state. Done when: headless, the menu starts each mode and returns.
 * [x] T125: Audio (§10.4): `gearbox.py`, `audio.py`, toggle `S` + button in every race window; on when watching a race, off for training/sandbox/analysis; `--sound/--no-sound`; Launch checkbox. Done when: tests for gearbox ratios and RPM→offset (dummy audio driver) and the toggle pass.
 * [x] T126: Evolution Race: pick a run and checkpoints (every N, evenly spaced, hand-picked, best-validated), labels by step; sandbox Launch option. Done when: a scripted race of 4 checkpoints runs headless.
-* [ ] T127: Human vs AI: keyboard and gamepad, ABS assist, physics choice; sandbox *Drive it yourself* (a game window). Done when: key events move a car headless and Launch builds the command.
+* [x] T127: Human vs AI: keyboard and gamepad, ABS assist, physics choice; sandbox *Drive it yourself* (a game window). Done when: key events move a car headless and Launch builds the command.
 * [ ] T128: Brain panel: activation capture, network graph, input bars, outputs, key `B`. Done when: labels and finite activations are right for every compatible model.
 * [ ] T129: Effects: trails, skid marks, smoke and dust, brake lights, start lights. Done when: screenshot check and cost measured.
 * [ ] T130: Visuals: textures, kerbs, start line, barrier, scenery, shadows, tinted cars. Done when: screenshots on 3 tracks look right.
@@ -203,6 +203,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T127: Human vs AI and Drive it yourself
+
+* **Status:** DONE. Mode `human` (menu entry 3): the arena picker plus your car's physics (Shift+C cycles the presets) and 0–19 opponents; your car is the first ghost car (`racer/render/human.py`). Keyboard (arrows/WASD) or gamepad (left stick, triggers or A/B, dead zone in `arena.yaml: human`), ABS assist for the all-or-nothing keyboard brake (K toggles, as in `drive.py`; the HUD shows ABS on / ACTIVE). CLI: `demo.py --human [PHYSICS]` adds your car to any race. **Sound key is M (was S in the doc) because S is the brake in WASD; M for the minimap moves to N (docs updated in T138).** Sandbox: Launch has a third tab *Drive it yourself* (physics, opponents, map, laps, baseline, sound) that opens a game window (Streamlit can't read 60 Hz keys). Tests: `tests/test_human.py` (input, gamepad, ABS, picker, headless race), `demo_argv` human; 97 passed, 7 skipped (human, render, sandbox, audio, checkpoints).
+* **Files:** Created `racer/render/human.py`, `tests/test_human.py`; edited `racer/render/app.py`, `arena.py`, `ui.py`, `audio.py`, `scripts/demo.py`, `configs/demo/arena.yaml`, `configs/demo/audio.yaml`, `racer/sandbox/launcher.py`, `racer/sandbox/pages/launch.py`, `tests/test_render.py`, `tests/test_sandbox.py`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T125: Audio
 

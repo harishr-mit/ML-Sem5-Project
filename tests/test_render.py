@@ -85,7 +85,7 @@ def test_arena_key_list_matches_the_key_handling():
     src = (ROOT / "racer" / "render" / "arena.py").read_text(encoding="utf-8")
     body = src[src.index("def run_race("):]
     handled = set(re.findall(r"pygame\.K_([A-Za-z0-9_]+)", body))
-    listed = " ".join(k for k, _ in demo.arena_keys(False)).lower()
+    listed = " ".join(k for k, _ in demo.arena_keys(False, human=True)).lower()
     names = {"ESCAPE": "esc", "TAB": "tab", "SPACE": "space", "PLUS": "+", "EQUALS": "+", "KP_PLUS": "+",
              "MINUS": "−", "KP_MINUS": "−"}
     missing = [k for k in handled if names.get(k, k.lower()) not in listed]

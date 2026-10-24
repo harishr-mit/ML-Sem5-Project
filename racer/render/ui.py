@@ -35,6 +35,7 @@ class Selection:
     laps: int = 3
     fair: bool = False
     gradient: bool = False      # colour cars from blue (first) to red (last): the Evolution Race
+    human: str | None = None    # add your own car with this physics preset (Human vs AI)
 
 
 @dataclass
@@ -59,6 +60,9 @@ class ModelPicker:
     scroll: int = 0
     done: Selection | None = None
     quit: bool = False
+    title: str = "MODEL ARENA — pick a track and up to 20 models"
+    extra_help: str = ""
+    extra_foot: str = ""
 
     def __post_init__(self) -> None:
         self.text = TextCache(self.font)
@@ -84,8 +88,11 @@ class ModelPicker:
         elif len(self.selected) + int(self.baseline) < self.max_cars:
             self.selected.append(model_id)
 
+    def ready(self) -> bool:
+        return bool(self.selected or self.baseline)
+
     def start(self) -> None:
-        if self.selected or self.baseline:
+        if self.ready():
             self.done = Selection(self.track, list(self.selected), self.baseline, self.laps, self.fair)
 
     # ------------------------------------------------------------ events
@@ -145,10 +152,10 @@ class ModelPicker:
         screen.fill(c["outside"])
         self._hit = []
         lh = self.lh
-        screen.blit(t.get("MODEL ARENA — pick a track and up to 20 models", c["hud_text"]), (20, 14))
+        screen.blit(t.get(self.title, c["hud_text"]), (20, 14))
         help_s = ("type: filter · Tab: best only · Shift+B: baseline car · Shift+P: fair physics · +/−: laps · "
                   "click header: sort · Enter: race · Esc: quit")
-        screen.blit(t.get(help_s, c["hud_dim"]), (20, 14 + lh))
+        screen.blit(t.get(help_s + self.extra_help, c["hud_dim"]), (20, 14 + lh))
 
         # tracks
         x, y = 20, 20 + lh * 3
@@ -209,10 +216,10 @@ class ModelPicker:
         extras = (["+ baseline"] if self.baseline else []) + (["fair physics"] if self.fair else []) \
             + (["best only"] if self.best_only else [])
         foot = (f"track {self.track} · {len(self.selected)} model(s) · {self.laps} laps"
-                + ("".join(f" · {e}" for e in extras)) + (f" · filter '{self.filter}'" if self.filter else ""))
+                + ("".join(f" · {e}" for e in extras)) + (f" · filter '{self.filter}'" if self.filter else "") + self.extra_foot)
         screen.blit(t.get(foot, c["hud_text"]), (20, h - 40))
         btn = pygame.Rect(w - 170, h - 48, 150, 34)
-        ready = bool(self.selected or self.baseline)
+        ready = self.ready()
         pygame.draw.rect(screen, c["hud_good"] if ready else c["hud_dim"], btn, border_radius=6)
         img = t.get("RACE  >", c["outside"])
         screen.blit(img, img.get_rect(center=btn.center))

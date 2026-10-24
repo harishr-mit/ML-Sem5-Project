@@ -187,6 +187,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T136: Sandbox *Workbench* page (live plots from the same runtime) + default plots on Overview; Compare links to it. Done when: headless page tests pass.
 * [x] T137: `scripts/make_plots.py`: the PNG report set from the same functions. Done when: it writes the set from the registry.
 * [x] T138: Docs (PROJECT_CONTEXT §10/§12/§16, README, glossary, `assets/LICENSES.md`), full suite, merge `feat/demo-complete` into `main`, remove the worktree. Done when: the suite passes on `main`.
+* [x] T139: Owner (2026-10-24): finished GA runs must be resumable long after they finish; sandbox gets a way to continue a run and a better model export. Worktree `ML Sem5 Project - dev` recreated on `feat/ga-extend` (the old one was merged and removed). Plan `docs/GA_EXTEND_PLAN.md`, decision D29 (PROJECT_CONTEXT §8/§16, `DECISIONS.md`). Done when: plan and decision are committed.
+* [~] T140: Engine: a finishing run breeds the next generation, saves `state.npz` and keeps it (finished = `finished.json` present); `Evolution` refuses a finished run unless asked to extend. Tests first. Done when: finish then extend with a larger patience equals an uninterrupted run with that patience (weights and lineage rows).
+* [ ] T141: Restore a run's state from its lineage (runs finished before T140: R020-R024): rebuild the last generation's cars, re-breed, replay the `min_gain` rule for `best_validation`/`last_gain`. Done when: a restored state equals the kept `state.npz` of a finished test run, and a copy of R021's real lineage restores to its last checkpoint's weights.
+* [ ] T142: Extend from the command line: `train.py --extend` (new `ga.validation.patience` and/or `max_generations`), patience allowed to change on resume without locking out older paused runs (legacy settings key still accepted), the extension stored in the run folder so a later plain resume keeps it. Done when: tests for extend, pause, plain resume and a legacy-key run pass.
+* [ ] T143: Backup: a finished run's `state.npz` is copied with its lineage (existing rule); an extended run reports CONFLICT for the files that grew (additive rule unchanged); the open question (versioned copies?) goes to `REVIEW_LATER.md`. Update the old-rule tests. Done when: backup tests pass.
+* [ ] T144: Sandbox (D27): Explorer → Evolution *Continue this run* (patience, generation budget, workers) writes a queue entry; the restore itself stays in `train.py`; glossary entry for the new settings. Done when: a headless page test adds the entry.
+* [ ] T145: Sandbox (D27): improve *Save as a model*: save a range of generations (every N, best-validated elite each) in one go, and point to it from Launch → Evolution Race. Done when: headless page tests save a range and show the pointer.
+* [ ] T146: Docs (PROJECT_CONTEXT §8/§10.5/§16, `CLAUDE.md` D26 backup bullet, README, `docs/NEUROEVOLUTION_PLAN.md`, `evolve.py` docstring), full suite, review, commit. Merging into `main` and extending R021 for real wait for the owner (clean tree, D12).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -203,6 +211,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T139: Plan and decision D29 (resumable finished GA runs)
+
+* **Task:** owner: finished GA runs must be resumable later; the sandbox gets a way to continue a run and a better model export.
+* **Status:** DONE (docs only). The old dev worktree was already merged and removed, so `ML Sem5 Project - dev` was recreated on `feat/ga-extend` from `main` (64e6c3e); tests run with `main`'s `.venv` and `PYTHONPATH` set to the worktree (no second venv, nothing installed).
+* **Files:** Created `docs/GA_EXTEND_PLAN.md`. Edited `log.md` (T139-T146), `PROJECT_CONTEXT.md` (§8 pause and resume, §16 D29), `DECISIONS.md`.
+* **Details:** the design was checked with the advisor first. Findings: keep state by breeding g+1 before stopping, make "extend" explicit, rebuild old runs from the lineage in `cars ORDER BY car`, keep legacy settings keys valid, persist the extended patience, and the backup will report CONFLICT for extended runs (owner decision, `REVIEW_LATER.md`, T143).
+* **Notes / Errors:** none. `main` and its `outputs/evolve/` were only read.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T123–T138: demo and Workbench merged into main
 

@@ -89,6 +89,8 @@ def render() -> None:
     with tab_evo:
         st.markdown("The checkpoints of one run race each other: early ones crash, later ones are faster. "
                     "Shows learning in about 20 seconds.")
+        st.caption("Neuroevolution runs: save the generations you want first (Explorer → Evolution → "
+                   "Save a range of generations), then they appear here as checkpoints.")
         real = [r for r in s.explorable_runs(False)]
         if not real:
             st.info("No runs yet.")

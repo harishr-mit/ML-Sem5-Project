@@ -191,10 +191,10 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T140: Engine: a finishing run breeds the next generation, saves `state.npz` and keeps it (finished = `finished.json` present); `Evolution` refuses a finished run unless asked to extend. Tests first. Done when: finish then extend with a larger patience equals an uninterrupted run with that patience (weights and lineage rows).
 * [x] T141: Restore a run's state from its lineage (runs finished before T140: R020-R024): rebuild the last generation's cars, re-breed, replay the `min_gain` rule for `best_validation`/`last_gain`. Done when: a restored state equals the kept `state.npz` of a finished test run, and a copy of R021's real lineage restores to its last checkpoint's weights.
 * [x] T142: Extend from the command line: `train.py --extend` (new `ga.validation.patience` and/or `max_generations`), patience allowed to change on resume without locking out older paused runs (legacy settings key still accepted), the extension stored in the run folder so a later plain resume keeps it. Done when: tests for extend, pause, plain resume and a legacy-key run pass.
-* [~] T143: Backup: a finished run's `state.npz` is copied with its lineage (existing rule); an extended run reports CONFLICT for the files that grew (additive rule unchanged); the open question (versioned copies?) goes to `REVIEW_LATER.md`. Update the old-rule tests. Done when: backup tests pass.
-* [ ] T144: Sandbox (D27): Explorer → Evolution *Continue this run* (patience, generation budget, workers) writes a queue entry; the restore itself stays in `train.py`; glossary entry for the new settings. Done when: a headless page test adds the entry.
-* [ ] T145: Sandbox (D27): improve *Save as a model*: save a range of generations (every N, best-validated elite each) in one go, and point to it from Launch → Evolution Race. Done when: headless page tests save a range and show the pointer.
-* [ ] T146: Docs (PROJECT_CONTEXT §8/§10.5/§16, `CLAUDE.md` D26 backup bullet, README, `docs/NEUROEVOLUTION_PLAN.md`, `evolve.py` docstring), full suite, review, commit. Merging into `main` and extending R021 for real wait for the owner (clean tree, D12).
+* [x] T143: Backup: a finished run's `state.npz` is copied with its lineage (existing rule); an extended run reports CONFLICT for the files that grew (additive rule unchanged); the open question (versioned copies?) goes to `REVIEW_LATER.md`. Update the old-rule tests. Done when: backup tests pass.
+* [x] T144: Sandbox (D27): Explorer → Evolution *Continue this run* (patience, generation budget, workers) writes a queue entry; the restore itself stays in `train.py`; glossary entry for the new settings. Done when: a headless page test adds the entry.
+* [x] T145: Sandbox (D27): improve *Save as a model*: save a range of generations (every N, best-validated elite each) in one go, and point to it from Launch → Evolution Race. Done when: headless page tests save a range and show the pointer.
+* [~] T146: Docs (PROJECT_CONTEXT §8/§10.5/§16, `CLAUDE.md` D26 backup bullet, README, `docs/NEUROEVOLUTION_PLAN.md`, `evolve.py` docstring), full suite, review, commit. Merging into `main` and extending R021 for real wait for the owner (clean tree, D12).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -211,6 +211,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T143-T145: backup, Continue this run, Save a range
+
+* **Task:** backup of kept states and extended runs; the sandbox side of D29 (D27).
+* **Status:** DONE. Tests: `tests/test_backup.py` (6: a finished run is backed up with its `state.npz`; an extended run is a CONFLICT and the old copy stays), `tests/test_sandbox.py` (`extend_entry` builds the queue entry and names clashes away; the Explorer → Evolution page queues an extension and saves a range of generations; Launch → Evolution race points to the range); the glossary completeness tests pass.
+* **Files:** Edited `racer/sandbox/builder.py` (`extend_entry`), `racer/sandbox/pages/explorer.py` (*Save a range of generations*, *Continue this run*), `racer/sandbox/pages/launch.py` (pointer), `racer/sandbox/glossary.yaml` (`run.extensions`, patience text), `tests/test_backup.py`, `tests/test_sandbox.py`, `REVIEW_LATER.md` (item 0: backup of extended runs), `CLAUDE.md`, `README.md`, `PROJECT_CONTEXT.md` (§10.5), `docs/NEUROEVOLUTION_PLAN.md`, `log.md`.
+* **Details:** *Continue this run* only writes a queue entry (`extend_<run>_<n>`, the identifying flags of the run's own command + `--extend` + `--set ga.validation.patience=N`); the restore stays in `train.py`, so the sandbox's write scope is unchanged. *Save a range* saves each generation's Auto car (best-validated elite, else its best car), at most 100 per press.
+* **Notes / Errors:** backup rule unchanged (additive, size comparison): a changed `state.npz` has the same size, so a stale backup copy of it would not even be reported. Owner decision in `REVIEW_LATER.md` item 0.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T142: `train.py --extend`
 

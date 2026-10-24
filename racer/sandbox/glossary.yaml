@@ -378,8 +378,8 @@ training:
       short: "(GA) Generator seed stream of the validation tracks (0 = training pool, 1 = held-out set)."
       affects: "Keeps validation tracks separate from every other set."
     train.ga.validation.patience:
-      short: "(GA) Generations without a validation gain before the run stops."
-      affects: "Longer = more chance of a late improvement, longer runs."
+      short: "(GA) Generations without a validation gain before the run stops. A finished run can be extended with a larger value (Explorer → Evolution → Continue this run, or train.py --extend)."
+      affects: "Longer = more chance of a late improvement, longer runs. Only decides when to stop, so extending a run equals having set it larger from the start."
       range: "500"
     train.ga.validation.min_gain:
       short: "(GA) Relative validation gain that counts as an improvement (0.01 = 1 %)."
@@ -659,6 +659,9 @@ run:
       affects: "—"
     run.generation:
       short: "(GA) Generation this car comes from (which car: run.car)."
+      affects: "—"
+    run.extensions:
+      short: "(GA) When a finished run was continued (D29): the time, the new patience and the generation budget of each extension."
       affects: "—"
     run.car:
       short: "(GA) Index of this car in its generation (from generation 1, the first n_elite are the elites carried over, best first)."

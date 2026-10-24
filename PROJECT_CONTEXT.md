@@ -572,7 +572,7 @@ The sandbox only reads the registry and model folders and writes queue files and
 - **Launch** has three tabs: race chosen models, an Evolution race (strategies as in the game) and **Drive it yourself** (a game window with your car on a physics preset against chosen models; Streamlit cannot read 60 Hz keys), each with a Sound checkbox.
 - **Draw a Track (T119, owner, D27):** a drawing canvas (`streamlit-drawable-canvas`), the drawing shown as a validated track, *Save* to `tracks/user/`, *Race on it* (Launch with the track chosen).
 - **Presets (T101, owner):** every model preset (inputs, car, reward, algorithm and network, track sets) with its values and notes, the rays to scale or the track previews, and the runs trained with it.
-- **Explorer → Evolution (T106, owner):** for neuroevolution models, fitness and validation per generation from the lineage, and *Save as a model* for any generation's car. This is the one place where the sandbox writes a model folder: a new one, rebuilt from the lineage; it never edits an existing one.
+- **Explorer → Evolution (T106, owner):** for neuroevolution models, fitness and validation per generation from the lineage, *Save as a model* for any generation's car, *Save a range of generations* (one car each, up to 100 at a time, for an Evolution race; D29), and *Continue this run* (a queue entry for `train.py --extend` with a new patience, budget and worker count; the restore itself stays in `train.py`, so the sandbox writes no run state). This is the one place where the sandbox writes a model folder: a new one, rebuilt from the lineage; it never edits an existing one.
 
 How it is built:
 

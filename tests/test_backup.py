@@ -65,10 +65,23 @@ def test_only_finished_evolve_runs_are_backed_up(tmp_path):
     """A paused run's lineage keeps growing; copying it would leave a stale copy that is never updated."""
     from racer.registry.backup import finished_evolve_runs
     evolve, dest = tmp_path / "evolve", tmp_path / "backup" / "evolve"
-    make_model(evolve, "R020_GA_main_s1", {"lineage.sqlite": b"done", "finished.json": b"{}"})
+    make_model(evolve, "R020_GA_main_s1", {"lineage.sqlite": b"done", "finished.json": b"{}", "state.npz": b"kept"})
     make_model(evolve, "R021_GA_ctrl_s1", {"lineage.sqlite": b"growing", "state.npz": b"s"})
     runs = finished_evolve_runs(evolve)
     assert [p.name for p in runs] == ["R020_GA_main_s1"]
     r = backup(evolve, dest, folders=runs)
-    assert sorted(r.copied) == ["R020_GA_main_s1/finished.json", "R020_GA_main_s1/lineage.sqlite"]
+    # a finished run keeps its state so it can be extended (D29): it is backed up with the lineage
+    assert sorted(r.copied) == ["R020_GA_main_s1/finished.json", "R020_GA_main_s1/lineage.sqlite",
+                                "R020_GA_main_s1/state.npz"]
     assert not (dest / "R021_GA_ctrl_s1").exists()
+
+
+def test_an_extended_run_is_reported_as_a_conflict_and_the_old_copy_is_kept(tmp_path):
+    from racer.registry.backup import finished_evolve_runs
+    evolve, dest = tmp_path / "evolve", tmp_path / "backup" / "evolve"
+    make_model(evolve, "R020_GA_main_s1", {"lineage.sqlite": b"900 generations", "finished.json": b"{}"})
+    backup(evolve, dest, folders=finished_evolve_runs(evolve))
+    (evolve / "R020_GA_main_s1" / "lineage.sqlite").write_bytes(b"900 generations + 600 more")    # extended, finished again
+    r = backup(evolve, dest, folders=finished_evolve_runs(evolve))
+    assert r.conflicts == ["R020_GA_main_s1/lineage.sqlite"] and not r.ok
+    assert (dest / "R020_GA_main_s1" / "lineage.sqlite").read_bytes() == b"900 generations"

@@ -382,6 +382,42 @@ def queue_entries(plan: Plan, env_name: str) -> list[dict[str, Any]]:
     return [{"name": tag, "args": train_argv(plan, env_name, tag, seed)} for tag, seed in run_tags(plan)]
 
 
+EXTEND_KEEP = ("--tag", "--train", "--trackset", "--tracks", "--env", "--physics", "--reward", "--seed")
+
+
+def extend_entry(snapshot: Mapping[str, Any], patience: int, generations: int | None, workers: int | None,
+                 taken: set[str]) -> dict[str, Any]:
+    """A queue entry that continues a neuroevolution run (D29): ``train.py --extend`` with the flags of
+    the run's own command that identify it (the run keeps its saved settings, so they only have to
+    be valid), the new patience and optionally a generation budget and worker count."""
+    toks = str(snapshot.get("command") or "").split()
+    if "--tag" not in toks:
+        raise ValueError("this run's snapshot has no command to continue it from")
+    args: list[str] = []
+    i = 0
+    while i < len(toks):
+        if toks[i] in EXTEND_KEEP:
+            args.append(toks[i])
+            i += 1
+            while i < len(toks) and not toks[i].startswith("--"):
+                args.append(toks[i])
+                i += 1
+        else:
+            i += 1
+    args += ["--extend", "--set", f"ga.validation.patience={int(patience)}"]
+    if workers:
+        args += ["--set", f"ga.workers={int(workers)}"]
+    if generations:
+        args += ["--generations", str(int(generations))]
+    run_id = str(snapshot["run_id"])
+    if run_id.startswith("S"):
+        args.append("--scratch")
+    n = 1
+    while f"extend_{run_id}_{n}" in taken:
+        n += 1
+    return {"name": f"extend_{run_id}_{n}", "args": args}
+
+
 def estimate_minutes(steps: int | None, runs_ahead: int, parallel: int, cfg: Mapping[str, Any] | None = None,
                      algorithm: str = "ppo", generations: int | None = None) -> dict[str, float] | None:
     """Rough time for one run and for the queue: ``runs_ahead`` includes this one.

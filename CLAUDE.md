@@ -36,7 +36,7 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 ## After a training run or queue completes
 
 - **Back up the models** once the run is trained and evaluated (or the whole queue has finished): `.venv\Scripts\python scripts\backup_models.py`. It copies only what is missing to the backup folder (`configs/backup/default.yaml`), never overwrites or deletes, and refuses while a training, queue or evaluation is running. Also run it after evaluating older models (it adds their new eval files). Log the result (files copied, any CONFLICT lines) in `log.md`.
-- **Neuroevolution runs (D26):** the backup also copies a finished run's lineage database (`outputs/evolve/<run>/lineage.sqlite`). A paused run's `state.npz` is how it resumes, so never delete it while the run is unfinished. Pause a run with Ctrl+C or a `stop.request` file, never by killing the process.
+- **Neuroevolution runs (D26):** the backup also copies a finished run's lineage database (`outputs/evolve/<run>/lineage.sqlite`) and its `state.npz` (D29: a finished run keeps it so `train.py --extend` can continue the run; ≈ 14 MB). A run's `state.npz` is how it resumes, so never delete it, finished or not. Extending a run that was already backed up makes the backup report CONFLICT for the files that grew (open question in `REVIEW_LATER.md`). Pause a run with Ctrl+C or a `stop.request` file, never by killing the process.
 
 ## End of a run (before the final summary)
 

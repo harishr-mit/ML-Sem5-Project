@@ -458,6 +458,14 @@ def test_recycled_pid_is_not_ours():
     assert procs.stop(me, procs.created(me) - 100.0) == "not running"
 
 
+def test_launch_evolution_race_points_to_saving_a_range_of_generations():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_function(_run_page, args=("launch",), default_timeout=120)
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert any("Save a range of generations" in c.value for c in at.caption)
+
+
 def test_launch_page_launches_and_stops(fake_launcher, monkeypatch):
     from streamlit.testing.v1 import AppTest
 
@@ -903,6 +911,53 @@ def test_explorer_evolution_tab_saves_any_generation(tmp_path, monkeypatch):
     assert at.subheader[0].value == (ids - {first.name}).pop()        # the new model is selected
 
 
+def test_explorer_evolution_tab_continues_a_run_and_saves_a_range(tmp_path, monkeypatch):
+    import numpy as np
+    import yaml
+    from streamlit.testing.v1 import AppTest
+
+    from racer.agents.compat import build_manifest
+    from racer.agents.evolve import Evolution, export_car
+    from racer.config import load_preset
+    from racer.registry.registry import Registry, run_row
+    from racer.sandbox.data import Store
+    from racer.sandbox.pages import _ui
+    snap = make_snapshot("S901", "S901_GA_x@0k", 0, env="rays7_lean", tag="x")
+    train = load_preset("train", "ga_default")
+    train["ga"].update(population=6, elite_frac=0.34, workers=1, max_generations=3,
+                       validation={"every": 2, "tracks": 1, "stream": 2, "patience": 1000, "min_gain": 0.01})
+    snap.update(algorithm="ga", train=train, manifest=build_manifest(snap["env_config"], train),
+                versions={"numpy": np.__version__},
+                command="train.py --tag x --scratch --train ga_default --tracks training_ground --env rays7_lean")
+    run_dir = tmp_path / "outputs" / "scratch" / "evolve" / "S901_GA_x"
+    assert Evolution(run_dir, snap["env_config"], train, 10, 2, log=lambda s: None).run() == "finished"
+    (run_dir / "snapshot.yaml").write_text(yaml.safe_dump(snap), encoding="utf-8")
+    reg = Registry(tmp_path / "outputs" / "scratch" / "registry")
+    reg.upsert_run(run_row(snap))
+    first, _ = export_car(run_dir, 1, out_dir=tmp_path / "outputs" / "scratch", registry=reg)
+    monkeypatch.setattr(_ui, "STORE", Store(tmp_path))
+    at = AppTest.from_function(_run_page, args=("explorer",), default_timeout=180)
+    at.session_state["explorer_model"] = first.name
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+
+    at.number_input(key="ex_ext_pat_S901").set_value(2500).run()          # Continue this run
+    at.button(key="ex_ext_add_S901").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    queued = yaml.safe_load((tmp_path / "configs" / "queue" / "sandbox.yaml").read_text(encoding="utf-8"))["runs"]
+    assert [r["name"] for r in queued] == ["extend_S901_1"]
+    args = queued[0]["args"]
+    assert args[:2] == ["--tag", "x"] and "--extend" in args and "ga.validation.patience=2500" in args
+    assert "--scratch" in args and "--generations" not in args
+
+    at.number_input(key="ex_rg_from_S901").set_value(0)                   # Save a range: generations 0..2
+    at.number_input(key="ex_rg_to_S901").set_value(2)
+    at.number_input(key="ex_rg_every_S901").set_value(1).run()
+    at.button(key="ex_rg_save_S901").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert len({m["model_id"] for m in reg.models() if m["run_id"] == "S901"}) == 3      # gen 1 was saved before
+
+
 @pytest.mark.parametrize("kind", ["env", "physics", "reward", "train", "trackset"])
 def test_presets_page_shows_every_preset(kind):
     from streamlit.testing.v1 import AppTest
@@ -917,6 +972,26 @@ def test_presets_page_shows_every_preset(kind):
         assert not at.exception, (kind, name, [e.value for e in at.exception])
         if name != "baseline":                         # the PID driver's settings, not a train preset
             assert any(f"{PRESET_KINDS[kind][1]} {name}" in c.value for c in at.code), (kind, name)
+
+
+def test_continue_a_run_queues_an_extend_command_that_names_the_same_run(tmp_path):
+    from racer.sandbox import builder as B
+    from racer.sandbox.queue import QueueControl
+    snap = {"run_id": "R021", "tag": "main_s1", "seed": 1, "command":
+            "train.py --tag main_s1 --train ga_default --trackset train7 --env rays7_lean --seed 1 "
+            "--curriculum E10: GA main, 7 training maps --notes Neuroevolution on the 7 maps, until the plateau"}
+    e = B.extend_entry(snap, patience=1500, generations=None, workers=4, taken=set())
+    assert e["name"] == "extend_R021_1"
+    assert e["args"] == ["--tag", "main_s1", "--train", "ga_default", "--trackset", "train7", "--env", "rays7_lean",
+                         "--seed", "1", "--extend", "--set", "ga.validation.patience=1500", "--set", "ga.workers=4"]
+    again = B.extend_entry(snap, patience=2000, generations=3000, workers=None, taken={"extend_R021_1"})
+    assert again["name"] == "extend_R021_2" and again["args"][-2:] == ["--generations", "3000"]
+    assert "--scratch" in B.extend_entry(dict(snap, run_id="S004"), 1500, None, None, set())["args"]
+    qc = QueueControl(root=tmp_path, file="configs/queue/sandbox.yaml")
+    qc.add([e])
+    assert qc.entries()[0]["name"] == "extend_R021_1" and qc.entries()[0]["generations"] is None
+    with pytest.raises(ValueError, match="no command"):
+        B.extend_entry({"run_id": "R9", "tag": "x"}, 1500, None, None, set())
 
 
 def test_runs_are_matched_to_their_presets():

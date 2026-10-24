@@ -12,6 +12,7 @@ from racer.sandbox.pages._ui import (freeze as _freeze, map_png as _map_png, md_
                                      num, pct, store, straight_png as _straight_png, track_length as _track_length,
                                      track_names as _track_names)
 
+RANGE_LIMIT = 100          # models one *Save a range* press may create
 TABS = ["Summary & why", "What it senses", "Its brain", "The car", "Reward", "Where it trained",
         "How it trained", "Episode rules", "Results", "Learning curves"]
 
@@ -464,6 +465,65 @@ def _export_car(root, run_id: str, generation: int, car: int | None) -> None:
     st.session_state["explorer_model"] = folder.name
 
 
+def _save_range(root, run_id: str, generations: list[int]) -> None:
+    """*Save a range of generations*: each generation's Auto car (best-validated elite, else its best car)."""
+    from racer.agents.evolve import export_car, run_dir_of
+    from racer.registry.registry import Registry
+    scratch = run_id.startswith("S")
+    made = known = 0
+    try:
+        run_dir = run_dir_of(run_id, root)
+        reg = Registry(root / ("outputs/scratch/registry" if scratch else "registry"))
+        for g in generations:
+            _, created = export_car(run_dir, g, None, out_dir=root / ("outputs/scratch" if scratch else "models"),
+                                    registry=reg)
+            made, known = made + created, known + (not created)
+    except (KeyError, RuntimeError, OSError) as e:
+        st.session_state["ex_ga_msg"] = ("error", f"Stopped after {made + known} of {len(generations)}: {e}")
+        return
+    st.session_state["ex_ga_msg"] = ("success", f"Saved {made} new model(s); {known} of the {len(generations)} "
+                                                "were saved before. They are in the model lists and Launch → "
+                                                "Evolution race.")
+
+
+def _queue_extension(root, run_id: str, run_snapshot, patience: int, generations: int, workers: int) -> None:
+    from racer.sandbox import builder as B
+    from racer.sandbox.queue import QueueControl
+    qc = QueueControl(root=root)
+    try:
+        entry = B.extend_entry(run_snapshot, patience, generations or None, workers, qc.names())
+        qc.add([entry])
+    except ValueError as e:
+        st.session_state["ex_ga_msg"] = ("error", f"Not queued: {e}")
+        return
+    st.session_state["ex_ga_msg"] = ("success", f"Queued as {entry['name']}. Press *Start queue* on Build & Queue to "
+                                                "run it (a real run needs a clean git tree, D12).")
+
+
+def _continue_run(s, run_id: str, run_dir, snap, finished: bool) -> None:
+    import yaml
+    st.markdown("**Continue this run** (D29). " + (
+        "It stopped (validation plateau or generation budget), but it keeps its population, so it can go on from "
+        "where it stopped, exactly as if it had been started with the larger patience." if finished else
+        "It is paused or still running; this resumes it with a new patience."))
+    try:
+        run_snap = yaml.safe_load((run_dir / "snapshot.yaml").read_text(encoding="utf-8"))
+    except OSError:
+        run_snap = snap
+    ga = run_snap["train"]["ga"]
+    old = int(ga["validation"]["patience"])
+    c1, c2, c3 = st.columns(3)
+    patience = int(c1.number_input("Patience (generations)", 1, 100_000, 2 * old, step=100, key=f"ex_ext_pat_{run_id}",
+                                   help=f"Now {old}. Generations without a 1 % validation gain before it stops."))
+    gens = int(c2.number_input("Stop after (generations, 0 = none)", 0, 1_000_000, 0, step=100,
+                               key=f"ex_ext_gen_{run_id}"))
+    workers = int(c3.number_input("Processes", 1, 16, int(ga["workers"]), key=f"ex_ext_workers_{run_id}"))
+    st.button("Add to the queue", key=f"ex_ext_add_{run_id}", on_click=_queue_extension,
+              args=(s.root, run_id, run_snap, patience, gens, workers))
+    st.caption("A run that finished before D29 has no saved population; it is rebuilt from the lineage when it starts "
+               "(needs the same numpy version as the run).")
+
+
 def _evolution(s, run_id: str, snap) -> None:
     from racer.agents.evolve import generation_table, is_finished, run_dir_of
     st.markdown("How this neuroevolution run improved, generation by generation, from its lineage database "
@@ -499,4 +559,17 @@ def _evolution(s, run_id: str, snap) -> None:
     car = None if auto else int(c3.number_input("Car index", 0, int(snap["train"]["ga"]["population"]) - 1, 0,
                                                 key=f"ex_ga_car_{run_id}"))
     st.button("Save as a model", key=f"ex_ga_save_{run_id}", on_click=_export_car, args=(s.root, run_id, gen, car))
+    st.markdown("**Save a range of generations**, one *Auto* car each, e.g. every 50th generation for an "
+                "Evolution race (Launch → Evolution race).")
+    r1, r2, r3 = st.columns(3)
+    lo = int(r1.number_input("From", 0, last, 0, key=f"ex_rg_from_{run_id}"))
+    hi = int(r2.number_input("To", 0, last, last, key=f"ex_rg_to_{run_id}"))
+    every = int(r3.number_input("Every", 1, max(last, 1), max(last // 10, 1), key=f"ex_rg_every_{run_id}"))
+    picked = list(range(lo, hi + 1, every))
+    too_many = len(picked) > RANGE_LIMIT
+    st.caption(f"{len(picked)} model(s)" + (f" — too many, at most {RANGE_LIMIT} at a time" if too_many else ""))
+    st.button("Save the range", key=f"ex_rg_save_{run_id}", disabled=not picked or too_many,
+              on_click=_save_range, args=(s.root, run_id, picked))
+    st.divider()
+    _continue_run(s, run_id, run_dir, snap, is_finished(run_dir))
 

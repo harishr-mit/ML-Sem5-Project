@@ -256,12 +256,21 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
     reg.upsert_run({"run_id": run_id, "total_steps": st.env_steps, "wall_clock_min": round(st.wall_s / 60, 1)})
     if outcome == "paused":
         return PAUSED_EXIT
-    folders = checkpoints_to_evaluate(sorted([*out_dir.glob(f"{run_name}@*"), *out_dir.glob(f"{run_name}_g*@*")]), ga["evaluate"])
+    folders = unevaluated(checkpoints_to_evaluate(
+        sorted([*out_dir.glob(f"{run_name}@*"), *out_dir.glob(f"{run_name}_g*@*")]), ga["evaluate"]), args.protocol)
     if not args.no_eval and folders:
         print(f"[{run_name}] evaluating {len(folders)} checkpoints (the {ga['evaluate']['top_validated']} best "
               f"validated + the last {ga['evaluate']['last']}; protocol {args.protocol})", flush=True)
         evaluate_and_record(folders, args.protocol, args.eval_workers or int(ga["workers"]))
     return 0
+
+
+def unevaluated(folders: list[Path], protocol: str) -> list[Path]:
+    """The folders that have no eval file for this protocol yet: an extended run (D29) lists
+    checkpoints that an earlier stop already evaluated, and evaluating again would only repeat ~50 s each."""
+    from racer.agents.evaluation import eval_filenames, protocol_version
+    name = eval_filenames(protocol_version(protocol))[0]
+    return [f for f in folders if not (f / name).is_file()]
 
 
 def checkpoints_to_evaluate(folders: list[Path], cfg: dict[str, Any]) -> list[Path]:

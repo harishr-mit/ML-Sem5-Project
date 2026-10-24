@@ -200,6 +200,30 @@ def test_an_extension_is_stored_in_the_snapshot_so_a_plain_resume_keeps_it(tmp_p
     assert not list(tmp_path.glob("*.partial"))
 
 
+def test_a_state_saved_before_d29_still_resumes(tmp_path):
+    env_config, train = small_run()
+    evolution(tmp_path, env_config, train).run(pause_after=2)
+    st = State.load(tmp_path / "state.npz")
+    st.settings = settings_key(env_config, train, legacy=True)          # as saved before the patience was left out
+    st.save(tmp_path / "state.npz")
+    assert evolution(tmp_path, env_config, train).run(pause_after=3) == "paused"
+    assert State.load(tmp_path / "state.npz").settings == settings_key(env_config, train)    # now the new key
+    changed = copy.deepcopy(train)
+    changed["ga"]["sigma"] = 0.05
+    with pytest.raises(ValueError, match="different settings"):
+        evolution(tmp_path, env_config, changed).run(pause_after=4)
+
+
+def test_an_extended_run_only_evaluates_checkpoints_without_this_protocols_file(tmp_path):
+    folders = [tmp_path / "a", tmp_path / "b"]
+    for f in folders:
+        f.mkdir()
+    (folders[0] / "eval_v2.json").write_text("{}", encoding="utf-8")
+    (folders[1] / "eval.json").write_text("{}", encoding="utf-8")          # v1's file doesn't count for v2
+    assert train_script().unevaluated(folders, "v2") == [folders[1]]
+    assert train_script().unevaluated(folders, "v1") == [folders[0]]
+
+
 def test_a_finished_run_is_only_restarted_by_extending_it(tmp_path):
     env_config, train = plateau_run(4)
     assert evolution(tmp_path, env_config, train).run() == "finished"

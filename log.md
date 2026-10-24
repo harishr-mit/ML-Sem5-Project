@@ -189,12 +189,12 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T138: Docs (PROJECT_CONTEXT §10/§12/§16, README, glossary, `assets/LICENSES.md`), full suite, merge `feat/demo-complete` into `main`, remove the worktree. Done when: the suite passes on `main`.
 * [x] T139: Owner (2026-10-24): finished GA runs must be resumable long after they finish; sandbox gets a way to continue a run and a better model export. Worktree `ML Sem5 Project - dev` recreated on `feat/ga-extend` (the old one was merged and removed). Plan `docs/GA_EXTEND_PLAN.md`, decision D29 (PROJECT_CONTEXT §8/§16, `DECISIONS.md`). Done when: plan and decision are committed.
 * [x] T140: Engine: a finishing run breeds the next generation, saves `state.npz` and keeps it (finished = `finished.json` present); `Evolution` refuses a finished run unless asked to extend. Tests first. Done when: finish then extend with a larger patience equals an uninterrupted run with that patience (weights and lineage rows).
-* [x] T141: Restore a run's state from its lineage (runs finished before T140: R020-R024): rebuild the last generation's cars, re-breed, replay the `min_gain` rule for `best_validation`/`last_gain`. Done when: a restored state equals the kept `state.npz` of a finished test run, and a copy of R021's real lineage restores to its last checkpoint's weights.
+* [x] T141: Restore a run's state from its lineage (runs finished before T140: R020–R022 and R024): rebuild the last generation's cars, re-breed, replay the `min_gain` rule for `best_validation`/`last_gain`. Done when: a restored state equals the kept `state.npz` of a finished test run, and a copy of R021's real lineage restores to its last checkpoint's weights.
 * [x] T142: Extend from the command line: `train.py --extend` (new `ga.validation.patience` and/or `max_generations`), patience allowed to change on resume without locking out older paused runs (legacy settings key still accepted), the extension stored in the run folder so a later plain resume keeps it. Done when: tests for extend, pause, plain resume and a legacy-key run pass.
 * [x] T143: Backup: a finished run's `state.npz` is copied with its lineage (existing rule); an extended run reports CONFLICT for the files that grew (additive rule unchanged); the open question (versioned copies?) goes to `REVIEW_LATER.md`. Update the old-rule tests. Done when: backup tests pass.
 * [x] T144: Sandbox (D27): Explorer → Evolution *Continue this run* (patience, generation budget, workers) writes a queue entry; the restore itself stays in `train.py`; glossary entry for the new settings. Done when: a headless page test adds the entry.
 * [x] T145: Sandbox (D27): improve *Save as a model*: save a range of generations (every N, best-validated elite each) in one go, and point to it from Launch → Evolution Race. Done when: headless page tests save a range and show the pointer.
-* [~] T146: Docs (PROJECT_CONTEXT §8/§10.5/§16, `CLAUDE.md` D26 backup bullet, README, `docs/NEUROEVOLUTION_PLAN.md`, `evolve.py` docstring), full suite, review, commit. Merging into `main` and extending R021 for real wait for the owner (clean tree, D12).
+* [x] T146: Docs (PROJECT_CONTEXT §8/§10.5/§16, `CLAUDE.md` D26 backup bullet, README, `docs/NEUROEVOLUTION_PLAN.md`, `evolve.py` docstring), full suite, review, commit. Merging into `main` and extending R021 for real wait for the owner (clean tree, D12).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -211,6 +211,14 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T146: advisor review fixes
+
+* **Task:** fixes from the advisor review of T139-T145 before the full suite.
+* **Status:** DONE. Full suite in the worktree: 372 passed, 13 skipped (the data-dependent tests skip: no `models/` here). One earlier run stopped at `test_stop_request_interrupts_a_running_queue`, a timing flake under load; it passes alone and in the full rerun.
+* **Files:** Edited `racer/sandbox/pages/explorer.py` (*Continue this run* only for finished runs; refused while a queue entry for the same tag is waiting, running or interrupted), `scripts/train.py` (`unevaluated`: after an extension only checkpoints without the protocol's eval file are evaluated), `tests/test_evolve.py` (a pre-D29 state resumes, a changed sigma is still refused, `unevaluated`), `tests/test_sandbox.py` (a second press is refused), `docs/GA_EXTEND_PLAN.md`, `PROJECT_CONTEXT.md`/`README.md`/`log.md` (the pre-D29 runs are R020–R022 and R024; R023 is PPO).
+* **Details:** evaluation re-runs but never overwrites eval files (D10), so without the filter an extension would repeat ~50 s per already-evaluated checkpoint.
+* **Notes / Errors:** this worktree has no `models/` or `outputs/evolve`, so the data-dependent tests (snapshot-key glossary coverage, R015 launch, integrity) skip here; the real check is the full suite on `main` after the merge, where `run.extensions` meets real snapshots. Merge into `main` and extending R021/R022/R024 for real wait for the owner.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T143-T145: backup, Continue this run, Save a range
 

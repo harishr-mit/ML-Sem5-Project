@@ -486,10 +486,20 @@ def _save_range(root, run_id: str, generations: list[int]) -> None:
                                                 "Evolution race.")
 
 
+def _arg(args: list[str], flag: str) -> str | None:
+    return args[args.index(flag) + 1] if flag in args[:-1] else None
+
+
 def _queue_extension(root, run_id: str, run_snapshot, patience: int, generations: int, workers: int) -> None:
     from racer.sandbox import builder as B
     from racer.sandbox.queue import QueueControl
     qc = QueueControl(root=root)
+    scratch = run_id.startswith("S")
+    busy = [e["name"] for e in qc.entries() if e["status"] in ("waiting", "running", "interrupted")
+            and e["scratch"] == scratch and _arg(e["args"], "--tag") == run_snapshot.get("tag")]
+    if busy:         # two processes on one run folder would corrupt its lineage and state
+        st.session_state["ex_ga_msg"] = ("error", f"Not queued: {busy[0]} is already in the queue for this run.")
+        return
     try:
         entry = B.extend_entry(run_snapshot, patience, generations or None, workers, qc.names())
         qc.add([entry])
@@ -502,10 +512,13 @@ def _queue_extension(root, run_id: str, run_snapshot, patience: int, generations
 
 def _continue_run(s, run_id: str, run_dir, snap, finished: bool) -> None:
     import yaml
-    st.markdown("**Continue this run** (D29). " + (
-        "It stopped (validation plateau or generation budget), but it keeps its population, so it can go on from "
-        "where it stopped, exactly as if it had been started with the larger patience." if finished else
-        "It is paused or still running; this resumes it with a new patience."))
+    if not finished:
+        st.caption("This run hasn't finished (paused or running): resume it from the queue entry that started it, "
+                   "or with the same command. *Continue this run* is for finished runs.")
+        return
+    st.markdown("**Continue this run** (D29). It stopped (validation plateau or generation budget), but it keeps its "
+                "population, so it can go on from where it stopped, exactly as if it had been started with the "
+                "larger patience.")
     try:
         run_snap = yaml.safe_load((run_dir / "snapshot.yaml").read_text(encoding="utf-8"))
     except OSError:

@@ -950,6 +950,10 @@ def test_explorer_evolution_tab_continues_a_run_and_saves_a_range(tmp_path, monk
     assert args[:2] == ["--tag", "x"] and "--extend" in args and "ga.validation.patience=2500" in args
     assert "--scratch" in args and "--generations" not in args
 
+    at.button(key="ex_ext_add_S901").click().run()                        # a second press: refused, one entry
+    assert any("already in the queue" in e.value for e in at.error)
+    assert len(yaml.safe_load((tmp_path / "configs" / "queue" / "sandbox.yaml").read_text(encoding="utf-8"))["runs"]) == 1
+
     at.number_input(key="ex_rg_from_S901").set_value(0)                   # Save a range: generations 0..2
     at.number_input(key="ex_rg_to_S901").set_value(2)
     at.number_input(key="ex_rg_every_S901").set_value(1).run()

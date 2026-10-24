@@ -22,6 +22,11 @@ Shared context for every agent working in this directory. Read this file **befor
 ## Current Status
 
 * **Last updated:** 2026-10-24 (Claude Opus 5.5). **Where we are:** start of Week 3. M1 and M2 reached; AI Sandbox built (T65–T75, T101, T106); map library + eval protocol v2; upgradable engine (D21–D23). **Neuroevolution (D26) built and merged to `main`** (PR #1, 2026-10-24; 256 tests pass at T107). Best PPO: `R015_t50_narrow7_s1@4600k` (seen 64 %, unseen 88 %, lap ratio 0.97) but it doesn't reproduce (R018, R019). GA σ test: σ 0.02 (S004: seen 100 %, unseen 87.5 %, lap ratio 0.997; one seed). Nothing is running. **Next:** T97 (owner starts `configs/queue/e10_ga.yaml`, then evaluate, back up, record E10); T83 (owner decision: run-to-run variance); **T97 queue ready on `main`** (4 runs incl. GA seed 2 and PPO under GA rules; GA tries start on the start line, T115). T08 / M3 Week 3 visuals (effects, brain panel, minimap, Evolution Race, Draw-a-Track, Human vs AI, video recorder); then T09 / M4. History of earlier status lines: see the Change Log.
+* **⚠ Two working copies until the E10 queue finishes (owner, 2026-10-24, T117):**
+  - **This folder (`ML Sem5 Project`, branch `main`) runs the E10 queue** (`configs/queue/e10_ga.yaml`). Don't edit `racer/`, `scripts/`, `configs/`, `tracks/` here and don't switch branches: every queue entry refuses to start on uncommitted code and runs whatever is checked out. Check-ins read only `outputs/queue_logs/e10_ga/state.json` and the log tail. The queue writes `registry/*.csv`, `registry/run_notes.yaml`, `outputs/eval/` and `models/` here.
+  - **Development happens in the worktree `C:\Users\Jack\Desktop\ML Sem5 Project - dev`** (branch `feat/draw-a-track`). Run Python there with this folder's `.venv` and `PYTHONPATH` set to the worktree, so `racer` is imported from the worktree (the editable install points here).
+  - **Keep the two mergeable:** the dev branch never edits `registry/`, `outputs/eval/`, `models/` or `configs/queue/e10_ga.yaml`, and never changes what an existing preset/setting means (extend, don't change). In `log.md` it only adds tasks at the bottom and Change Log entries at the top; "Current Status" is rewritten at merge time.
+  - **When the queue finishes:** evaluate/back up and record E10 results here on `main` and commit; then merge `feat/draw-a-track` into `main` (resolve `log.md` by keeping both sets of entries), run the full suite, and remove the worktree (`git worktree remove`).
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
 * **Plan:** `PROJECT_CONTEXT.md` is the single source of truth: design, physics, env, training, registry, demo, timeline (§12) and setup (§14). `CLAUDE.md` holds the agent rules.
 * **Architecture:** a headless simulation (`racer/physics`, `racer/track`, `racer/env`, with no pygame) used by the training scripts (`scripts/train.py`, `evaluate.py`) and by the pygame-ce demo (`scripts/demo.py`, `racer/render`).
@@ -159,6 +164,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [ ] T114: Docs (PROJECT_CONTEXT §6/§10.1, README, glossary if needed), full suite, review, commit.
 * [x] T115: Owner (2026-10-24, mid-T110): GA training tries always start on the start/finish line (centred, aligned, standing) on every map, not at a random point. New setting `ga.start: line | random` (`ga_default`: line; missing = random, so older runs resume unchanged). Done when: test shows line starts and an unchanged map sequence; docs (PROJECT_CONTEXT §8, §16, glossary, README). T110 paused meanwhile.
 * [x] T116: Owner decisions for the E10 queue (2026-10-24): control run (TG, 300 gen), GA main seeds 1 and 2 (no generation cap, plateau stop), PPO under GA rules (rays7_lean + track limits, train7, 5M steps) last; σ stays 0.02; commit and merge locally; the owner starts the queue.
+* [x] T117: Owner (2026-10-24): the E10 queue runs in this folder on `main`; development continues in a git worktree (`ML Sem5 Project - dev`, branch `feat/draw-a-track`); both merged when the queue finishes. Rules noted under Current Status.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -175,6 +181,13 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Opus 5.5) — T117: Queue folder and dev worktree
+
+* **Owner decision:** run the E10 queue in the background in the project folder (`main`) and keep working in a separate git worktree; merge both when the queue finishes.
+* **Why a worktree:** `train.py` refuses a real run on uncommitted code (`CODE_PATHS`), checked when *each* queue entry starts, and it runs whatever branch is checked out; so editing here would fail entries 2–4. Docs, the registry and eval copies don't count as dirty.
+* **Status:** DONE. Rules for both copies under "Current Status". Worktree `C:\Users\Jack\Desktop\ML Sem5 Project - dev` on `feat/draw-a-track`.
+* **Files:** Edited `log.md`.
 
 ### 2026-10-24 — Claude Code (Opus 5.5) — T115: GA tries start on the start line
 

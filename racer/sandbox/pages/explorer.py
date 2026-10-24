@@ -204,11 +204,14 @@ def _summary(s, run, snap, model_id, m, doc) -> None:
         if snap.get("command"):
             with st.expander("Exact training command"):
                 st.code(str(snap["command"]), language="text")
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         c1.button("Compare with others", key="ex_cmp", on_click=_goto,
                   args=("compare",), kwargs={"compare_models": [model_id]})
         c2.button("Launch in a race", key="ex_launch", on_click=_goto,
                   args=("launch",), kwargs={"launch_models": [model_id]})
+        c3.button("Drive a lap and analyse it", key="ex_wb", on_click=_goto,
+                  args=("workbench",), kwargs={"wb_drivers": [model_id]},
+                  help="Workbench: racing line, speed trace, g-g diagram and what the network does.")
 
 
 def _senses(snap, man, model_id) -> None:

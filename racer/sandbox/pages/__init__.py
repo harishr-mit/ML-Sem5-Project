@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import streamlit as st
 
-from racer.sandbox.pages import build, compare, draw, explorer, glossary, launch, overview, presets
+from racer.sandbox.pages import build, compare, draw, explorer, glossary, launch, overview, presets, workbench
 
 # (key, module, title, material icon); the first page is the home page
 PAGES = [
     ("overview", overview, "Overview", "dashboard"),
     ("explorer", explorer, "Model Explorer", "psychology"),
     ("compare", compare, "Compare", "compare_arrows"),
+    ("workbench", workbench, "Workbench", "monitoring"),
     ("build", build, "Build & Queue", "build"),
     ("presets", presets, "Presets", "tune"),
     ("draw", draw, "Draw a Track", "draw"),

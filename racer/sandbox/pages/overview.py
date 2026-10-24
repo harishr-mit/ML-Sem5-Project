@@ -107,8 +107,32 @@ def render() -> None:
         b[2].button("Race them", key="ov_race", disabled=not picked or len(picked) > 20, on_click=_goto,
                     args=("launch",), kwargs={"launch_models": picked})
 
+        _plots(df)
+
     st.header("Running now")
     _running()
+
+
+def _plots(df: pd.DataFrame) -> None:
+    """Two default plots of the leaderboard: who is both general and fast, and who generalises best."""
+    from racer.sandbox import plots
+    ok = df[(df["not comparable"] == "")].rename(columns={"lap ratio": "lap_ratio", "steps (M)": "steps_M"})
+    ok = ok.dropna(subset=["unseen"])
+    if ok.empty:
+        return
+    st.header("Results at a glance")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Faster and more general is down-right** (lap ratio below 1 = faster than the baseline)")
+        st.altair_chart(plots.chart_scatter(ok.dropna(subset=["lap_ratio"]), "unseen", "lap_ratio", "experiment",
+                                            tooltip=["model", "run", "unseen", "lap_ratio"], width=420, height=320),
+                        width="stretch")
+    with c2:
+        st.markdown("**Completion on tracks never trained on** (top 10 runs)")
+        top = ok.sort_values("unseen", ascending=False).head(10).assign(run_model=lambda d: d["run"] + " " + d["experiment"].astype(str))
+        st.altair_chart(plots.chart_bars(top, "run_model", "unseen", None, width=420, height=320, percent=True),
+                        width="stretch")
+    st.button("Open the Workbench", key="ov_wb", on_click=_goto, args=("workbench",))
 
 
 def _running() -> None:

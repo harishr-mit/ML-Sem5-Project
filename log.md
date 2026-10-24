@@ -183,9 +183,9 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T132: Swarm view. Done when: many cars from one policy run at 60 FPS.
 * [x] T133: Performance: 20 cars with all effects and audio at 60 FPS. Done when: a bench script and a test threshold pass.
 * [x] T134: Rays table: Delete column + *Remove ticked rays* button in Build & Queue. Done when: a page test removes chosen rows.
-* [ ] T135: `racer/agents/telemetry.py` + `racer/sandbox/plots.py`: racing line, speed trace, g-g diagram, braking zones, registry plots (curves, ablation bars, E10). Done when: unit tests on small data pass.
-* [ ] T136: Sandbox *Workbench* page (live plots from the same runtime) + default plots on Overview; Compare links to it. Done when: headless page tests pass.
-* [ ] T137: `scripts/make_plots.py`: the PNG report set from the same functions. Done when: it writes the set from the registry.
+* [x] T135: `racer/agents/telemetry.py` + `racer/sandbox/plots.py`: racing line, speed trace, g-g diagram, braking zones, registry plots (curves, ablation bars, E10). Done when: unit tests on small data pass.
+* [x] T136: Sandbox *Workbench* page (live plots from the same runtime) + default plots on Overview; Compare links to it. Done when: headless page tests pass.
+* [x] T137: `scripts/make_plots.py`: the PNG report set from the same functions. Done when: it writes the set from the registry.
 * [ ] T138: Docs (PROJECT_CONTEXT §10/§12/§16, README, glossary, `assets/LICENSES.md`), full suite, merge `feat/demo-complete` into `main`, remove the worktree. Done when: the suite passes on `main`.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
@@ -203,6 +203,21 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T137: PNG report set
+
+* **Status:** DONE. `scripts/make_plots.py` (logic in `racer/sandbox/report.py`) writes results scatter, ablation bars, the E10 method comparison (R021-R023, like-for-like), training curves (when the TensorBoard logs exist on the machine), and racing line, speed trace, g-g and a lap table for chosen drivers. Figures without data are skipped and listed, never faked. Tests: `tests/test_report.py` (4).
+* **Files:** Created `racer/sandbox/report.py`, `scripts/make_plots.py`, `tests/test_report.py`; edited `log.md`.
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T136: Workbench page and default plots
+
+* **Status:** DONE. New sandbox page *Workbench* (Registry, Compare results, Learning curves, Drive & analyse, Brain): the registry as a plottable data set (any two metrics, colour by algorithm, CSV download), grouped result bars for chosen models, training curves with smoothing, and laps driven right in the page (up to 4 drivers, 1-3 laps, rolling start): lap summary table, racing line coloured by speed, traces with shared zoom, g-g diagram, braking zones, CSV; the Brain tab scrubs a lap and shows the network's inputs and neuron layers at each moment. Links: Explorer *Drive a lap and analyse it*, Compare *Plot and analyse these in the Workbench*; the Overview gets *Results at a glance* (unseen completion against lap ratio, and the top 10 runs). Headless page tests drive the baseline and check every plot renders.
+* **Files:** Created `racer/sandbox/pages/workbench.py`; edited `racer/sandbox/pages/__init__.py`, `overview.py`, `explorer.py`, `compare.py`, `tests/test_sandbox.py`, `log.md`.
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T135: Telemetry and plot library
+
+* **Status:** DONE. `racer/agents/telemetry.py` drives a model (or the baseline) under its own rules and records every step (position, lap distance, speed, commands, pedals, lateral and longitudinal g, off-road, sliding, optionally the observations), with lap slicing (distance unwrapped) and braking zones. `racer/sandbox/plots.py` (no Streamlit): outlines of tracks, lap summaries, long-form telemetry, interactive Altair charts (racing line coloured by speed, shared-zoom traces, g-g with the friction ring, registry scatter, bars, learning curves) and matplotlib twins for files. Tests: `tests/test_telemetry.py` (4), `tests/test_plots.py` (10).
+* **Files:** Created `racer/agents/telemetry.py`, `racer/sandbox/plots.py`, `tests/test_telemetry.py`, `tests/test_plots.py`, `log.md`.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T134: Delete rows in the rays table
 

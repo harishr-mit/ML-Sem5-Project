@@ -63,6 +63,11 @@ def render() -> None:
               kwargs={"launch_models": list(picked)}, disabled=any(s.problems(m) for m in picked),
               help="Opens the Launch page with these models selected.")
 
+    st.button("Plot and analyse these in the Workbench", on_click=_goto, args=("workbench",),
+              kwargs={"wb_models": list(picked), "wb_drivers": list(picked)}, key="cmp_wb",
+              disabled=any(s.problems(m) for m in picked),
+              help="Opens the Workbench: result bars for these models, and a lap each to compare racing lines.")
+
     st.header("What is different")
     flat = [explain.snapshot_rows(sn, mn or None) for sn, mn in zip(snaps, mans)]
     d = explain.diff(flat)

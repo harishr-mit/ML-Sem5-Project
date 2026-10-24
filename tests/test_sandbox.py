@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PAGE_KEYS = ["overview", "explorer", "compare", "build", "presets", "draw", "launch", "glossary"]
+PAGE_KEYS = ["overview", "explorer", "compare", "workbench", "build", "presets", "draw", "launch", "glossary"]
 
 
 @pytest.fixture(autouse=True)
@@ -969,3 +969,25 @@ def test_drop_marked_removes_only_the_ticked_rows():
     assert drop_marked(rows, [False, False, False]) == rows
     assert drop_marked(rows, [True, True, True]) == []
     assert drop_marked([], []) == []
+
+
+def test_workbench_drives_the_baseline_and_draws_every_plot():
+    """The Workbench drives a lap right here and renders table, racing line, traces, g-g and braking zones."""
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_function(_run_page, args=("workbench",), default_timeout=240)
+    at.session_state["wb_run"] = {"who": ["baseline"], "track": "training_ground", "laps": 1, "speed": 0.0}
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert {"Registry", "Compare results", "Learning curves", "Drive & analyse", "Brain", "Racing line", "Traces"} <= {t.label for t in at.tabs}
+    assert any("training_ground" in s.value for s in at.subheader)
+    charts = at.get("vega_lite_chart")
+    assert len(charts) >= 4                                      # registry scatter + racing line + traces + g-g (+ more)
+    assert at.get("dataframe")                                   # the lap summary table
+
+
+def test_workbench_brain_tab_needs_a_driven_model_first():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_function(_run_page, args=("workbench",), default_timeout=120)
+    at.run()
+    assert not at.exception
+    assert any("Drive a model" in c.value for c in at.caption)

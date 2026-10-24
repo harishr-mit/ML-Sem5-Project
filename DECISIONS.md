@@ -8,6 +8,7 @@ Short log of decisions taken in sessions. The full design record is PROJECT_CONT
 |---|---|---|
 | **GA runs stay resumable after they finish** (D29): a finished run keeps `state.npz` (about 14 MB); `train.py --extend` continues it with a new patience or budget; runs finished before get their state rebuilt from the lineage | A plateau stop that turns out too early shouldn't cost the generations already driven; "main 2" would start from scratch | log.md T139-T146, `docs/GA_EXTEND_PLAN.md`, PROJECT_CONTEXT §8 |
 | The backup copies a finished run's `state.npz` too | Owner | `racer/registry/backup.py` |
+| Backup of extended GA runs: changed files are saved as `name.v2`, `name.v3`, … next to the old copy (no git in the backup folder) | Owner: keeps the never-overwrite rule, no CONFLICT | `racer/registry/backup.py` |
 | Sandbox: *Continue this run* and a bulk *Save as a model* | Owner ("both") | log.md T144, T145 |
 
 ## 2026-10-24

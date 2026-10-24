@@ -285,7 +285,7 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | Export a neuroevolution car | `scripts\export_ga.py --run R020 --list` · `--generation 750 [--car 3] [--evaluate]` (rebuilt from the lineage) |
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |
-| Back up models (after every run) | `scripts\backup_models.py [--run R015] [--dry-run] [--dest <folder>]` (copies what's missing; never overwrites or deletes) |
+| Back up models (after every run) | `scripts\backup_models.py [--run R015] [--dry-run] [--dest <folder>]` (copies what's missing; never overwrites or deletes; an extended GA run's changed files are saved as `name.v2`, `.v3`) |
 | Game window | `scripts\demo.py [--mode arena\|evolution\|human\|swarm] [--track …] [--models … \| --run R002 [--every N \| --spaced N \| --top N] \| --best] [--baseline] [--human [PHYSICS]] [--swarm N] [--laps 3] [--fair] [--gradient] [--no-sound] [--title "caption"] [--screenshot out.png --frames 600]` |
 | Frame-rate check | `scripts\bench_demo.py [--cars 20] [--frames 600] [--min-fps 60]` |
 | Report plots (PNG) | `scripts\make_plots.py [--out outputs\plots\report] [--track technical] [--models baseline <model_id> …] [--no-drive]` (the Workbench's charts as files) |

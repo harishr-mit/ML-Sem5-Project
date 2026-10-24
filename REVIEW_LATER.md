@@ -4,13 +4,6 @@ Decisions that are waiting on the owner. Each one says what it blocks and what w
 
 _Last updated: 2026-10-24 (after the demo merge)._
 
-## Backup of extended GA runs (D29, T143)
-
-### 0. How should `backup_models.py` treat a GA run that was extended after it was backed up?
-- Extending a finished run changes its `lineage.sqlite`, `finished.json`, `snapshot.yaml` and `state.npz`. The backup never overwrites, so it reports CONFLICT for the files whose size changed (lineage, finished.json) and keeps the old copy. `state.npz` has a fixed size, so its stale copy in the backup is **not** reported.
-- **Options:** (a) versioned copies (`lineage.sqlite` → `lineage.sqlite.v2`, only for evolve runs, still never deleting); (b) compare by modification time or hash as well as size, and write the newer file next to the old one; (c) leave as is and delete the run's backup folder by hand before backing up an extended run.
-- **Decide before:** the first real extension (R021, R022 or R024). Until then the extended generations would exist only locally.
-
 ## Waiting on the GA runs (T97)
 
 Start the queue first: `.venv\Scripts\python scripts\queue_overnight.py configs\queue\e10_ga.yaml` (control run: Training Ground, 300 generations; main run: 7 maps, until the validation plateau).

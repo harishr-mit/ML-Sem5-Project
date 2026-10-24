@@ -194,6 +194,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T143: Backup: a finished run's `state.npz` is copied with its lineage (existing rule); an extended run reports CONFLICT for the files that grew (additive rule unchanged); the open question (versioned copies?) goes to `REVIEW_LATER.md`. Update the old-rule tests. Done when: backup tests pass.
 * [x] T144: Sandbox (D27): Explorer → Evolution *Continue this run* (patience, generation budget, workers) writes a queue entry; the restore itself stays in `train.py`; glossary entry for the new settings. Done when: a headless page test adds the entry.
 * [x] T145: Sandbox (D27): improve *Save as a model*: save a range of generations (every N, best-validated elite each) in one go, and point to it from Launch → Evolution Race. Done when: headless page tests save a range and show the pointer.
+* [x] T147: Owner (2026-10-24): back up extended GA runs under versioned names (`lineage.sqlite.v2`), no git in the backup folder. `backup(versioned=True)` for evolve runs, compared by content. Done when: tests pass and the real dry run is clean.
 * [x] T146: Docs (PROJECT_CONTEXT §8/§10.5/§16, `CLAUDE.md` D26 backup bullet, README, `docs/NEUROEVOLUTION_PLAN.md`, `evolve.py` docstring), full suite, review, commit. Merging into `main` and extending R021 for real wait for the owner (clean tree, D12).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
@@ -211,6 +212,13 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T147: versioned backup of extended runs
+
+* **Task:** owner: keep a versioned name such as `lineage.sqlite.v2` instead of a CONFLICT; no `git init` in the backup folder.
+* **Status:** DONE. `tests/test_backup.py` (7): unchanged = up to date; a grown file and a same-size changed file become `.v2`, then `.v3`; the first copy is untouched; models keep the strict CONFLICT rule. Real `backup_models.py --dry-run`: 0 files to copy, 4 finished runs, no conflicts.
+* **Files:** Edited `racer/registry/backup.py` (`versioned`, content compare), `scripts/backup_models.py`, `tests/test_backup.py`, `CLAUDE.md`, `PROJECT_CONTEXT.md` (§9, D29), `DECISIONS.md`, `README.md`, `docs/GA_EXTEND_PLAN.md`, `REVIEW_LATER.md` (item 0 removed: decided), `log.md`.
+* **Notes / Errors:** none. Merged to `main`; the owner's drawn track `scribble` committed; the worktree and branches removed.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T146: advisor review fixes
 

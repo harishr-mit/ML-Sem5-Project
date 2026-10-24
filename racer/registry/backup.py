@@ -4,9 +4,14 @@
 like the model folders themselves (D10): files missing from the backup are copied, files
 already there are never overwritten, and nothing is ever deleted. A file whose size differs
 from the backup's copy is reported as a conflict and left alone.
+
+Neuroevolution runs are the exception (``versioned=True``, D29): extending a finished run changes
+its files, so a changed file is copied next to the old one as ``name.v2``, ``name.v3``, … and
+nothing is overwritten or deleted.
 """
 from __future__ import annotations
 
+import filecmp
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -53,11 +58,21 @@ def finished_evolve_runs(evolve_dir: Path, only_run: str | None = None) -> list[
     return [p for p in model_folders(evolve_dir, only_run) if (p / FINISHED).is_file()]
 
 
+def _latest_version(dst: Path) -> tuple[Path, int]:
+    """The newest backed-up copy of ``dst`` (``dst``, ``dst.v2``, …) and its version number."""
+    n = 1
+    while dst.with_name(f"{dst.name}.v{n + 1}").exists():
+        n += 1
+    return (dst if n == 1 else dst.with_name(f"{dst.name}.v{n}")), n
+
+
 def backup(models_dir: Path, dest: Path, only_run: str | None = None, dry_run: bool = False,
-           folders: list[Path] | None = None) -> BackupReport:
+           folders: list[Path] | None = None, versioned: bool = False) -> BackupReport:
     """Copy what is missing from ``dest``; never overwrite or delete.
 
     ``folders`` (all under ``models_dir``) replaces the default list of model folders.
+    ``versioned``: a file whose content differs from the newest backed-up copy is saved as the next
+    ``.vN`` instead of being reported as a conflict.
     """
     report = BackupReport()
     for folder in folders if folders is not None else model_folders(models_dir, only_run):
@@ -67,7 +82,13 @@ def backup(models_dir: Path, dest: Path, only_run: str | None = None, dry_run: b
         for src in sorted(p for p in folder.rglob("*") if p.is_file()):
             rel = src.relative_to(models_dir)
             dst = dest / rel
-            if dst.exists():
+            if dst.exists() and versioned:
+                latest, n = _latest_version(dst)
+                if filecmp.cmp(src, latest, shallow=False):
+                    report.up_to_date += 1
+                    continue
+                dst, rel = dst.with_name(f"{dst.name}.v{n + 1}"), rel.with_name(f"{rel.name}.v{n + 1}")
+            elif dst.exists():
                 if dst.stat().st_size == src.stat().st_size:
                     report.up_to_date += 1
                 else:

@@ -76,12 +76,33 @@ def test_only_finished_evolve_runs_are_backed_up(tmp_path):
     assert not (dest / "R021_GA_ctrl_s1").exists()
 
 
-def test_an_extended_run_is_reported_as_a_conflict_and_the_old_copy_is_kept(tmp_path):
+def test_an_extended_run_is_backed_up_under_a_versioned_name(tmp_path):
+    """D29: extending changes files of a run that was backed up; the old copy stays, the new one is .v2, .v3, …"""
     from racer.registry.backup import finished_evolve_runs
     evolve, dest = tmp_path / "evolve", tmp_path / "backup" / "evolve"
-    make_model(evolve, "R020_GA_main_s1", {"lineage.sqlite": b"900 generations", "finished.json": b"{}"})
-    backup(evolve, dest, folders=finished_evolve_runs(evolve))
-    (evolve / "R020_GA_main_s1" / "lineage.sqlite").write_bytes(b"900 generations + 600 more")    # extended, finished again
-    r = backup(evolve, dest, folders=finished_evolve_runs(evolve))
-    assert r.conflicts == ["R020_GA_main_s1/lineage.sqlite"] and not r.ok
-    assert (dest / "R020_GA_main_s1" / "lineage.sqlite").read_bytes() == b"900 generations"
+    run = "R020_GA_main_s1"
+    make_model(evolve, run, {"lineage.sqlite": b"900 generations", "state.npz": b"aaaa", "finished.json": b"{}"})
+
+    def save():
+        return backup(evolve, dest, folders=finished_evolve_runs(evolve), versioned=True)
+    save()
+    assert save().copied == []                                               # nothing changed: up to date
+    (evolve / run / "lineage.sqlite").write_bytes(b"900 generations + 600 more")     # extended: the file grew
+    (evolve / run / "state.npz").write_bytes(b"bbbb")                                # same size, other content
+    r = save()
+    assert r.ok and sorted(r.copied) == [f"{run}/lineage.sqlite.v2", f"{run}/state.npz.v2"]
+    assert (dest / run / "lineage.sqlite").read_bytes() == b"900 generations"        # the first copy is untouched
+    assert (dest / run / "lineage.sqlite.v2").read_bytes() == b"900 generations + 600 more"
+    assert save().copied == []                                               # the latest version is current
+    (evolve / run / "state.npz").write_bytes(b"cccc")                                # extended again
+    assert save().copied == [f"{run}/state.npz.v3"]
+
+
+def test_without_versioning_a_changed_file_is_still_a_conflict(tmp_path):
+    evolve, dest = tmp_path / "evolve", tmp_path / "backup" / "models"
+    make_model(evolve, "R001_a@100k", {"model.zip": b"old"})
+    backup(evolve, dest)
+    (evolve / "R001_a@100k" / "model.zip").write_bytes(b"older!")
+    r = backup(evolve, dest)
+    assert r.conflicts == ["R001_a@100k/model.zip"] and not r.ok
+    assert (dest / "R001_a@100k" / "model.zip").read_bytes() == b"old"

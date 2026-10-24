@@ -4,7 +4,9 @@
 
 Run it after every completed run (training + evaluation, or a whole queue). It copies model
 folders and files missing from the backup (``configs/backup/default.yaml``: ``dest``), never
-overwrites or deletes anything, and reports files whose size differs. Finished neuroevolution
+overwrites or deletes anything, and reports files whose size differs. A finished neuroevolution
+run that was extended later (D29) is the exception: its changed files are saved next to the old
+copy as ``name.v2``, ``name.v3``, … Finished neuroevolution
 runs (``outputs/evolve/<run>/``: lineage database) go to ``<dest>/evolve/``. It refuses to run while
 a training, queue or evaluation is running, because those are still writing model folders.
 """
@@ -44,7 +46,7 @@ def main() -> int:
     print(f"[backup] {verb} {len(r.copied)} files ({r.bytes_copied / 1e6:.1f} MB), "
           f"{len(r.new_folders)} new model folders; {r.up_to_date} files already backed up")
     runs = finished_evolve_runs(EVOLVE_DIR, a.run)
-    e = backup(EVOLVE_DIR, dest / "evolve", dry_run=a.dry_run, folders=runs)
+    e = backup(EVOLVE_DIR, dest / "evolve", dry_run=a.dry_run, folders=runs, versioned=True)
     print(f"[backup] neuroevolution lineage: {verb} {len(e.copied)} files ({e.bytes_copied / 1e6:.1f} MB) "
           f"of {len(runs)} finished runs")
     for c in r.conflicts + [f"evolve/{c}" for c in e.conflicts]:

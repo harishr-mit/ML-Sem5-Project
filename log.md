@@ -24,7 +24,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Last updated:** 2026-10-24 (Claude Opus 5.5). **Where we are:** start of Week 3. M1 and M2 reached; AI Sandbox built (T65–T75, T101, T106); map library + eval protocol v2; upgradable engine (D21–D23). **Neuroevolution (D26) built and merged to `main`** (PR #1, 2026-10-24; 256 tests pass at T107). Best PPO: `R015_t50_narrow7_s1@4600k` (seen 64 %, unseen 88 %, lap ratio 0.97) but it doesn't reproduce (R018, R019). GA σ test: σ 0.02 (S004: seen 100 %, unseen 87.5 %, lap ratio 0.997; one seed). Nothing is running. **Next:** T97 (owner starts `configs/queue/e10_ga.yaml`, then evaluate, back up, record E10); T83 (owner decision: run-to-run variance); **T97 queue ready on `main`** (4 runs incl. GA seed 2 and PPO under GA rules; GA tries start on the start line, T115). T08 / M3 Week 3 visuals (effects, brain panel, minimap, Evolution Race, Draw-a-Track, Human vs AI, video recorder); then T09 / M4. History of earlier status lines: see the Change Log.
 * **⚠ Two working copies until the E10 queue finishes (owner, 2026-10-24, T117):**
   - **This folder (`ML Sem5 Project`, branch `main`) runs the E10 queue** (`configs/queue/e10_ga.yaml`). Don't edit `racer/`, `scripts/`, `configs/`, `tracks/` here and don't switch branches: every queue entry refuses to start on uncommitted code and runs whatever is checked out. Check-ins read only `outputs/queue_logs/e10_ga/state.json` and the log tail. The queue writes `registry/*.csv`, `registry/run_notes.yaml`, `outputs/eval/` and `models/` here.
-  - **Development happens in the worktree `C:\Users\Jack\Desktop\ML Sem5 Project - dev`** (branch `feat/draw-a-track`). Run Python there with this folder's `.venv` and `PYTHONPATH` set to the worktree, so `racer` is imported from the worktree (the editable install points here).
+  - **Development happens in the worktree `C:\Users\Jack\Desktop\ML Sem5 Project - dev`** (branch `feat/draw-a-track`). It has its **own `.venv`** (owner, 2026-10-24: Python 3.11.9, same package versions as this folder's, `racer` installed editable from the worktree): run `.venv\Scripts\python ...` there, no `PYTHONPATH` needed. Remove it with the worktree.
   - **Keep the two mergeable:** the dev branch never edits `registry/`, `outputs/eval/`, `models/` or `configs/queue/e10_ga.yaml`, and never changes what an existing preset/setting means (extend, don't change). In `log.md` it only adds tasks at the bottom and Change Log entries at the top; "Current Status" is rewritten at merge time.
   - **When the queue finishes:** evaluate/back up and record E10 results here on `main` and commit; then merge `feat/draw-a-track` into `main` (resolve `log.md` by keeping both sets of entries), run the full suite, and remove the worktree (`git worktree remove`).
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
@@ -167,6 +167,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T117: Owner (2026-10-24): the E10 queue runs in this folder on `main`; development continues in a git worktree (`ML Sem5 Project - dev`, branch `feat/draw-a-track`); both merged when the queue finishes. Rules noted under Current Status.
 * [x] T118: Owner (2026-10-24): D27, every feature is reflected in the AI Sandbox; rule in `CLAUDE.md`, PROJECT_CONTEXT §10.5/§16, memory.
 * [x] T119: Draw-a-Track in the sandbox (D27; owner: draw inside the sandbox, save to `tracks/user/`): *Draw a Track* page with a canvas (`streamlit-drawable-canvas` 0.13.0), validated preview, save, *Race on it* → Launch. Done when: headless page test passes (done) and a real browser run works (done).
+* [x] T120: Owner (2026-10-24): own `.venv` in the dev worktree, rebuilt on Python 3.11.9 (the first one was 3.14 and empty); package versions identical to the main venv.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -183,6 +184,12 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-24 — Claude Code (Opus 5.5) — T120: Dev worktree venv
+
+* **Owner:** created a `.venv` in the dev worktree. It was Python 3.14.6 and empty; the project is pinned to 3.11.9 (torch 2.14.1+cpu, numba, SB3; §14.1), so it was rebuilt with `py -3.11 -m venv .venv`, then torch (CPU index), `requirements.txt`, `pip install -e .`. Unpinned sub-dependencies came out newer (e.g. python-dateutil 3.0.0) and were set to the main venv's versions: `pip freeze` now identical except the editable `racer` path. `pip check` clean. Local to the worktree, git-ignored (`.venv/`); no global change.
+* **Checks:** `racer` and torch import from the worktree; test_golden/test_sketch/test_sandbox_draw/test_physics: 30 passed, 1 skipped.
+* **Files:** Edited `log.md` (Current Status rule for the worktree, T120, this entry).
 
 ### 2026-10-24 — Claude Code (Opus 5.5) — T119: Draw a Track page in the sandbox
 

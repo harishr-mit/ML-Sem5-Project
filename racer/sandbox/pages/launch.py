@@ -44,6 +44,7 @@ def render() -> None:
         getattr(st, msg[0])(msg[1])
 
     pre = st.session_state.pop("launch_models", None)
+    pre_track = st.session_state.pop("launch_track", None)           # handed over by Draw a Track
     tab_models, tab_evo = st.tabs(["Race chosen models", "Evolution race (one run)"])
     names = track_names()
     with tab_models:
@@ -74,7 +75,7 @@ def render() -> None:
             with st.expander(f"{len(blocked)} model(s) can't run on this engine and are hidden"):
                 for m, why in blocked.items():
                     st.markdown(f"- `{m}`: {why}")
-        track, laps, baseline, fair = _race_options("ln", names, acfg)
+        track, laps, baseline, fair = _race_options("ln", names, acfg, pre_track)
         n_cars = len(picked) + int(baseline)
         too_many = n_cars > max_cars
         if too_many:
@@ -128,11 +129,15 @@ def render() -> None:
                     st.code(tail, language="text")
 
 
-def _race_options(prefix: str, names: list[str], acfg: dict) -> tuple[str, int, bool, bool]:
+def _race_options(prefix: str, names: list[str], acfg: dict,
+                  chosen: str | None = None) -> tuple[str, int, bool, bool]:
     s = store()
     c1, c2, c3, c4 = st.columns([3, 1.2, 1.4, 1.4])
+    if chosen in names:
+        st.session_state.pop(f"{prefix}_track", None)     # the hand-over wins over the last choice
+    default = chosen if chosen in names else "technical"
     track = c1.selectbox("Map", names, key=f"{prefix}_track",
-                         index=names.index("technical") if "technical" in names else 0)
+                         index=names.index(default) if default in names else 0)
     laps = int(c2.number_input("Laps", 1, 20, int(acfg["race"]["laps"]), key=f"{prefix}_laps"))
     baseline = c3.checkbox("Add the baseline car", key=f"{prefix}_base",
                            help="The hand-coded PID driver (E8), as a reference.")

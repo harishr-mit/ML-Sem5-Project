@@ -1,0 +1,18 @@
+# Draw-a-Track (PROJECT_CONTEXT §6, §10.1): turning a drawing into a track.
+# Road width, run-off and kerbs default to the generator's (configs/track/default.yaml).
+
+sketch:
+  min_points: 3               # fewer drawn points than this = nothing to build
+  min_thickness: 0.05         # spread across ÷ spread along the drawing; below this it is a line, not a loop
+  min_drawn_m: 20.0           # a drawing shorter than this (in metres) is a click, not a track
+  smooth_frac: 0.03           # moving-average window as a fraction of the loop (removes hand jitter at any drawing size)
+  max_smooth_frac: 0.2        # never smooth wider than this (a wider window collapses the shape)
+  samples: 1000               # the drawing is resampled to this many points before smoothing
+  control_spacing_m: 40.0     # one control point per this much of the (scaled) drawing
+  fix_steps: 10               # tries at fixing length, corners and gaps (scale), or corners too sharp for any size (smooth ×2)
+
+canvas:                       # the drawing area in the AI Sandbox (Draw a Track page)
+  width_px: 640
+  height_px: 420
+  width_m: 1000.0             # metres across the canvas (a drawing outside 800–4000 m is rescaled anyway)
+  stroke_px: 4

@@ -38,6 +38,9 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 - **Clean up:** confirm there are 0 background tasks and 0 open sockets left.
 - **Update the docs:** review the docs related to the task or bug (`PROJECT_CONTEXT.md`, `README.md`, `log.md`) and update them to reflect the changes or fixes made.
 
+## Every feature shows in the AI Sandbox (owner, 2026-10-24, D27)
+- **A feature isn't done until the sandbox reflects it:** a way to see, explain or launch it there (page, glossary entry, launch option), with a headless page test. Plan the sandbox part as its own task in `log.md` when you plan the feature.
+
 ## Working with the owner
 - Feel free to ask for any critical decisions midrun.
 - If any bugs are found midrun, do the needful: fix them (with a test), and log them in `log.md`.
@@ -50,7 +53,7 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 4. **Build test-first, in small steps.** Write the failing test, then the code. Put the logic in `racer/` (testable), not in `scripts/` or Streamlit pages.
 5. **Check.** Run the checks for every part you touched (table below), then the full suite: `.venv\Scripts\python -m pytest -q`.
 6. **Review** the diff before committing, and fix what the review finds.
-7. **Document** as in *End of a run*, including the README preset list, the glossary and `docs/*.md`.
+7. **Sandbox and document:** the sandbox reflects the feature (D27). Then document as in *End of a run*, including the README preset list, the glossary and `docs/*.md`.
 8. **Commit** with a Conventional Commits message; real training runs need a clean tree (D12).
 9. **Finish** as in *After a training run* and *End of a run*.
 
@@ -88,7 +91,7 @@ configs/<kind>/*.yaml         every tunable number; a glossary entry for every k
 | Registry | `racer/registry` | CSV columns only appended; `tests/test_integrity.py` |
 | Queue | `scripts/queue_overnight.py`, `configs/queue` | runs without Claude; `state.json`, `stop.request`, exit codes (3 = a paused GA run); `--dry-run` every new queue file |
 | Backup | `scripts/backup_models.py`, `configs/backup` | additive only; run after every completed run or queue |
-| AI Sandbox | `racer/sandbox` | a glossary entry for every config and snapshot key (a test fails otherwise); Build & Queue for new algorithms or preset kinds; the Presets page; headless page tests |
+| AI Sandbox | `racer/sandbox` | every new feature appears here (D27); a glossary entry for every config and snapshot key (a test fails otherwise); Build & Queue for new algorithms or preset kinds; the Presets page; headless page tests |
 | Demo | `racer/render`, `scripts/demo.py` | 60 FPS with 20 cars; every model must race (compat); the on-screen key list test |
 | Tests | `tests/` | add tests for new behaviour; the full suite passes before a commit |
 | Docs | PROJECT_CONTEXT, README, `log.md`, `docs/`, `assets/LICENSES.md` | PROJECT_CONTEXT first, then everything else that states the old behaviour |
@@ -101,3 +104,5 @@ configs/<kind>/*.yaml         every tunable number; a glossary entry for every k
 - Platform is Windows and the project path has spaces: use `pathlib`, and guard SubprocVecEnv scripts with `if __name__ == "__main__":`.
 - Never change an existing `obs_spec` version or edit a saved model folder. Models must stay loadable forever. (Only exception: `evaluate.py` may add eval files once, never overwrite; see PROJECT_CONTEXT §9.)
 - Build in small, testable steps. After physics changes, run `scripts/physics_sanity.py`.
+
+

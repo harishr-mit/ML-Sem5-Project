@@ -204,6 +204,13 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Notes / Errors:** anything the next agent needs to know
 -->
 
+### 2026-10-24 — Claude Code (Sonnet 5.5) — T123–T138: demo and Workbench merged into main
+
+* **Status:** DONE. `feat/demo-complete` (T124–T138) merged into `main` (fast-forward). Full suite on `main`: 373 passed (after adding the R024 run notes). Dev worktree removal: see below.
+* **R024 (the owner's GA run with `rays6_narrow`, finished 21:26 in `main`):** committed its registry rows, eval copies and `configs/env/sb_rays6_narrow.yaml`, and added its entry to `registry/run_notes.yaml` (`test_run_notes_match_the_runs` failed without it). Best checkpoint @11999k: unseen 62.5 %, lap ratio 1.41.
+* **Persistence rules (owner, new in `CLAUDE.md`):** created `DECISIONS.md` and `user.md`, updated `REVIEW_LATER.md` (E10 result, editor dropped). Plans stay in `docs/` (`DEMO_PLAN.md`).
+* **Files:** Created `DECISIONS.md`, `user.md`; edited `REVIEW_LATER.md`, `registry/run_notes.yaml`, `log.md`; committed the owner's `CLAUDE.md` edit (Persistence section).
+
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T138: Docs, full suite, browser check
 
 * **Status:** DONE. PROJECT_CONTEXT §4, §10.1-§10.5, §12 and the README describe the finished demo (modes, keys, effects, audio defaults and the M/N key choice, brain panel, measured frame rates, the Workbench, Drive it yourself, make_plots and bench_demo; recorder, slides and highlight video marked dropped). Full suite in the worktree: 358 passed, 10 skipped, 1 failed: `test_integrity::test_model_folders_and_registry_agree`, which needs every registered model folder and the worktree only had four copied in (expected; it runs in `main`). Real-browser check of the sandbox (worktree server on port 8599, stopped afterwards): the Workbench registry plot and a driven baseline lap (table, racing line, traces) and the rays table *Remove* all work. Merge into `main` and worktree removal follow.

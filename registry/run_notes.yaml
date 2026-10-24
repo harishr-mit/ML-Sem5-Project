@@ -88,3 +88,6 @@ R022:
 R023:
   why: 'E10 PPO under GA rules: the same 10 inputs (rays7_lean) and track limits on the same 7 maps, 5M steps like R015, so E10 compares the methods only.'
   outcome: 'Best @1700k: 100 % on seen, test, held-out and unseen, lap ratio 0.975, in 5.0M env steps (46.6 min), about a tenth of the GA runs steps at similar wall-clock. Best of 50 evaluated checkpoints (the max of many noisy checkpoints is optimistic), one seed; R015/R018 showed that PPO results can fail to reproduce.'
+R024:
+  why: 'Neuroevolution with rays6_narrow: the 0 degree ray replaced by narrow +-1 degree rays (60 m / 200 m ranges as listed in configs/env/sb_rays6_narrow.yaml) and the previous steering and gas as inputs. Does the model sense a curve far ahead with narrow front rays, and do the previous inputs smooth the output?'
+  outcome: 'Best of 19 evaluated checkpoints @11999k (v2): seen 86 %, test maps 50 %, held-out 70 %, unseen 62.5 %, lap ratio 1.41, after 36.5M env steps (43 min). Below the E10 GA runs on the same protocol (R021/R022: unseen 75 / 94 %, lap ratio 1.05 / 1.07) and clearly slower. One seed, so a pointer rather than a result.'

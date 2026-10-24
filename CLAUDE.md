@@ -45,6 +45,7 @@ This is an RL racing-line project (Machine Learning, Semester 5, solo). The full
 - **Update the docs:** review the docs related to the task or bug (`PROJECT_CONTEXT.md`, `README.md`, `log.md`) and update them to reflect the changes or fixes made.
 
 ## Every feature shows in the AI Sandbox (owner, 2026-10-24, D27)
+
 - **A feature isn't done until the sandbox reflects it:** a way to see, explain or launch it there (page, glossary entry, launch option), with a headless page test. Plan the sandbox part as its own task in `log.md` when you plan the feature.
 
 ## Working with the owner
@@ -125,3 +126,11 @@ configs/<kind>/*.yaml         every tunable number; a glossary entry for every k
 - Skip the advisor for simple edits, lookups, formatting, and routine commands.
 - When you consult the advisor, state the goal, the constraints, what you've already tried, and the specific decision you need help with.
 - Briefly tell me when you consulted the advisor and why.
+
+## Persistence across sessions
+
+* anything you deem important to be remembered shall persist in one form or other
+- plans go into <context>plan.md files
+- decisions go into DECISIONS.md
+- decisions to be taken later or postponed go into REVIEW_LATER.md
+- user preferences for the project goes into user.md (local to project). whenever your statements are contradicted by the user, it is a sign of user preference. This is vague, but it is safe to assume and put whatever you think subsequent sessions need to know to make the quality of experience for the user into that user.md

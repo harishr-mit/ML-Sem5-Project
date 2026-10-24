@@ -2,13 +2,14 @@
 
 Decisions that are waiting on the owner. Each one says what it blocks and what will inform it. When one is decided, record it in PROJECT_CONTEXT §16 (and the section it changes), then remove it from this list.
 
-_Last updated: 2026-10-24._
+_Last updated: 2026-10-24 (after the demo merge)._
 
 ## Waiting on the GA runs (T97)
 
 Start the queue first: `.venv\Scripts\python scripts\queue_overnight.py configs\queue\e10_ga.yaml` (control run: Training Ground, 300 generations; main run: 7 maps, until the validation plateau).
 
 ### 1. Drop PPO and keep only neuroevolution?
+- **Update 2026-10-24 (E10 ran):** under identical inputs and rules PPO (R023, 5M steps) beat both GA seeds on unseen completion (100 % vs 75 / 94 %) and lap ratio (0.975 vs 1.05 / 1.07). One seed each, so this isn't conclusive. The owner's condition for dropping PPO ("if GA turns out better") is **not met**. Cheapest next test: a second seed of R023.
 - **Owner's leaning (2026-10-24):** drop PPO entirely if GA turns out better.
 - **Why it's open:** PPO's best result (R015) doesn't reproduce (R018: 0 % on the test maps; R019 stuck early). GA's single σ-test run (S004) reached 100 % seen / 87.5 % unseen / lap ratio 0.997, but on one seed, and its checkpoints vary a lot.
 - **Decide after:** the main GA run is evaluated (protocol v2).
@@ -34,6 +35,7 @@ Start the queue first: `.venv\Scripts\python scripts\queue_overnight.py configs\
 - **Needed before:** the final showcase.
 
 ### 5. Faculty track input: editor or a photo of paper?
+- **Update 2026-10-24:** the game-window editor was dropped (D28); the sandbox's *Draw a Track* page is the editor now. A photo import stays a possible extension.
 - Currently: the in-game editor (being built now, T08). Importing a photo would be an extension.
 
 ### 6. Demo physics default: each model's own, or one shared preset?

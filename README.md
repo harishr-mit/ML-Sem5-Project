@@ -220,7 +220,7 @@ This opens the sandbox in its own window (a small built-in browser, Edge WebView
   - **Evolution** (neuroevolution models): fitness and validation per generation, *Save as a model* for any generation's car, *Save a range of generations* (one car each, for an Evolution race), and *Continue this run* (queues `train.py --extend` with a new patience).
 - **Compare (2–4 models):** only the settings that differ, each with its note, then their shape, results (within one protocol), learning curves and driven lines side by side.
 - **Workbench:** plots from live data. *Registry* (any two metrics against each other, colour by algorithm, CSV), *Compare results* (grouped bars), *Learning curves* (smoothing), *Drive & analyse* (up to 4 drivers drive laps right in the page: lap table, racing line coloured by speed, speed/gas/steering traces with shared zoom, g-g diagram with the grip ring, braking zones, CSV) and *Brain* (scrub a lap and watch the neurons). The Overview has two default plots.
-- **Build & Queue:** start from a trained model's setup or from presets, then change what you want to test:
+- **Build & Queue:** six guided steps (senses, network, learning, world, length, name) with one-click quick picks for every step (`configs/rays`, `readings`, `memory`, `network`, `learning`, `budget`), a pinned review and a suggested tag and reason. Start from a trained model's setup or from presets, then change what you want to test:
   - **Inputs:** a ray table with a live diagram (tick rays and *Remove* to delete rows), plus the car's own readings.
   - **Network:** outputs, hidden layers and a live parameter count.
   - **Training:** algorithm and hyperparameters, car, reward, track set.

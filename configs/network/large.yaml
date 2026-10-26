@@ -1,0 +1,3 @@
+# Two layers of 512 neurons. More capacity, about 4x the weights of medium, slower to train.
+net_arch: [512, 512]
+activation: tanh

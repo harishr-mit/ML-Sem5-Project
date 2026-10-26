@@ -12,8 +12,9 @@ from racer.sandbox.pages._ui import freeze, md_table, store, straight_png
 def render() -> None:
     st.title("Presets")
     st.caption("A model is built from five presets in `configs/`: its inputs, car, reward, algorithm and track set. "
-               "Pick one to see what it contains (every value with its note), a picture where it helps, and the "
-               "runs trained with it. Use a preset with its train.py flag, or start from it on *Build & Queue*.")
+               "Five more kinds are quick-picks on *Build & Queue* (ray sets, car readings, network sizes, learning "
+               "styles, budgets). Pick one to see what it contains (every value with its note), a picture where it "
+               "helps, and the runs trained with it.")
     kinds = list(explain.PRESET_KINDS)
     kind = st.radio("Kind", kinds, format_func=lambda k: explain.PRESET_KINDS[k][0], horizontal=True, key="pr_kind")
     title, flag, what = explain.PRESET_KINDS[kind]
@@ -24,9 +25,11 @@ def render() -> None:
     header = explain.preset_header(kind, name)
     if header:
         st.info(header)
-    if not (kind == "train" and "policy" not in preset):      # the baseline driver isn't trained
+    if not flag:
+        st.caption("A quick-pick on *Build & Queue*: one click fills the form with these values.")
+    elif not (kind == "train" and "policy" not in preset):      # the baseline driver isn't trained
         st.code(f".venv\\Scripts\\python scripts\\train.py --tag my_run {flag} {name} …", language="text")
-    visual = {"env": _inputs, "train": _training, "trackset": _tracks}.get(kind)
+    visual = {"env": _inputs, "train": _training, "trackset": _tracks, "rays": _rays}.get(kind)
     if visual:
         visual(name, preset)
     rows = explain.section(explain.preset_rows(kind, preset), {"trackset": "tracks"}.get(kind, kind))
@@ -55,6 +58,11 @@ def _inputs(name: str, preset) -> None:
     if rays:
         c2.image(straight_png(f"preset_{name}", (("", freeze(rays)),), 12.0, 0.0), width="stretch",
                  caption="The rays on a straight 12 m road, to scale.")
+
+
+def _rays(name: str, preset) -> None:
+    st.image(straight_png(f"preset_rays_{name}", (("", freeze(preset["rays"])),), 12.0, 0.0), width=520,
+             caption="The rays on a straight 12 m road, to scale.")
 
 
 def _training(name: str, preset) -> None:
@@ -97,5 +105,7 @@ def _tracks(name: str, preset) -> None:
 
 def _used_by(kind: str, name: str) -> None:
     runs = explain.runs_using(kind, name, store().runs())
+    if kind in ("rays", "readings", "network", "learning", "budget"):
+        return
     label = "Runs with this algorithm" if kind == "train" else "Runs trained with this preset"
     st.markdown(f"**{label}:** " + (", ".join(f"{r['run_id']} ({r.get('tag')})" for r in runs) if runs else "none yet."))

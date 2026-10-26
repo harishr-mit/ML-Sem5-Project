@@ -1,0 +1,6 @@
+# Lean set plus where the car is across the road and which wheels are on what surface: for finding the racing line (using the full width, clipping kerbs).
+features:
+  - {feature: heading_sincos}
+  - {feature: v_long, scale: 70.0}
+  - {feature: road_position, scale_m: 10.0}
+  - {feature: wheel_surface}

@@ -1,0 +1,5 @@
+# A serious run done twice with different random seeds, so you can tell skill from luck (R015 vs R018).
+steps: 5000000
+generations: 2000
+seeds: [1, 2]
+trial: false

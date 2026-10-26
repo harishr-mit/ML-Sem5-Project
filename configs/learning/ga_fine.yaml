@@ -1,0 +1,4 @@
+# Evolution with small mutations (sigma 0.01): fine-tunes what works, but explores less.
+algorithm: ga
+ga:
+  sigma: 0.01

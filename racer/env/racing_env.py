@@ -144,7 +144,8 @@ class RacingEnv(gym.Env):
 
     def _observe(self) -> np.ndarray:
         return self.observer.observe(self.track, self.car, self.tracker.heading_error(self.car.theta),
-                                     self._onroad_frac(), self.prev_action, self._obs, self.tracker).copy()
+                                     self._onroad_frac(), self.prev_action, self._obs, self.tracker,
+                                     self._wheels).copy()
 
     # --------------------------------------------------------------------- API
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
@@ -165,6 +166,7 @@ class RacingEnv(gym.Env):
         self._probe()
 
         self.prev_action = self.action_layout.neutral()
+        getattr(self.observer, "reset", lambda: None)()
         self.prev_steer = 0.0
         self.controls = (0.0, 0.0)
         self.steps = 0
@@ -183,6 +185,8 @@ class RacingEnv(gym.Env):
     def step(self, action):
         a = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
         steer, gas = self.action_layout.to_controls(a)
+        if gas < 0.0 and getattr(self.action_layout, "abs_margin", None):     # ABS-assisted layouts (D30)
+            gas = -min(-gas, self.car.abs_brake_limit(self._wheels.tolist(), self.action_layout.abs_margin))
         self.controls = (steer, gas)
         car, ep, dt = self.car, self.ep, self.params.dt
 

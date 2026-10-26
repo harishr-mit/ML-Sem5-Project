@@ -1,0 +1,4 @@
+# PPO that keeps trying new things for longer: a higher entropy bonus. Helps avoid getting stuck early; may drive less precisely.
+algorithm: ppo
+ppo:
+  ent_coef: 0.01

@@ -1,0 +1,4 @@
+# SAC with a lower learning rate. Slower and steadier.
+algorithm: sac
+sac:
+  learning_rate: 0.0001

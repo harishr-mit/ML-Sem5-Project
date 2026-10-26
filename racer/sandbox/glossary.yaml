@@ -108,35 +108,37 @@ reward:
   intro: "The reward is the only thing that tells the agent what good driving is (PROJECT_CONTEXT §7.3). Each term is added every decision (20 per second)."
   keys:
     reward.type:
-      short: "Which reward function: progress (default) or speed (E3, naive)."
-      affects: "What the agent optimises. 'speed' pays for moving in any direction, which invites circling (reward hacking)."
+      short: "Which reward formula: progress (the default) or speed (a deliberately naive one for the reward-hacking demo, E3)."
+      affects: "What the car tries to maximise. 'speed' pays for moving in any direction, which invites circling."
+      range: "progress"
       related: E3
     reward.progress:
-      short: "Reward per metre of progress along the centreline (negative when going backwards)."
-      affects: "The main signal; the other weights are relative to it."
+      short: "Points for each metre driven along the track (negative when driving backwards)."
+      affects: "The main signal. The other numbers are weighed against it."
       range: "1.0"
     reward.time:
-      short: "Penalty per second."
-      affects: "Pressure to go fast: every second costs, so a faster lap scores more."
+      short: "Points lost for every second that passes."
+      affects: "Higher: pressure to be fast, so a faster lap scores more. Too high: the car rushes and crashes."
       range: "0.02–0.1"
     reward.steer_change:
-      short: "Penalty per unit change of the steering output between decisions."
-      affects: "Smoother steering (looks better, and is usually faster). Too high = the car is reluctant to turn."
+      short: "Points lost for each sudden change of steering."
+      affects: "Higher: smoother steering, which looks better and is usually faster. Too high: the car is reluctant to turn."
       range: "0.05–0.2"
     reward.offroad:
-      short: "Penalty per second, times the fraction of wheels off the road."
-      affects: "Discourages cutting corners across the grass and driving with wheels off."
+      short: "Points lost per second for each wheel off the road."
+      affects: "Higher: the car stays on the tarmac. Lower: it may cut corners across the grass."
       range: "0.2–1.0"
     reward.lap_bonus:
-      short: "Bonus for each completed lap."
-      affects: "Extra incentive to finish laps cleanly."
+      short: "A bonus for finishing a lap."
+      affects: "Higher: more reason to complete laps cleanly."
+      range: "5"
     reward.crash:
-      short: "Penalty when the episode ends early (barrier, off-road too long, stuck, wrong way, track limits if on)."
-      affects: "Higher = more cautious driving."
+      short: "Points lost when a try ends early (barrier, too long off the road, stuck, wrong way)."
+      affects: "Higher: a more cautious car. Lower: a braver car that crashes more while learning."
       range: "10–50"
     reward.speed:
-      short: "(speed reward, E3) Reward per metre travelled in any direction."
-      affects: "Pays for circling or weaving as much as racing: the reward-hacking demo."
+      short: "(Speed reward only) Points per metre travelled in any direction."
+      affects: "Pays for circling or weaving as much as for racing: the reward-hacking demo."
       related: E3
 
 inputs:
@@ -259,138 +261,160 @@ training:
       short: "Steps between saved checkpoints; each one is evaluated."
       affects: "How finely you can pick the best moment of a run."
     train.ppo.n_steps:
-      short: "Steps per env collected before each update (rollout length)."
-      affects: "Larger = more stable updates but fewer of them."
-      range: "512–2048"
+      short: "How many steps each practice car drives before the network studies what happened (one batch of experience)."
+      affects: "Higher: every lesson rests on more driving, so learning is steadier but updates come less often. Lower: quicker but noisier lessons."
+      range: "1024 (512–2048)"
     train.ppo.batch_size:
-      short: "Minibatch size for each gradient step."
-      affects: "Smaller = noisier, more steps; larger = smoother, slower per epoch."
-      range: "64–512"
+      short: "How many driving moments the network studies at once in a learning round."
+      affects: "Smaller: noisier, more rounds. Larger: smoother, slower. It should divide n_steps × 6 evenly (a warning appears if not)."
+      range: "256 (64–512)"
     train.ppo.n_epochs:
-      short: "Passes over each rollout."
-      affects: "More = learns more from each batch of driving, but risks unstable updates."
-      range: "5–20"
+      short: "How many times the network re-studies the same batch of driving."
+      affects: "More: squeezes more out of each batch but can overshoot and get worse. Fewer: safer but slower."
+      range: "10 (5–20)"
     train.ppo.gamma:
-      short: "Discount: how much future rewards count."
-      affects: "How far ahead the agent plans. 0.995 ≈ 200 decisions (10 s): enough to brake for a corner well ahead."
-      range: "0.99–0.999"
+      short: "How much the car cares about the future. 0.995 means it looks about 10 seconds ahead."
+      affects: "Higher: plans further, so it brakes earlier for corners, but learning is slower and noisier. Lower: short-sighted, and crashes in corners it should have braked for."
+      range: "0.995 (0.99–0.999)"
     train.ppo.gae_lambda:
-      short: "GAE λ: bias versus variance of the advantage estimate."
-      affects: "Lower = less noisy but more biased learning signal."
-      range: "0.9–0.98"
+      short: "How the car judges whether an action was good: near 1 trusts the whole outcome, lower trusts a short-term guess."
+      affects: "Higher: fewer wrong lessons but a noisier signal. Lower: smoother but can mislearn."
+      range: "0.95 (0.9–0.98)"
     train.ppo.learning_rate:
-      short: "Step size of each update."
-      affects: "Higher = learns faster but can collapse; lower = slow but steady. Fine-tuning uses a lower rate."
-      range: "1e-4–1e-3"
+      short: "How big a step the network takes each time it learns. The most important dial."
+      affects: "Higher: learns faster but can suddenly collapse into bad driving. Lower: slow and steady. Fine-tuning a good model uses a lower rate."
+      range: "0.0003 (0.0001–0.001)"
     train.ppo.lr_schedule:
-      short: "constant, or linear decay to 0 at the end of training."
-      affects: "Linear decay lets the policy settle at the end."
+      short: "Whether the learning rate shrinks over the run (linear) or stays the same (constant)."
+      affects: "linear: big steps early, tiny steps at the end, so the driving settles. constant: keeps changing until the end."
+      range: "linear"
     train.ppo.clip_range:
-      short: "Maximum change of the policy per update (PPO's trust region)."
-      affects: "Smaller = more cautious updates."
-      range: "0.1–0.3"
+      short: "A safety fence: how far one learning round may change the car's behaviour."
+      affects: "Smaller: very cautious, slow. Larger: bolder and riskier."
+      range: "0.2 (0.1–0.3)"
     train.ppo.ent_coef:
-      short: "Entropy bonus weight."
-      affects: "Keeps the policy exploring. Too high = sloppy, random-looking driving."
-      range: "0–0.01"
+      short: "A bonus for trying different things (entropy means randomness)."
+      affects: "Higher: keeps exploring, which avoids getting stuck early, but the driving looks sloppy. Near zero: commits quickly to what it already knows."
+      range: "0.002 (0–0.01)"
     train.ppo.vf_coef:
-      short: "Weight of the critic (value) loss."
-      affects: "Balance between learning to act and learning to predict reward."
+      short: "How much effort goes into the critic, the part of the network that predicts how well a situation will go."
+      affects: "Higher: the critic learns faster but may slow down the driver. Rarely worth changing."
+      range: "0.5"
     train.ppo.max_grad_norm:
-      short: "Gradient clipping."
-      affects: "Protects against occasional huge updates."
+      short: "A speed limit on how much one learning round may change the weights."
+      affects: "Lower: calmer learning. Rarely worth changing."
+      range: "0.5"
     train.sac.learning_rate:
-      short: "(SAC) Step size of each update."
-      affects: "As for PPO."
+      short: "How big a step the network takes each time it learns (the same idea as in PPO)."
+      affects: "Higher: faster but less stable. Lower: slower and steadier."
+      range: "0.0003 (0.0001–0.001)"
     train.sac.lr_schedule:
-      short: "(SAC) constant or linear decay."
-      affects: "As for PPO."
+      short: "Whether the learning rate shrinks over the run (linear) or stays the same (constant)."
+      affects: "constant is the SAC default; linear settles the driving at the end."
+      range: "constant"
     train.sac.buffer_size:
-      short: "(SAC) Replay buffer size (transitions kept)."
-      affects: "How much past driving the agent keeps learning from."
+      short: "The memory of past driving that SAC studies again and again (PPO throws its experience away after each lesson)."
+      affects: "Larger: more variety to learn from, more memory used. Smaller: forgets old driving sooner."
+      range: "1,000,000"
     train.sac.learning_starts:
-      short: "(SAC) Random-policy steps before learning starts."
-      affects: "Fills the buffer with varied data first."
+      short: "Steps of random driving at the start, to fill the memory before any learning happens."
+      affects: "Higher: better first lessons but a slower start. Lower: starts learning from very little."
+      range: "10,000"
     train.sac.batch_size:
-      short: "(SAC) Minibatch size."
-      affects: "Noise versus cost of each update."
+      short: "How many driving moments the network studies at once in a learning round."
+      affects: "Smaller: noisier. Larger: smoother but slower per round."
+      range: "256"
     train.sac.tau:
-      short: "(SAC) Target-network smoothing."
-      affects: "Smaller = more stable, slower value learning."
+      short: "How slowly the steady 'target' copy of the network follows the real one. The copy keeps learning from wobbling."
+      affects: "Smaller: more stable but slower to learn. Larger: faster but wobblier."
+      range: "0.005"
     train.sac.gamma:
-      short: "(SAC) Discount factor."
-      affects: "How far ahead the agent plans (as for PPO)."
+      short: "How much the car cares about the future (0.995 is about 10 seconds ahead)."
+      affects: "Higher: plans further ahead. Lower: short-sighted."
+      range: "0.995"
     train.sac.train_freq:
-      short: "(SAC) Env steps (per env) between updates."
-      affects: "Learning per sample versus training speed."
+      short: "How many steps pass between learning rounds. 1 means the network learns after every step."
+      affects: "Higher: less learning per step but faster training. Lower: more learning per step, slower."
+      range: "1"
     train.sac.gradient_steps:
-      short: "(SAC) Gradient steps per update."
-      affects: "Learning per sample versus training speed."
+      short: "How many learning updates happen in each round."
+      affects: "More: learns more from the same driving but each step takes longer."
+      range: "1 (1–2)"
     train.sac.ent_coef:
-      short: "(SAC) Entropy weight (auto = tuned to a target)."
-      affects: "Exploration."
+      short: "How much SAC is rewarded for trying new things. 'auto' lets it tune this itself."
+      affects: "Higher: explores more. 'auto' is a good choice for almost everyone."
+      range: "auto"
     train.ga.population:
-      short: "(GA) Cars per generation; all drive the same map from the same start."
-      affects: "More cars explore more variations per generation, but each generation takes longer."
-      range: "50"
+      short: "How many cars drive in each generation; all of them drive the same map from the same start."
+      affects: "More: a wider search each generation but every generation takes longer. Fewer: faster generations, less variety."
+      range: "50 (50–100)"
     train.ga.elite_frac:
-      short: "(GA) Share of the best cars that go to the next generation unchanged; they are also the only parents."
-      affects: "Higher = safer (good cars kept), lower = more new variations per generation."
+      short: "The share of the best cars that go into the next generation unchanged. They are also the only parents."
+      affects: "Higher: safer, good cars are kept. Lower: more new variations each generation, riskier."
       range: "0.25"
     train.ga.sigma:
-      short: "(GA) Mutation size: the spread of the random noise added to every weight of a child."
-      affects: "Too small = slow progress; too large = children lose what their parent could do."
-      range: "0.02–0.05"
+      short: "Mutation size: how strongly each child is randomly changed from its parent (noise added to every weight)."
+      affects: "Too small: no progress. Too large: the child forgets what its parent could do. 0.02 beat 0.05 in our test (T96)."
+      range: "0.02 (0.01–0.05)"
     train.ga.start:
-      short: "(GA) Where each generation's try starts: line = on the start/finish line, centred, standing still; random = a random point, offset and speed (runs before 2026-10-24)."
-      affects: "line: every lap is a full lap from a standing start, like evaluation; random: the cars learn to recover from any position."
+      short: "Where each try begins: 'line' = on the start line standing still; 'random' = anywhere on the track at any speed."
+      affects: "line: every try is a full lap from a standing start, like the evaluation. random: the cars learn to recover from any position (older runs)."
       range: "line"
     train.ga.speed_scale:
-      short: "(GA) m/s; a finished lap scores 1 + mean speed / speed_scale, a failed try its lap fraction (0–1)."
-      affects: "Only the scale of the fitness: any finisher beats any non-finisher, a faster lap beats a slower one."
+      short: "A scale (m/s) for the score of cars that finish a lap: score = 1 + average speed ÷ this."
+      affects: "Only the size of the score. Any car that finishes beats any car that crashed, and a faster lap beats a slower one."
+      range: "70"
     train.ga.workers:
-      short: "(GA) Processes that drive the cars of a generation in parallel."
-      affects: "Speed and CPU load only (5 ≈ 60–70 % CPU); results are identical for any number."
-      range: "4–8"
+      short: "How many processor cores drive cars at the same time."
+      affects: "More: faster generations but a busier PC. Fewer: calmer PC. Results are identical for any number."
+      range: "5 (about 60 % CPU)"
     train.ga.checkpoint_every:
-      short: "(GA, runs before 2026-10-15) Generations between saved checkpoints (the best car on that generation's map). Newer runs save a checkpoint at every validation."
+      short: "(Runs before 2026-10-15) Generations between saved checkpoints. Newer runs save one at every validation."
       affects: "How finely you can pick the best moment of a run."
     train.ga.max_generations:
-      short: "(GA) Stop after this many generations (--generations); empty = run until the validation score stops improving."
-      affects: "Run length. PPO/SAC runs are budgeted in steps instead."
-      range: "200 (a quick test) – several thousand"
+      short: "Stop after this many generations. Empty means: run until the validation score stops improving."
+      affects: "Run length. A limit stops it earlier; no limit lets it run until it plateaus (you can pause any time)."
+      range: "200 for a quick test, 1000–2000 for a real run"
     train.ga.evaluate.top_validated:
-      short: "(GA) After the run, evaluate this many checkpoints with the best validation scores."
-      affects: "Finds the best car even when it came early: later checkpoints aren't reliably better (one map per generation)."
+      short: "After the run, test this many saved cars that scored best on the validation tracks."
+      affects: "Finds the best car even when it appeared early: later cars are not reliably better."
+      range: "10"
     train.ga.evaluate.last:
-      short: "(GA) After the run, also evaluate this many of the most recent checkpoints."
-      affects: "Shows where the run ended. The others can be evaluated later with evaluate.py."
+      short: "After the run, also test this many of the most recent saved cars."
+      affects: "Shows where the run ended up. The others can be tested later with evaluate.py."
+      range: "10"
     train.ga.state_every:
-      short: "(GA) Generations between saves of the pause state, against crashes (a pause always saves)."
-      affects: "How much is lost if the PC crashes."
+      short: "How many generations pass between safety saves of the run (a pause always saves)."
+      affects: "Only how much work is lost if the PC crashes."
+      range: "10"
     train.ga.validation.every:
-      short: "(GA) Generations between validations: all elites drive the validation tracks, and the best-validated elite is saved as a checkpoint."
-      affects: "How quickly the run notices it has stopped improving, and how many checkpoints (Evolution Race steps) it saves."
+      short: "How many generations pass between check-ups, when the best cars drive tracks they never trained on."
+      affects: "Smaller: notices a plateau sooner and saves more checkpoints (more Evolution Race steps). Larger: less checking."
+      range: "20"
     train.ga.validation.tracks:
-      short: "(GA) Number of generated validation tracks; never trained on, not the test or held-out tracks."
-      affects: "More = a steadier stopping signal, slower validation."
+      short: "How many fresh generated tracks the check-up uses (never trained on, not the test or held-out maps)."
+      affects: "More: a steadier signal for when to stop, but slower check-ups."
+      range: "5"
     train.ga.validation.stream:
-      short: "(GA) Generator seed stream of the validation tracks (0 = training pool, 1 = held-out set)."
-      affects: "Keeps validation tracks separate from every other set."
+      short: "Which random-track stream the check-up tracks come from (0 = training pool, 1 = held-out set, 2 = its own)."
+      affects: "Keeps the check-up tracks separate from every other set. Leave it."
+      range: "2"
     train.ga.validation.patience:
-      short: "(GA) Generations without a validation gain before the run stops. A finished run can be extended with a larger value (Explorer → Evolution → Continue this run, or train.py --extend)."
-      affects: "Longer = more chance of a late improvement, longer runs. Only decides when to stop, so extending a run equals having set it larger from the start."
+      short: "How many generations the run waits for an improvement before it stops."
+      affects: "Longer: more chance of a late improvement but longer runs. A finished run can be continued later with a larger value (Explorer → Evolution → Continue this run)."
       range: "500"
     train.ga.validation.min_gain:
-      short: "(GA) Relative validation gain that counts as an improvement (0.01 = 1 %)."
-      affects: "Stops runs that only creep forward."
+      short: "How much better (as a share, 0.01 = 1 %) a check-up score must be to count as an improvement."
+      affects: "Larger: stops runs that only creep forward. Smaller: keeps going on tiny gains."
+      range: "0.01"
     train.policy.net_arch:
-      short: "Hidden layer widths of the network (the critic has the same shape)."
-      affects: "Capacity: bigger can learn more complex driving but trains slower and needs more data."
-      range: "[64, 64] – [256, 256]"
+      short: "How many neurons are in each hidden layer. The network is a stack of these: the senses go in, steering and pedals come out."
+      affects: "Bigger: can learn subtler driving but trains slower and needs more data. Smaller: faster, but may be too simple."
+      range: "[256, 256]; try [64, 64] for a quick test"
     train.policy.activation:
-      short: "Activation function between layers (tanh or relu)."
-      affects: "Shape of what the network can represent; tanh is the PPO default here."
+      short: "The function each neuron applies. tanh gives smooth values between −1 and 1; relu is simpler and often learns faster at first."
+      affects: "tanh: smoother steering and pedals (the PPO default). relu: faster early learning, jerkier outputs (the SAC default)."
+      range: "tanh"
     train.vecnormalize.norm_obs:
       short: "Normalise inputs by their running mean and spread (statistics saved with the model)."
       affects: "Makes all inputs equally visible to the network."
@@ -722,3 +746,132 @@ results:
     metric.mean_lap_*:
       short: "Mean lap time (s) on that map."
       affects: "—"
+
+build:
+  title: "Build & Queue: what each setting means"
+  intro: "Plain-language help for the Build & Queue page (D30): what a setting is, what happens when you turn it, and a safe starting value."
+  keys:
+    build.start_model:
+      short: "Copies everything about an existing trained model (inputs, network, learning, car, tracks) into the form."
+      affects: "A quick way to make a variation: change one thing and compare against the original."
+      range: "R015 is the best PPO model"
+    build.start_env:
+      short: "A ready-made set of inputs and episode rules (from configs/env) to start the form from."
+      affects: "Sets the rays and readings; the rest of the form gets the standard defaults for the algorithm you pick."
+      range: "rays7_narrow for PPO, rays7_lean for GA"
+    build.algorithm:
+      short: "The method that improves the car. PPO and SAC learn from rewards by trial and error; GA (neuroevolution) breeds the best cars and mutates them."
+      affects: "PPO: reliable, our best results. SAC: reuses old driving, a comparison. GA: no gradients, needs many more steps (E10)."
+      range: "PPO"
+    build.use_rays:
+      short: "Rays are the car's eyes: straight lines that measure how far away the road edge is."
+      affects: "Without rays the car cannot see the road ahead and will not learn to drive."
+      range: "On"
+    build.ray_angle:
+      short: "Direction of the ray in degrees. 0 is straight ahead, positive is to the left, negative to the right."
+      affects: "Narrow angles near 0 see bends early. Wide angles (±60° to ±90°) see the road edges beside the car."
+      range: "0, ±7, ±20, ±60"
+    build.ray_range:
+      short: "How far the ray can see, in metres."
+      affects: "Longer: sees bends earlier (needed to brake from high speed: ~200 m straight ahead). Shorter: cheaper but late braking."
+      range: "200 ahead, 60 to the sides"
+    build.scale:
+      short: "The number this reading is divided by so it fits roughly between −1 and 1."
+      affects: "Rarely worth changing. Too small: the reading saturates. Too large: it barely registers."
+      range: "Leave the default"
+    build.layout:
+      short: "What the network controls. steer_gas: one value for steering and one pedal (negative = brake). steer_throttle_brake: steering plus two separate pedals."
+      affects: "Separate pedals allow throttle and brake together, but need a bit more to learn. All current models use steer_gas."
+      range: "steer_gas"
+    build.layers:
+      short: "How many hidden layers the network has. Each layer lets it combine the senses in another step."
+      affects: "More layers: can learn more complex rules but trains slower. Two is plenty for driving."
+      range: "2"
+    build.width:
+      short: "How many neurons this layer has."
+      affects: "More neurons: more capacity, slower training. Fewer: faster but simpler."
+      range: "256"
+    build.physics:
+      short: "The car and the ground it drives on (mass, engine, grip)."
+      affects: "Changes how the car behaves, so models trained on different cars cannot be compared fairly. no_grip_limit is a demonstration, downforce a variation."
+      range: "default"
+    build.reward:
+      short: "What the car is rewarded for (PPO and SAC only; evolution scores laps instead)."
+      affects: "progress rewards driving forward along the track. speed_naive rewards speed in any direction and shows reward hacking."
+      range: "progress"
+    build.trackset:
+      short: "Which tracks the car practises on and how often each is picked."
+      affects: "More varied tracks: a car that copes with new tracks. A single track: an expert on that track only (it overfits). Test maps are never used."
+      range: "maps7 (PPO), train7 (GA)"
+    build.steps:
+      short: "How many steps of driving the training lasts (20 steps = 1 second of driving)."
+      affects: "More steps: better driving up to a point, longer wait (about 10 minutes per million). A checkpoint is saved and tested every 100,000 steps, so you can pick the best moment later."
+      range: "2M to try, 5M for a serious run"
+    build.generations:
+      short: "How many generations the evolution runs."
+      affects: "More: further progress, longer wait. 'No limit' runs until the validation score stops improving; pause or extend it any time."
+      range: "500 to try, 2000 for a serious run"
+    build.seeds:
+      short: "Random starting points. One run is made per seed, e.g. '1, 2' makes two runs."
+      affects: "Two seeds show whether a result was skill or luck: the same setup can turn out well or badly (R015 vs R018)."
+      range: "1, or 1, 2 for a fair comparison"
+    build.trial:
+      short: "A trial is a throwaway test run kept out of the main registry and results."
+      affects: "Use it for quick checks. Untick it when the result should count and be compared."
+      range: "On for quick tests, off for real runs"
+    build.tag:
+      short: "A short name for this run, used in its folder and model id (letters, digits and _ only). It is suggested from your choices."
+      affects: "Helps you find the model later. The seed is added automatically (…_s1)."
+      range: "e.g. ppo_r9_256x256_5m"
+    build.why:
+      short: "A sentence on what this run is meant to show. It is stored with the model."
+      affects: "Future you will read this on the Explorer page. A good one says what you changed and what you expect."
+      range: "e.g. Does a 512 network drive better than 256?"
+    build.metric_io:
+      short: "How many numbers go into the network (inputs) and come out (outputs)."
+      affects: "More inputs means a bigger first layer. Outputs are steering and pedals."
+    build.metric_weights:
+      short: "How many adjustable numbers (weights) the network has that drive the car."
+      affects: "A rough measure of its capacity. R015 has about 74,000."
+    build.parallel:
+      short: "How many runs train at the same time."
+      affects: "2 is fastest on this PC (1.6× the total speed of one). 3 slows everything down."
+      range: "2"
+
+quickpicks:
+  title: "Quick-pick presets"
+  intro: "The files behind the quick-pick buttons on Build & Queue (configs/rays, readings, network, learning, budget). Network and learning picks use the notes of the train.* settings they fill in."
+  keys:
+    rays.rays:
+      short: "A list of rays, each with an angle (degrees, 0 = ahead, + = left) and a range (metres)."
+      affects: "Decides where the car looks. Shallow rays see bends early; wide rays see the road beside the car."
+    readings.features:
+      short: "The car's own readings that go into the network besides the rays, each with its scale."
+      affects: "More readings give the network more to work with but also more to learn."
+    budget.steps:
+      short: "Training steps for PPO and SAC."
+      affects: "More steps: longer training, usually better driving up to a point."
+      range: "300,000 – 5,000,000"
+    budget.generations:
+      short: "Generations for neuroevolution; empty means no limit."
+      affects: "More generations: further progress, longer wait."
+      range: "50 – 2000"
+    budget.seeds:
+      short: "The random seeds to train, one run each."
+      affects: "Several seeds show how much a result depends on luck."
+      range: "[1] or [1, 2]"
+    budget.trial:
+      short: "Whether the runs are throwaway trials, kept out of the main results."
+      affects: "true for quick checks, false for real runs."
+    memory.steps:
+      short: "How many earlier decisions the car remembers as extra inputs (20 decisions = 1 second). 0 switches the memory off."
+      affects: "More: the car can feel trends (speeding up, a bend getting closer) but the network gets many more inputs to learn from. At the start of a lap the 'past' is simply the present."
+      range: "0 to start; 3–10 to try"
+    memory.stride:
+      short: "Remember every n-th decision instead of every one: 2 means 1, 2, 3… steps back become 2, 4, 6… steps back."
+      affects: "Higher: a longer memory for the same number of inputs, but with gaps."
+      range: "1"
+    memory.of:
+      short: "Which inputs get a memory. Rays are left out unless you tick them (they multiply the inputs fast)."
+      affects: "Remembering only speeds and heading is cheap and usually enough; remembering rays shows how fast the road edge is approaching."
+      range: "The car's own readings"

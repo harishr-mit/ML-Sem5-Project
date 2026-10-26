@@ -1,0 +1,5 @@
+# PPO taking small, careful steps: lower learning rate and a tighter clip. Slower, steadier; try it when a run got stuck or collapsed (R019).
+algorithm: ppo
+ppo:
+  learning_rate: 0.0001
+  clip_range: 0.1

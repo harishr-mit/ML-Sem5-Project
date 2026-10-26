@@ -1,0 +1,3 @@
+# Two layers of 256 neurons. The network behind R015 and R023: a good all-round start.
+net_arch: [256, 256]
+activation: tanh

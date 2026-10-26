@@ -1,0 +1,4 @@
+# Only heading and forward speed. The smallest set that still lets the car brake and steer; what the genetic algorithm uses.
+features:
+  - {feature: heading_sincos}
+  - {feature: v_long, scale: 70.0}

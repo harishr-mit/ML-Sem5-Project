@@ -1,0 +1,5 @@
+# PPO that looks further ahead (gamma 0.999) and averages over more history (gae_lambda 0.98). Good for long-term planning such as braking early.
+algorithm: ppo
+ppo:
+  gamma: 0.999
+  gae_lambda: 0.98

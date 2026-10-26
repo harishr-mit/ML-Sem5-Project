@@ -1,0 +1,6 @@
+# Lean set plus how hard the car accelerates and corners (g) and how much grip it uses, so it can feel the grip limit before it slides.
+features:
+  - {feature: heading_sincos}
+  - {feature: v_long, scale: 70.0}
+  - {feature: accel_g, scale_ms2: 12.0}
+  - {feature: grip_use, cap: 2.0}

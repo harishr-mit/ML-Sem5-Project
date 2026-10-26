@@ -1,0 +1,5 @@
+# Three rays: left, straight ahead, right. The smallest set that can still steer; a quick, cheap experiment.
+rays:
+  - {angle_deg: -40.0, range_m: 100.0}
+  - {angle_deg: 0.0, range_m: 200.0}
+  - {angle_deg: 40.0, range_m: 100.0}

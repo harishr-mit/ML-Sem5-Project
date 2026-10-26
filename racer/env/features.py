@@ -28,7 +28,7 @@ REQUIRED = object()
 class ObsState:
     """What the env knows at observation time (one reusable object per observer)."""
 
-    __slots__ = ("track", "car", "tracker", "heading_error", "onroad_frac", "prev_action")
+    __slots__ = ("track", "car", "tracker", "heading_error", "onroad_frac", "prev_action", "wheels")
 
 
 class Feature:
@@ -55,12 +55,15 @@ class Feature:
     def write(self, st: ObsState, out: np.ndarray, k: int) -> None:
         raise NotImplementedError
 
+    def reset(self) -> None:
+        """Called at the start of every episode (only stateful features need it)."""
+
 
 class Rays(Feature):
     name = "rays"
-    description = ("Distance from the car centre to the road edge along each ray (angle counter-clockwise "
-                   "from the heading, −90 = right), divided by the ray's range and capped at 1. "
-                   "Shallow angles see bends early; wide angles see the road edges beside the car.")
+    description = ("The car's eyes: how far away the road edge is along each ray, as a share of the ray's range "
+                   "(1 = nothing within reach). Angles are measured from straight ahead, + to the left. "
+                   "Shallow rays see bends early; wide rays see the road beside the car.")
     params = {"rays": REQUIRED}
 
     def setup(self, ctx):
@@ -84,7 +87,8 @@ class Rays(Feature):
 
 class HeadingSinCos(Feature):
     name = "heading_sincos"
-    description = "sin and cos of the angle between the car and the track direction (0 = pointing along the track)."
+    description = ("Which way the car points compared with the road (as sin and cos, two numbers). "
+                   "Straight along the road is 0° — it tells the car it is turned or sliding sideways.")
 
     def setup(self, ctx):
         self.dim, self.labels, self.low = 2, ["sin_head", "cos_head"], np.full(2, -1.0)
@@ -110,23 +114,23 @@ class _Scaled(Feature):
 
 class VLong(_Scaled):
     name, attr = "v_long", "v_long"
-    description = "Forward speed (m/s) / scale. How fast the car is going."
+    description = "How fast the car is going forwards (divided by the scale so it is about −1 to 1). Needed to brake in time."
 
 
 class VLat(_Scaled):
     name, attr = "v_lat", "v_lat"
-    description = "Sideways speed (m/s) / scale. Non-zero when the car slides: lets the agent feel a skid."
+    description = "How fast the car is sliding sideways. Zero when gripping; non-zero in a skid, so the car can feel one."
 
 
 class YawRate(_Scaled):
     name, attr = "yaw_rate", "yaw_rate"
-    description = "Turning rate (rad/s) / scale. How fast the car is rotating."
+    description = "How fast the car is spinning around (turning rate). Shows a spin starting before the rays notice."
 
 
 class SteerAngle(Feature):
     name = "steer_angle"
-    description = ("Current front-wheel angle / scale_deg. The wheels move at a limited rate, so this tells the "
-                   "agent where the steering actually is, not just what it asked for.")
+    description = ("Where the front wheels actually point right now. The wheels turn slowly, so this can differ "
+                   "from what the car asked for.")
     params = {"scale_deg": 30.0}
 
     def setup(self, ctx):
@@ -139,7 +143,7 @@ class SteerAngle(Feature):
 
 class OnroadFrac(Feature):
     name = "onroad_frac"
-    description = "Fraction of the 4 wheels on the road (kerbs count as road): 1 = on track, 0 = on the grass."
+    description = "How many of the 4 wheels are on the road (kerbs count as road): 1 = all on track, 0 = all on the grass."
 
     def setup(self, ctx):
         self.dim, self.labels, self.low = 1, ["onroad_frac"], np.zeros(1)
@@ -150,8 +154,8 @@ class OnroadFrac(Feature):
 
 class PrevAction(Feature):
     name = "prev_action"
-    description = ("The policy's previous outputs (one value per output of the action layout). "
-                   "Helps smooth control: the agent knows what it just did.")
+    description = ("What the car did on the last decision (steering and pedals). Helps it drive smoothly, because "
+                   "it knows what it just did.")
 
     def setup(self, ctx):
         layout = ctx["action_layout"]
@@ -165,9 +169,8 @@ class PrevAction(Feature):
 
 class CurvatureAhead(Feature):
     name = "curvature_ahead"
-    description = ("Track curvature at the given distances ahead along the centreline, × radius_m and clipped "
-                   "to [−1, 1] (positive = bends left; 1 = a corner of radius radius_m or tighter). "
-                   "This is map knowledge: the car no longer relies on its rays alone (E6).")
+    description = ("How sharply the track bends at set distances ahead (positive = left, 1 = a very tight corner). "
+                   "This is map knowledge: the car no longer relies on its rays alone (experiment E6).")
     params = {"distances_m": [25.0, 50.0, 100.0], "radius_m": 15.0}
 
     def setup(self, ctx):
@@ -188,8 +191,111 @@ class CurvatureAhead(Feature):
             out[k + j] = min(max(kappa[i] * self.radius, -1.0), 1.0)
 
 
+class _Clipped(Feature):
+    """Shared set-up: ``dim`` values in [low, 1] (labels and low declared by the subclass)."""
+
+    def setup(self, ctx):
+        self.dim = len(self.labels_)
+        self.labels = list(self.labels_)
+        self.low = np.full(self.dim, self.low_)
+
+
+class AccelG(_Clipped):
+    name = "accel_g"
+    description = ("How hard the car is accelerating or braking (forwards) and cornering (sideways), divided by the "
+                   "scale in m/s². Shows how close the car is to the grip limit.")
+    params = {"scale_ms2": 12.0}
+    labels_, low_ = ("accel_long", "accel_lat"), -1.0
+
+    def setup(self, ctx):
+        super().setup(ctx)
+        self.inv = 1.0 / float(self.cfg["scale_ms2"])
+
+    def write(self, st, out, k):
+        out[k] = min(max(st.car.a_long * self.inv, -1.0), 1.0)
+        out[k + 1] = min(max(st.car.a_lat * self.inv, -1.0), 1.0)
+
+
+class GripUse(_Clipped):
+    name = "grip_use"
+    description = ("How much of the tyres' grip is being used: 0 = none, 0.5 = right at the limit, "
+                   "above that = sliding (capped at 2× the limit).")
+    params = {"cap": 2.0}
+    labels_, low_ = ("grip_use",), 0.0
+
+    def write(self, st, out, k):
+        out[k] = min(max(st.car.grip_use / float(self.cfg["cap"]), 0.0), 1.0)
+
+
+class WheelSurface(_Clipped):
+    name = "wheel_surface"
+    description = ("What each of the 4 wheels is on: 1 = road, 0.5 = kerb, 0 = grass. "
+                   "More detail than the on-road fraction: which wheels are off.")
+    labels_, low_ = ("wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr"), 0.0
+
+    def write(self, st, out, k):
+        for i in range(4):
+            sid = int(st.wheels[i])
+            out[k + i] = 1.0 if sid == 1 else 0.5 if sid == 2 else 0.0
+
+
+class RoadPosition(_Clipped):
+    name = "road_position"
+    description = ("Where the car is across the road: its offset from the centre line (−1 right edge … +1 left edge) "
+                   "and the gap to the left and right road edge in metres ÷ scale. Lets it use the full width.")
+    params = {"scale_m": 10.0}
+    labels_, low_ = ("road_offset", "gap_left", "gap_right"), -1.0
+
+    def write(self, st, out, k):
+        hw, lat = st.track.half_width, st.tracker.lateral
+        inv = 1.0 / float(self.cfg["scale_m"])
+        out[k] = min(max(lat / hw, -1.0), 1.0)
+        out[k + 1] = min(max((hw - lat) * inv, -1.0), 1.0)
+        out[k + 2] = min(max((hw + lat) * inv, -1.0), 1.0)
+
+
+class History(Feature):
+    """Memory (D30): the values of the features listed before it, as they were 1, 2, … ``steps`` decisions ago."""
+
+    name = "history"
+    description = ("Memory: the car's earlier readings (as they were 1, 2, … n decisions ago, 20 per second), so it can "
+                   "feel trends such as speeding up or a bend coming closer. Put it last. At the start of an "
+                   "episode the past is the current state.")
+    params = {"steps": REQUIRED, "stride": 1, "of": None}      # of: feature names to remember (None = all but rays)
+
+    def setup(self, ctx):
+        self.n, self.stride = int(self.cfg["steps"]), int(self.cfg["stride"])
+        if self.n < 1 or self.stride < 1:
+            raise ValueError("feature history: steps and stride must be at least 1")
+        of = self.cfg["of"]
+        earlier = [(f, off) for f, off in ctx.get("earlier", []) if (f.name != "rays" if of is None else f.name in of)]
+        if of is not None and {f.name for f, _ in earlier} != set(of):
+            raise ValueError(f"feature history: 'of' names features that don't come before it: {sorted(of)}")
+        if not earlier:
+            raise ValueError("feature history: nothing before it to remember")
+        self.idx = np.concatenate([np.arange(off, off + f.dim) for f, off in earlier])
+        names = [lab for f, _ in earlier for lab in f.labels]
+        low = np.concatenate([f.low for f, _ in earlier])
+        self.m = len(self.idx)
+        self.dim = self.m * self.n
+        self.labels = [f"{lab} (-{j * self.stride})" for j in range(1, self.n + 1) for lab in names]
+        self.low = np.tile(low, self.n)
+        self.buf: list[np.ndarray] = []
+
+    def reset(self) -> None:
+        self.buf = []
+
+    def write(self, st, out, k):
+        cur = out[self.idx].copy()
+        if not self.buf:                                 # first decision of an episode: no past yet
+            self.buf = [cur] * (self.n * self.stride)
+        for j in range(self.n):
+            out[k + j * self.m:k + (j + 1) * self.m] = self.buf[(j + 1) * self.stride - 1]
+        self.buf = [cur] + self.buf[:self.n * self.stride - 1]
+
+
 FEATURES: dict[str, type[Feature]] = {cls.name: cls for cls in (
-    Rays, HeadingSinCos, VLong, VLat, YawRate, SteerAngle, OnroadFrac, PrevAction, CurvatureAhead)}
+    Rays, HeadingSinCos, VLong, VLat, YawRate, SteerAngle, OnroadFrac, PrevAction, CurvatureAhead, AccelG, GripUse, WheelSurface, RoadPosition, History)}
 
 
 def build_feature(cfg: Mapping[str, Any], ctx: Mapping[str, Any]) -> Feature:

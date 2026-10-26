@@ -343,6 +343,7 @@ obs_spec:
 - Features live in a registry (`racer/env/features.py`). Each one declares its size, bounds, labels for the brain panel, and a one-line description (shown in the AI Sandbox). The observation is the concatenation in list order.
 - **Adding or removing an input = editing the list.** A new kind of input = a new registered feature name. A feature's meaning never changes once a model uses it; a changed behaviour gets a new name.
 - Features available at first: `rays`, `heading_sincos`, `v_long`, `v_lat`, `yaw_rate`, `onroad_frac`, `prev_action` (same maths as v1), plus `steer_angle` (current wheel angle) and `curvature_ahead` (track curvature at given distances ahead: map knowledge, E6).
+- **Added by D30 (owner, 2026-10-26):** `accel_g` (forward and sideways acceleration), `grip_use` (tyre force demanded ÷ grip available), `wheel_surface` (road / kerb / grass for each wheel), `road_position` (offset from the centre line and gaps to both road edges) and `history` (memory: chosen earlier inputs as they were 1…n decisions ago, every k-th decision; must be the last feature; before the first decision of an episode the past is the present). `history` is stateful: observers have a `reset()` that the env calls at every episode start.
 
 ### 7.2 Action
 
@@ -352,6 +353,7 @@ obs_spec:
 
 - `steer_gas` (default, all models so far): `[steer, gas]` as above.
 - `steer_throttle_brake`: 3 outputs in [−1, 1]; throttle and brake are mapped to [0, 1] and the car receives `gas = throttle − brake`.
+- **Added by D30:** `steer_rate` (the first output turns the wheel from where it is by up to 0.3 of full lock per decision, instead of naming an angle) and `steer_throttle_brake_abs` (as `steer_throttle_brake`, with the brake capped just inside the grip limit by the env). A handbrake layout needs a new physics version and is in REVIEW_LATER.md.
 - New layouts are added to a registry (`racer/env/actions.py`); `prev_action` and the reward's steering term read the layout, so they work for any layout.
 
 ### 7.3 Reward (`configs/reward/progress.yaml`)
@@ -567,7 +569,7 @@ The sandbox only reads the registry and model folders and writes queue files and
 
 - **Overview:** leaderboard, plus what is running.
 - **Model Explorer:** rays on a straight road and on any map by the model's own sensor, network diagram and layer table, every setting with its glossary note, results for each protocol, learning curves.
-- **Compare**, **Build & Queue**, **Launch**, **Glossary**. Build & Queue's rays table has a *Remove* column and button (T134).
+- **Compare**, **Build & Queue** (D30: six guided steps with a pinned review, quick-pick presets from real files in `configs/{rays,readings,memory,network,learning,budget}/`, suggested tag and reason, decimal inputs, plain-language '?' help), **Launch**, **Glossary**. Build & Queue's rays table has a *Remove* column and button (T134).
 - **Workbench (T135-T136, owner, D28):** plots from the same Python runtime, no export step: the registry as a data set (any two metrics, colour by algorithm, CSV), result bars for chosen models, training curves, and fresh laps driven in the page (up to 4 drivers) with a lap table, racing line coloured by speed, traces with shared zoom, g-g diagram, braking zones and CSV; a *Brain* tab scrubs a lap and shows the network's inputs and neurons at each moment. The Overview has default plots. Logic: `racer/agents/telemetry.py`, `racer/sandbox/plots.py`.
 - **Launch** has three tabs: race chosen models, an Evolution race (strategies as in the game) and **Drive it yourself** (a game window with your car on a physics preset against chosen models; Streamlit cannot read 60 Hz keys), each with a Sound checkbox.
 - **Draw a Track (T119, owner, D27):** a drawing canvas (`streamlit-drawable-canvas`), the drawing shown as a validated track, *Save* to `tracks/user/`, *Race on it* (Launch with the track chosen).
@@ -813,6 +815,7 @@ The assets are downloaded, renamed and pruned. **`assets/LICENSES.md` is the man
 | 2026-10-24 | **E10 results (T121):** under identical inputs and rules, PPO (R023, 5M steps) beat neuroevolution (R021/R022, about 46M steps): unseen 100 % vs 75 % / 94 %, lap ratio 0.975 vs 1.05 / 1.07. Single seeds, best-of-many checkpoints, so claims need more seeds (§11). No design rule changes. |
 | 2026-10-24 | **D28 (owner, T123): finish the demo and analysis work first, then experiment freely.** In: mode menu, Evolution Race, Human vs AI, swarm view, brain panel as a live network graph, audio in every race window (on for watching races, off for training/sandbox/analysis, toggle everywhere), real polish, a sandbox *Workbench* for live plots, *Drive it yourself* from the sandbox, delete in the rays table. Out: the game-window drawing editor (the sandbox page stays), the video recorder, the slides and highlight video. Plan: `docs/DEMO_PLAN.md`. |
 | 2026-10-24 | **D29 (owner, T139): GA runs stay resumable after they finish.** The patience stop can come too early, and a new run ("main 2") would throw away the generations already driven. A finishing run now breeds the next generation and keeps `state.npz` (about 14 MB); the backup copies it; `train.py --extend` continues the run with a new patience or generation budget (only the stopping rules may change, so the continuation equals an uninterrupted run); runs finished earlier (R020–R022 and R024) are restored from their lineage. Sandbox: *Continue this run* (Explorer → Evolution) and a bulk *Save as a model*. Plan: `docs/GA_EXTEND_PLAN.md`. Backup (owner): a changed file of an extended run is saved next to the old copy as `name.v2`, `name.v3`, … (`backup(versioned=True)` for evolve runs), so nothing is overwritten. |
+| 2026-10-26 | **D30 (owner, T154): Build & Queue polish.** The page becomes guided steps (inputs, network, learning, world, budget, name) with a pinned summary. Every step gets one-click **quick-pick presets as real files**: `configs/rays/`, `configs/readings/` (input bundles), `configs/network/`, `configs/learning/` (per algorithm), `configs/budget/` (steps or generations, seeds, trial). They only fill the form (a run still stores the full resolved settings), are listed on the Presets page, and old presets and models are untouched. The tag and the 'why' are suggested from what was changed and stay editable. The form keeps its state when you leave and return. '?' texts on the page are rewritten in plain language. |
 
 ---
 

@@ -51,9 +51,16 @@ def groups() -> list[tuple[str, str, str]]:
     return [(g, b.get("title", g), b.get("intro", "")) for g, b in raw.items()]
 
 
+# Quick-pick presets (D30) fill in train.* settings, so they share those notes.
+ALIASES = {"learning.": "train.", "network.": "train.policy."}
+
+
 def lookup(key: str) -> dict[str, Any] | None:
     """Glossary entry for a key: exact match first, then the most specific wildcard."""
     g = glossary()
+    for prefix, target in ALIASES.items():
+        if key.startswith(prefix):
+            key = target + key[len(prefix):]
     if key in g:
         return g[key]
     matches = [p for p in g if any(c in p for c in "*?[") and fnmatch.fnmatchcase(key, p)]
@@ -68,6 +75,19 @@ def note(key: str) -> str:
     if not e:
         return ""
     return " ".join(x for x in (e.get("short", ""), e.get("affects", "")) if x)
+
+
+def help_text(key: str) -> str:
+    """A widget's '?' text (markdown): what it is, what turning it changes, a safe starting value."""
+    e = lookup(key)
+    if not e:
+        return ""
+    out = e.get("short", "")
+    if e.get("affects"):
+        out += f"\n\n**What changes if you turn it:** {e['affects']}"
+    if e.get("range"):
+        out += f"\n\n**A safe start:** {e['range']}"
+    return out
 
 
 # ------------------------------------------------------------------ flattening
@@ -243,6 +263,13 @@ PRESET_KINDS: dict[str, tuple[str, str, str]] = {
     "train": ("Algorithm & network", "--train",
               "The learning algorithm (PPO, SAC or neuroevolution), its settings and the network's hidden layers."),
     "trackset": ("Track sets", "--trackset", "Which tracks a run trains on, and how often each one is picked."),
+    # Quick-picks of Build & Queue (D30): they only fill the form, so there is no train.py flag.
+    "rays": ("Ray sets", "", "Where the car looks: the angle and reach of each distance ray."),
+    "readings": ("Car readings", "", "What the car feels about itself besides the rays: heading, speeds, spin, last action."),
+    "memory": ("Memory", "", "How many earlier decisions the car remembers as extra inputs (previous states)."),
+    "network": ("Network sizes", "", "How many neurons the network has and how they switch (the activation)."),
+    "learning": ("Learning styles", "", "Ready-made settings for how one algorithm learns: cautious, explorative, bold …"),
+    "budget": ("Budgets", "", "How long to train, with how many seeds, and whether it is a throwaway trial."),
 }
 # runs.csv column naming the preset a run used (train presets aren't recorded: matched by algorithm)
 _RUN_COLUMN = {"env": "obs_spec", "physics": "physics_preset", "reward": "reward_preset", "trackset": "track_set"}
@@ -265,6 +292,8 @@ def runs_using(kind: str, name: str, runs: Iterable[Mapping[str, Any]]) -> list[
         from racer.config import load_preset
         algo = load_preset("train", name).get("algorithm")
         return [r for r in runs if r.get("algorithm") == algo]
+    if kind not in _RUN_COLUMN:          # quick-picks aren't recorded: a run keeps the values, not the preset
+        return []
     col = _RUN_COLUMN[kind]
     return [r for r in runs if str(r.get(col) or "") == name]
 

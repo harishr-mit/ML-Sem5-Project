@@ -1,0 +1,5 @@
+# A short check that a setup trains at all: 300k steps (about 5 min) or 50 generations, one seed, kept out of the main results as a trial.
+steps: 300000
+generations: 50
+seeds: [1]
+trial: true

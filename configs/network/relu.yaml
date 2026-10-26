@@ -1,0 +1,3 @@
+# The medium network with relu instead of tanh (the SAC default). Learns faster at first; outputs are less smooth.
+net_arch: [256, 256]
+activation: relu

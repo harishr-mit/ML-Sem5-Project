@@ -197,6 +197,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [ ] T151 (optional, Could): E7 PPO vs SAC run; E6 curvature look-ahead run; E9 downforce on vs off. Each: queue entry, evaluate, back up, record in §11. Done when: each result is in §11, or the owner drops it.
 * [ ] T152: Report: ML analysis write-up for the course (learning curves, E1–E10 results, the R015/R018/R019 variance story, caveats of one seed per setting), using `scripts/make_plots.py` figures. Done when: a draft exists in `docs/` and the owner has read it.
 * [ ] T153: Final docs pass and rehearsal (T09): README (presets, commands, credits line), PROJECT_CONTEXT §11/§16 up to date, a rehearsal of the live demo on the owner's machine. Done when: the owner signs off the demo run-through.
+* [x] T154: Build & Queue polish (owner 2026-10-26, D30): guided steps + pinned summary; real quick-pick presets (`configs/network|learning|budget|rays|readings`); auto-suggested tag/why; form state kept when leaving the page; beginner-friendly '?' texts for everything on the page. Branch `feat/build-polish`.
+  * [x] T154a–f (PROJECT_CONTEXT D30, preset files + Presets page, `racer/sandbox/picks.py`, build.py rewrite, plain-language glossary and registry texts, tests, README/docs). Extra owner requests the same day: decimal inputs; previous states as inputs (`history`); new inputs `accel_g`, `grip_use`, `wheel_surface`, `road_position`; new layouts `steer_rate`, `steer_throttle_brake_abs`. Deferred: handbrake layout (needs a physics version), see REVIEW_LATER §9.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -213,6 +215,19 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-26 — Claude (Sonnet 5.5) — T154: Build & Queue polish (D30)
+
+* **Task:** make the Build & Queue page cohesive: guided steps, quick-pick presets for every option, easier naming, no lost form state, beginner-friendly '?' texts; then decimals, previous-state inputs and more inputs/outputs.
+* **Status:** DONE on branch `feat/build-polish`; checked in a real browser (sticky review, highlighted quick picks, tooltips) and with the tests (see the last line).
+* **Files (created):** `racer/sandbox/picks.py`, `configs/{rays,readings,memory,network,learning,budget}/*.yaml` (36 presets), `tests/test_build_picks.py`.
+* **Files (edited):** `racer/sandbox/pages/build.py` (rewritten), `pages/presets.py`, `explain.py` (aliases, `help_text`, preset kinds), `builder.py`, `glossary.yaml` (75 entries rewritten in plain language, 31 new), `racer/env/{features,actions,obs_spec,racing_env}.py`, `racer/physics/car.py` (`grip_use` reading only, no physics change), `racer/agents/algorithms.py` (texts), `tests/test_sandbox.py`, `PROJECT_CONTEXT.md` (D30, §7.1, §7.2, §10.5), `README.md`, `DECISIONS.md`, `REVIEW_LATER.md`, `log.md`.
+* **Details:**
+  - Form state: the edited plan is stored at the end of every run, so leaving the page and returning keeps it (widget state alone is dropped on a page change).
+  - Tag and why are suggested from the choices (`suggest_tag`, `suggest_why`) until edited; availability is shown inline.
+  - `history` is stateful: observers got `reset()`, called by `RacingEnv.reset`. New inputs and layouts are new registered names; nothing existing changed.
+  - Float settings are decimal boxes; steps can be given in millions with decimals.
+* **Notes / Errors:** a full-suite run stalled once while the sandbox server and a browser were running at the same time; the same tests pass alone. A handbrake layout is not built.
 
 ### 2026-10-26 — Claude Code (Sonnet 5.5) — T148: housekeeping, README status
 

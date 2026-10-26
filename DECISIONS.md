@@ -27,3 +27,4 @@ Short log of decisions taken in sessions. The full design record is PROJECT_CONT
 | Development in a git worktree while a queue runs in `main`; merge when it ends | Real runs refuse uncommitted code | log.md T117, T123 |
 | `tracks/user/wiggly_wiggly.json` copied into `main` | Owner asked | log.md T122 |
 | E10 conclusion: PPO under the GA's rules beat neuroevolution (one seed each) | Registry R020–R023 | PROJECT_CONTEXT §11 |
+| Build & Queue polish (D30): quick picks are real preset files that only fill the form; memory (`history`), five more inputs and two more layouts are options | Owner request 2026-10-26 | PROJECT_CONTEXT §16 D30 |

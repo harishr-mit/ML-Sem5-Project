@@ -21,13 +21,8 @@ Shared context for every agent working in this directory. Read this file **befor
 
 ## Current Status
 
-* **Last updated:** 2026-10-24 (Claude Opus 5.5). **Where we are:** start of Week 3. M1 and M2 reached; AI Sandbox built (T65–T75, T101, T106); map library + eval protocol v2; upgradable engine (D21–D23). **Neuroevolution (D26) built and merged to `main`** (PR #1, 2026-10-24; 256 tests pass at T107). Best PPO: `R015_t50_narrow7_s1@4600k` (seen 64 %, unseen 88 %, lap ratio 0.97) but it doesn't reproduce (R018, R019). GA σ test: σ 0.02 (S004: seen 100 %, unseen 87.5 %, lap ratio 0.997; one seed). Nothing is running. **Next:** T97 (owner starts `configs/queue/e10_ga.yaml`, then evaluate, back up, record E10); T83 (owner decision: run-to-run variance); **T97 queue ready on `main`** (4 runs incl. GA seed 2 and PPO under GA rules; GA tries start on the start line, T115). T08 / M3 Week 3 visuals (effects, brain panel, minimap, Evolution Race, Draw-a-Track, Human vs AI, video recorder); then T09 / M4. History of earlier status lines: see the Change Log.
-* **E10 done and merged (T121, 2026-10-24):** the queue finished (R020–R023), results are in PROJECT_CONTEXT §11/§16 (PPO under GA rules beat both GA seeds; single seeds), `feat/draw-a-track` is merged into `main` (281 tests pass). Nothing is running. **Next:** T110–T114 (Draw-a-Track in the game window, T112–T114 still open); T83 (variance decision, plus a second PPO seed of R023).
-* **(Superseded by the merge above) Two working copies, until the worktree is removed (owner, 2026-10-24, T117):**
-  - **This folder (`ML Sem5 Project`, branch `main`) runs the E10 queue** (`configs/queue/e10_ga.yaml`). Don't edit `racer/`, `scripts/`, `configs/`, `tracks/` here and don't switch branches: every queue entry refuses to start on uncommitted code and runs whatever is checked out. Check-ins read only `outputs/queue_logs/e10_ga/state.json` and the log tail. The queue writes `registry/*.csv`, `registry/run_notes.yaml`, `outputs/eval/` and `models/` here.
-  - **Development happens in the worktree `C:\Users\Jack\Desktop\ML Sem5 Project - dev`** (branch `feat/draw-a-track`). It has its **own `.venv`** (owner, 2026-10-24: Python 3.11.9, same package versions as this folder's, `racer` installed editable from the worktree): run `.venv\Scripts\python ...` there, no `PYTHONPATH` needed. Remove it with the worktree.
-  - **Keep the two mergeable:** the dev branch never edits `registry/`, `outputs/eval/`, `models/` or `configs/queue/e10_ga.yaml`, and never changes what an existing preset/setting means (extend, don't change). In `log.md` it only adds tasks at the bottom and Change Log entries at the top; "Current Status" is rewritten at merge time.
-  - **When the queue finishes:** evaluate/back up and record E10 results here on `main` and commit; then merge `feat/draw-a-track` into `main` (resolve `log.md` by keeping both sets of entries), run the full suite, and remove the worktree (`git worktree remove`).
+* **Last updated:** 2026-10-26 (Claude Code, Sonnet 5.5). **Where we are:** Weeks 1–3 are done (M1, M2, M3). Decision D28 (finish demo and analysis first, then experiment) is complete: mode menu, Evolution Race, Human vs AI, swarm, brain panel, audio, effects, the sandbox Workbench and Draw a Track. Neuroevolution (D26) and resumable GA runs (D29) are built and merged. E10 is done: PPO under GA rules (R023, 100 % seen and unseen, lap ratio 0.975) beat both GA seeds. All work is on `main`; nothing is running. Best earlier PPO `R015_t50_narrow7_s1@4600k` doesn't reproduce (R018, R019).
+* **Next (open tasks):** T83 (owner decision: run-to-run variance); T149 (second PPO seed of R023); T150 (extend R021 for real); T151 (optional E6/E7/E9 runs); T152 (report); T153 (final docs pass and rehearsal, i.e. M4/T09). Dropped by the owner (D28): game-window editor, video recorder, slides, highlight video. Earlier status lines: see the Change Log.
 * **Project:** RL Racing Line. A 2D top-down racing game written from scratch, in which a car learns a racing line with PPO (Stable-Baselines3). Grip-limited physics, ray sensors, a model registry (CSV → xlsx), and a multi-car demo (10–20 ghost cars, evolution race, draw-a-track, human vs AI).
 * **Plan:** `PROJECT_CONTEXT.md` is the single source of truth: design, physics, env, training, registry, demo, timeline (§12) and setup (§14). `CLAUDE.md` holds the agent rules.
 * **Architecture:** a headless simulation (`racer/physics`, `racer/track`, `racer/env`, with no pygame) used by the training scripts (`scripts/train.py`, `evaluate.py`) and by the pygame-ce demo (`scripts/demo.py`, `racer/render`).
@@ -44,7 +39,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T05: Environment setup: `.venv`, `requirements.txt` (§14.1), CPU torch, verify imports, `git init`
 * [x] T06: **M1 (Week 1):** physics, surfaces, tracks, sensors, Gymnasium env, sanity tests, debug renderer; first PPO run completes laps
 * [x] T07: **M2 (Week 2):** configs, train/evaluate, checkpoints, registry and xlsx export, loader, curriculum, basic 20-car Model Arena
-* [ ] T08: **M3 (Week 3):** textures, effects, HUD, brain panel, minimap, camera, Evolution Race, Draw-a-Track, Human vs AI, video recorder
+* [x] T08: **M3 (Week 3):** textures, effects, HUD, brain panel, minimap, camera, Evolution Race, Draw-a-Track, Human vs AI, video recorder. Done 2026-10-24 (T119, T123–T138); the video recorder and the game-window editor were dropped by the owner (D28), Draw-a-Track lives in the sandbox.
 * [ ] T09: **M4 (Week 4):** ablations, plots, analysis view, highlight video, slides, README, rehearsal
 * [x] T10: Asset audit: rename, prune unused, cut and loop the engine and tyre sounds, write `assets/LICENSES.md`, update PROJECT_CONTEXT §10/§14
 * [x] T11: Add the rule "goal/requirement changes must be reflected in the relevant documents" to `CLAUDE.md`
@@ -144,7 +139,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T94: S3 export to a model folder (SB3 PPO zip + identity `vecnormalize.pkl`), `ga` algorithm entry, compat.
 * [x] T95: S4 evolution loop: workers, validation + stopping, checkpoints + registry, TensorBoard, lineage SQLite, pause/resume, `ga_default.yaml`, `train.py` dispatch, glossary, `.gitignore`, backup of the lineage.
 * [x] T96: S5 σ test: σ 0.02 vs 0.05, scratch runs on `train7` with the same budget of 10M env steps each (owner, 2026-10-15: run now; equal compute instead of 200 generations).
-* [ ] T97: S6 control run (Training Ground) and main run (7 maps); evaluate; back up. Owner decision (2026-10-15): queued in `configs/queue/e10_ga.yaml` for the owner to start; then evaluate (automatic), back up, record results in PROJECT_CONTEXT §11 and `registry/run_notes.yaml`.
+* [x] T97: S6 control run (Training Ground) and main run (7 maps); evaluate; back up. Owner decision (2026-10-15): queued in `configs/queue/e10_ga.yaml` for the owner to start; then evaluate (automatic), back up, record results in PROJECT_CONTEXT §11 and `registry/run_notes.yaml`.
 * [x] T98: S7 docs (README, PROJECT_CONTEXT, log). The E10 results are added with T97.
 * [x] T99: Owner request (2026-10-15): check CLAUDE.md, PROJECT_CONTEXT.md, README.md and log.md against the D26 decisions and fix what is out of line (docs only).
 * [x] T100: Owner decisions (2026-10-15): selection stated exactly (all 50 ranked, top 12 kept unchanged, the same 12 are the only parents of the other 38); model ids of GA runs get `GA_` before the tag. Docs updated; pre-implementation commit; then T92 onwards.
@@ -196,6 +191,12 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T145: Sandbox (D27): improve *Save as a model*: save a range of generations (every N, best-validated elite each) in one go, and point to it from Launch → Evolution Race. Done when: headless page tests save a range and show the pointer.
 * [x] T147: Owner (2026-10-24): back up extended GA runs under versioned names (`lineage.sqlite.v2`), no git in the backup folder. `backup(versioned=True)` for evolve runs, compared by content. Done when: tests pass and the real dry run is clean.
 * [x] T146: Docs (PROJECT_CONTEXT §8/§10.5/§16, `CLAUDE.md` D26 backup bullet, README, `docs/NEUROEVOLUTION_PLAN.md`, `evolve.py` docstring), full suite, review, commit. Merging into `main` and extending R021 for real wait for the owner (clean tree, D12).
+* [x] T148: Housekeeping: tick T08 and T97 (their work is done, see D28 and T121), rewrite the stale "Current Status" block. Done when: the status block matches the newest Change Log entry.
+* [ ] T149: Second PPO seed of R023 (the cheapest test of whether PPO's 100 % is luck, PROJECT_CONTEXT §11); queue file via the sandbox, evaluate, back up, record. Done when: R0xx is registered and its result is in §11 and `registry/run_notes.yaml`.
+* [ ] T150: Extend R021 for real with `train.py --extend` (D29; needs a clean tree, D12). Done when: the extended run is evaluated, backed up as `.v2`, and the result is recorded.
+* [ ] T151 (optional, Could): E7 PPO vs SAC run; E6 curvature look-ahead run; E9 downforce on vs off. Each: queue entry, evaluate, back up, record in §11. Done when: each result is in §11, or the owner drops it.
+* [ ] T152: Report: ML analysis write-up for the course (learning curves, E1–E10 results, the R015/R018/R019 variance story, caveats of one seed per setting), using `scripts/make_plots.py` figures. Done when: a draft exists in `docs/` and the owner has read it.
+* [ ] T153: Final docs pass and rehearsal (T09): README (presets, commands, credits line), PROJECT_CONTEXT §11/§16 up to date, a rehearsal of the live demo on the owner's machine. Done when: the owner signs off the demo run-through.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -212,6 +213,20 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-26 — Claude Code (Sonnet 5.5) — T148: housekeeping, README status
+
+* **Task:** owner: do T148 (Week 3 is done, so tick T08), and update the README to reflect the current state (the final README pass waits for the other tasks, T153).
+* **Status:** DONE (docs only; checked with `tests/test_integrity.py`).
+* **Files:** Edited `log.md` (T08, T97, T148 ticked; "Current Status" rewritten, the obsolete two-worktree block removed), `README.md` (status block rewritten with what exists and the results so far; stale "planned for Weeks 3–4" sentence, `user/` and `scripts/` layout rows fixed).
+* **Notes / Errors:** T08 was closed with a note: video recorder and game-window editor dropped (D28).
+
+### 2026-10-26 — Claude Code (Sonnet 5.5) — T148–T153: unfinished work added as tasks
+
+* **Task:** owner: list all unfinished work as tasks.
+* **Status:** DONE (planning only; no code touched).
+* **Files:** Edited `log.md` (tasks T148–T153 at the bottom of the task list; this entry).
+* **Notes / Errors:** T83 (variance decision), T08 and T09 already existed and stay open.
 
 ### 2026-10-24 — Claude Code (Sonnet 5.5) — T147: versioned backup of extended runs
 

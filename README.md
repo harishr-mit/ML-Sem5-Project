@@ -8,11 +8,15 @@ A 2D top-down racing game written from scratch, where a car learns to drive a ra
 
 The demo (pygame-ce) loads any trained model from a registry and races up to 20 of them as ghost cars. It has a mode menu: **Model Arena**, **Evolution Race** (one run's checkpoints), **Human vs AI** and **Swarm**, with textures, scenery, tyre smoke and skid marks, a brain panel that shows the network's neurons live, a dashboard, a minimap and engine sound. The AI Sandbox adds a **Workbench** for live plots and analysis.
 
-> **Status:** milestone M2 (Week 2) done. Track sets with generated tracks, fine-tuning (`--parent`), the evaluation protocol, the model registry (CSV → xlsx), an overnight experiment queue and the Model Arena (20 different models at a steady 60 FPS) are in place. The best model so far, `R015_t50_narrow7_s1@4600k` (7 narrow rays, trained on the map library), is faster than the hand-coded baseline and completes 88 % of the runs on maps it has never seen. A second seed and a longer run of the same setup didn't reproduce that (R018, R019), so results vary a lot between runs. Experiment results so far: [PROJECT_CONTEXT.md §11](PROJECT_CONTEXT.md).
-> **New (2026-10-11):** a map library of 9 hand-designed maps (7 for training, 2 test maps never trained on), evaluation protocol v2, and an upgradable model design: inputs are built from named features, the outputs follow a versioned action layout, and PPO and SAC are both supported. Any model the engine can run races in the arena.
-> **New: the AI Sandbox** (`scripts\sandbox.py`, a local app in its own window). It explains every trained model (what it senses, its network, what it was trained with and why), compares models, builds and queues new training runs, and launches races in separate game windows. See [AI Sandbox](#understand-compare-build-and-race-models-ai-sandbox) below.
-> **New (2026-10-15): neuroevolution** (D26), a genetic algorithm that trains the same kind of driving network without gradients, to compare with PPO (experiment E10, run 2026-10-24: with the same inputs and rules PPO won, see PROJECT_CONTEXT §11). See [Train with neuroevolution](#train-with-neuroevolution-genetic-algorithm). Design: [docs/NEUROEVOLUTION_PLAN.md](docs/NEUROEVOLUTION_PLAN.md).
-> **New (2026-10-24, D28): the demo is complete.** Mode menu, Evolution Race, Human vs AI, Swarm, brain panel, audio, effects and polish (see *Play the game* and *Race models*), and the sandbox's Workbench and *Drive it yourself*. The game-window drawing editor, video recorder, slides and highlight video were dropped. Plan: [docs/DEMO_PLAN.md](docs/DEMO_PLAN.md).
+> **Status (2026-10-26):** Weeks 1–3 are done, so the demo, the AI Sandbox and the analysis tools are complete (D28). What is left is the experiments and the write-up: a second PPO seed, extending a neuroevolution run, optional ablations, the report and a rehearsal. The open tasks are in [log.md](log.md).
+> **What exists:**
+> - **Training:** PPO and SAC (Stable-Baselines3) and a neuroevolution trainer (genetic algorithm, D26) that can pause, resume and continue after finishing (D29). Overnight queue, model registry (CSV → xlsx) and backups.
+> - **Tracks and evaluation:** a map library (7 training maps, 2 test maps never trained on, 10 generated held-out tracks), evaluation protocol v2, and an upgradable model design: inputs are named features, outputs follow a versioned action layout, and every model carries its own configs.
+> - **Game window:** Model Arena (20 models at a steady 60 FPS), Evolution Race, Human vs AI, Swarm, brain panel, effects, audio.
+> - **AI Sandbox:** explains and compares models, builds and queues runs, launches races, draws tracks and plots live in the Workbench. See [AI Sandbox](#understand-compare-build-and-race-models-ai-sandbox).
+>
+> **Results so far** (full table in [PROJECT_CONTEXT.md §11](PROJECT_CONTEXT.md)): PPO with 7 narrow rays on the map library (`R015_t50_narrow7_s1@4600k`) beats the hand-coded baseline on unseen maps, but a second seed and a longer run didn't reproduce it (R018, R019), so results vary a lot between runs. In the PPO vs neuroevolution comparison (E10, same inputs and rules) PPO won: R023 completes 100 % of seen and unseen maps at 0.975 of the baseline's lap time, against 75–94 % unseen and 1.05–1.07 for the two GA seeds. Each is one seed, so these are indications, not proof.
+> **Dropped (D28):** the game-window drawing editor (drawing is in the sandbox), the video recorder, the slides and the highlight video. Plans: [docs/DEMO_PLAN.md](docs/DEMO_PLAN.md), [docs/NEUROEVOLUTION_PLAN.md](docs/NEUROEVOLUTION_PLAN.md).
 > Full design, plan and timeline: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md). Progress and change log: [log.md](log.md).
 
 ## Setup (Windows)
@@ -58,7 +62,7 @@ Every command below starts with `.venv\Scripts\python`, run from the project fol
 | 11 | The model registry as a spreadsheet (then open `registry\registry.xlsx`) | `scripts\registry.py export` |
 | 12 | Track gallery: PNG previews in `outputs\plots\tracks\` | `scripts\preview_tracks.py showcase train test heldout` |
 
-Tracks: `training_ground`, `technical`, `fast_flow` (showcase); `city_blocks`, `esses`, `hairpin_valley`, `oval_infield` (training maps); `alpine`, `coastline` (test maps, never trained on); `heldout_00` … `heldout_09` (generated, never trained on). Draw-a-track, Human vs AI, video recording and the report plots are planned for Weeks 3–4 and aren't built yet.
+Tracks: `training_ground`, `technical`, `fast_flow` (showcase); `city_blocks`, `esses`, `hairpin_valley`, `oval_infield` (training maps); `alpine`, `coastline` (test maps, never trained on); `heldout_00` … `heldout_09` (generated, never trained on). Tracks you draw in the sandbox are saved in `user`.
 
 **Understand and compare models**
 
@@ -310,9 +314,9 @@ In human mode (`1`) the walls are solid and nothing resets the car; baseline and
 |---|---|
 | `racer/` | `physics`, `track`, `env` (headless, no pygame); `agents`, `registry`, `render` (pygame-ce, demo only); `sandbox` (AI Sandbox: data, explanations + `glossary.yaml`, diagrams, curves, run builder, queue, launcher; Streamlit only in `sandbox/pages/`) |
 | `configs/` | YAML presets: `physics/`, `env/`, `reward/`, `train/`, `track/` (geometry and generator), `trackset/` (what training samples), `eval/` (evaluation protocol), `queue/` (overnight experiment lists; `sandbox.yaml` is git-ignored), `demo/` (render, arena and audio settings), `sandbox/` (AI Sandbox settings) |
-| `scripts/` | train, evaluate, registry, demo (the game window and its modes), make_plots + bench_demo, sandbox (AI Sandbox), queue_overnight, drive (debug window), physics sanity, track previews / generation, env benchmark; later record video, plots |
+| `scripts/` | train, evaluate, registry, demo (the game window and its modes), make_plots + bench_demo, sandbox (AI Sandbox), queue_overnight, backup_models, export_ga, drive (debug window), physics sanity, track previews / generation, env and training benchmarks |
 | `tests/` | pytest unit tests; `test_integrity.py` checks that the registry, model folders, eval copies, run notes, docs and pinned packages agree |
-| `tracks/` | `showcase/` and `train/` (the 7 training maps), `test/` (2 test maps) and `heldout/` (generated), both never used in training, `user/` (drawn in the editor). Any other folder works too: a track JSON added at any time is found by name |
+| `tracks/` | `showcase/` and `train/` (the 7 training maps), `test/` (2 test maps) and `heldout/` (generated), both never used in training, `user/` (drawn in the sandbox's Draw a Track page). Any other folder works too: a track JSON added at any time is found by name |
 | `docs/` | `DEMO_PLAN.md`: scope and tasks of the demo and Workbench (D28); `SANDBOX_PLAN.md`: design and build plan of the AI Sandbox app; `NEUROEVOLUTION_PLAN.md`: design of the genetic-algorithm trainer (D26) |
 | `models/` | self-contained, immutable model folders; **local only** (git-ignored), back them up by copying the folder |
 | `registry/` | `runs.csv`, `models.csv` → `registry.xlsx`; `run_notes.yaml` (why each run was made and what it showed) |

@@ -1,0 +1,3 @@
+# Three layers of 256 neurons. Depth instead of width: can combine inputs in more steps.
+net_arch: [256, 256, 256]
+activation: tanh

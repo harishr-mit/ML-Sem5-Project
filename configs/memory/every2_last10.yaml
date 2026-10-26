@@ -1,0 +1,3 @@
+# Remembers every second decision for the last 20 (10 snapshots covering 1 s): a longer memory for the same number of inputs.
+steps: 10
+stride: 2

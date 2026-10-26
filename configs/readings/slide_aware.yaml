@@ -1,0 +1,6 @@
+# Lean set plus sideways speed and spin, so the car can feel a slide starting and catch it.
+features:
+  - {feature: heading_sincos}
+  - {feature: v_long, scale: 70.0}
+  - {feature: v_lat, scale: 10.0}
+  - {feature: yaw_rate, scale: 3.0}

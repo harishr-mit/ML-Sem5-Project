@@ -1,0 +1,9 @@
+# Seven rays that look nearly along the road (7 and 20 degrees), so a bend is seen 35-70 m earlier. The set behind R015, the best PPO model.
+rays:
+  - {angle_deg: -60.0, range_m: 60.0}
+  - {angle_deg: -20.0, range_m: 120.0}
+  - {angle_deg: -7.0, range_m: 200.0}
+  - {angle_deg: 0.0, range_m: 200.0}
+  - {angle_deg: 7.0, range_m: 200.0}
+  - {angle_deg: 20.0, range_m: 120.0}
+  - {angle_deg: 60.0, range_m: 60.0}

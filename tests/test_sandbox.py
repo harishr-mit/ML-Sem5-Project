@@ -267,7 +267,8 @@ def test_every_preset_key_is_explained():
 
     from racer.sandbox.explain import preset_rows, unexplained
     keys = set()
-    for kind in ("physics", "reward", "train", "env", "trackset", "track"):
+    for kind in ("physics", "reward", "train", "env", "trackset", "track", "rays", "readings", "memory", "network",
+                 "learning", "budget"):
         for f in (PROJECT_ROOT / "configs" / kind).glob("*.yaml"):
             keys |= set(preset_rows(kind, yaml.safe_load(f.read_text(encoding="utf-8")) or {}))
     assert keys and unexplained(keys) == []
@@ -801,7 +802,8 @@ def test_build_page_adds_a_run_to_the_queue(tmp_path, monkeypatch):
     at = AppTest.from_function(_run_page, args=("build",), default_timeout=180)
     at.run()
     assert not at.exception, [e.value for e in at.exception]
-    assert at.button(key="bq_add").disabled                     # no tag / reason yet
+    assert not at.button(key="bq_add").disabled                 # a name and reason are suggested
+    assert at.text_input(key="bq_tag_0").value.startswith("ppo_r7_256x256_") and "PPO with 7 rays" in at.text_area(key="bq_why_0").value
     at.text_input(key="bq_tag_0").input("sbtest")
     at.text_area(key="bq_why_0").input("check that the form queues a run with the right arguments")
     at.text_input(key="bq_seeds_0").input("1, 2")
@@ -962,7 +964,8 @@ def test_explorer_evolution_tab_continues_a_run_and_saves_a_range(tmp_path, monk
     assert len({m["model_id"] for m in reg.models() if m["run_id"] == "S901"}) == 3      # gen 1 was saved before
 
 
-@pytest.mark.parametrize("kind", ["env", "physics", "reward", "train", "trackset"])
+@pytest.mark.parametrize("kind", ["env", "physics", "reward", "train", "trackset", "rays", "readings", "memory",
+                                  "network", "learning", "budget"])
 def test_presets_page_shows_every_preset(kind):
     from streamlit.testing.v1 import AppTest
 
@@ -974,7 +977,7 @@ def test_presets_page_shows_every_preset(kind):
         at.session_state[f"pr_name_{kind}"] = name
         at.run()
         assert not at.exception, (kind, name, [e.value for e in at.exception])
-        if name != "baseline":                         # the PID driver's settings, not a train preset
+        if name != "baseline" and PRESET_KINDS[kind][1]:     # the PID driver's settings; quick-picks have no flag
             assert any(f"{PRESET_KINDS[kind][1]} {name}" in c.value for c in at.code), (kind, name)
 
 
@@ -1070,3 +1073,19 @@ def test_workbench_brain_tab_needs_a_driven_model_first():
     at.run()
     assert not at.exception
     assert any("Drive a model" in c.value for c in at.caption)
+
+
+def test_build_page_chip_fills_the_form_and_the_form_survives_a_page_change():
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_function(_run_page, args=("build",), default_timeout=180)
+    at.run()
+    at.button(key="bq_pick_network_large").click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.session_state["bq_plan"].net_arch == [512, 512]
+    assert at.button(key="bq_pick_network_large").proto.type == "primary"
+    at.button(key="bq_pick_memory_last5").click().run()
+    assert at.session_state["bq_plan"].features[-1]["steps"] == 5
+    # every run stores the edited plan, so a page change (which drops the widgets) keeps the form
+    at.number_input(key="bq_mem_n_2").set_value(7).run()
+    assert at.session_state["bq_plan"].features[-1]["steps"] == 7 and at.session_state["bq_plan"].net_arch == [512, 512]

@@ -48,3 +48,7 @@ Start the queue first: `.venv\Scripts\python scripts\queue_overnight.py configs\
 
 ### 8. `final_mix` and `tracks/user/`
 - `final_mix` trains on every track in `tracks/user/`, so tracks drawn in the demo become training data for any later `final_mix` run. Old snapshots are unaffected. Should `final_mix` be marked as "don't use for new runs"? Linked to #4.
+
+### 9. Handbrake output layout (owner request 2026-10-26, D30)
+- A `steer_gas_handbrake` layout (a rear-wheel lock that allows deliberate drifts) needs a new physics version (D23: new equations = new version). Not built yet: decide whether the drift behaviour is worth a physics version and what it should do to rear grip.
+- Lap progress / lap time as an input was asked about: not added (it lets a car memorise one track, which hurts generalisation; time elapsed carries no driving information). Revisit if a single-track speed record is wanted.

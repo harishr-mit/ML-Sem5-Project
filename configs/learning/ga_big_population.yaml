@@ -1,0 +1,4 @@
+# Evolution with 100 cars per generation and the default mutation size: a wider search each generation, twice the time per generation.
+algorithm: ga
+ga:
+  population: 100

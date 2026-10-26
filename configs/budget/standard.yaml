@@ -1,0 +1,5 @@
+# A normal run: 2M steps (about 30 min) or 500 generations, one seed.
+steps: 2000000
+generations: 500
+seeds: [1]
+trial: false

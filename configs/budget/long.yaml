@@ -1,0 +1,5 @@
+# A serious run: 5M steps (about 1 h) or 2000 generations, one seed. The budget of R015 and R023.
+steps: 5000000
+generations: 2000
+seeds: [1]
+trial: false

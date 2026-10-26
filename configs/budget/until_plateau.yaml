@@ -1,0 +1,5 @@
+# Neuroevolution only: no generation limit, it stops when the validation score stops improving. PPO and SAC use 5M steps.
+steps: 5000000
+generations: null
+seeds: [1]
+trial: false

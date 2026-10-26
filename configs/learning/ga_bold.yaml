@@ -1,0 +1,5 @@
+# Evolution with big mutations (sigma 0.05) and 100 cars per generation: explores widely, slower per generation. sigma 0.05 lost to 0.02 in the T96 test.
+algorithm: ga
+ga:
+  sigma: 0.05
+  population: 100

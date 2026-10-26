@@ -56,7 +56,7 @@ class ObserverV1:
             self.labels += {"heading_sincos": ["sin_head", "cos_head"], "prev_action": ["prev_steer", "prev_gas"]}.get(e, [e])
 
     def observe(self, track, car, heading_error: float, onroad_frac: float,
-                prev_action: np.ndarray, out: np.ndarray, tracker=None) -> np.ndarray:
+                prev_action: np.ndarray, out: np.ndarray, tracker=None, wheels=None) -> np.ndarray:
         f = track.field
         cast_rays(f.dist, f.idx, f.geom, car.x, car.y, car.theta, self.angles, self.ranges,
                   self.raycast_params, self.ray_dist)
@@ -125,9 +125,17 @@ class ObserverV2:
         self.name = spec["name"]
         self.raycast_params = pack_raycast_params(raycast_cfg)
         ctx = {"raycast_params": self.raycast_params, "action_layout": action_layout}
-        self.features = [build_feature(f, ctx) for f in spec["features"]]
+        self.features = []
+        ctx["earlier"] = []                               # (feature, offset) so far: the history feature reads them
+        for f in spec["features"]:
+            feat = build_feature(f, ctx)
+            ctx["earlier"].append((feat, sum(x.dim for x in self.features)))
+            self.features.append(feat)
         if not self.features:
             raise ValueError("obs_spec v2: needs at least one feature")
+        if [f.name for f in self.features].count("history") > 1 or (
+                "history" in [f.name for f in self.features] and self.features[-1].name != "history"):
+            raise ValueError("obs_spec v2: 'history' may appear once, as the last feature")
         rays = [f for f in self.features if f.name == "rays"]
         if len(rays) > 1:
             raise ValueError("obs_spec v2: at most one 'rays' feature (list every ray in it)")
@@ -142,10 +150,15 @@ class ObserverV2:
         self.labels = [label for f in self.features for label in f.labels]
         self._st = ObsState()
 
+    def reset(self) -> None:
+        """Start of an episode: stateful features (history) forget."""
+        for f in self.features:
+            f.reset()
+
     def observe(self, track, car, heading_error: float, onroad_frac: float,
-                prev_action: np.ndarray, out: np.ndarray, tracker=None) -> np.ndarray:
+                prev_action: np.ndarray, out: np.ndarray, tracker=None, wheels=None) -> np.ndarray:
         st = self._st
-        st.track, st.car, st.tracker = track, car, tracker
+        st.track, st.car, st.tracker, st.wheels = track, car, tracker, wheels
         st.heading_error, st.onroad_frac, st.prev_action = heading_error, onroad_frac, prev_action
         for f, k in zip(self.features, self.offsets):
             f.write(st, out, int(k))

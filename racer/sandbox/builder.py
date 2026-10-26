@@ -28,7 +28,7 @@ from racer.config import PROJECT_ROOT, ConfigError, deep_merge, load_preset
 
 # Order features appear in a new spec (rays first, previous action last, like every preset).
 FEATURE_ORDER = ["rays", "heading_sincos", "v_long", "v_lat", "yaw_rate", "steer_angle", "onroad_frac",
-                 "curvature_ahead", "prev_action"]
+                 "road_position", "wheel_surface", "accel_g", "grip_use", "curvature_ahead", "prev_action", "history"]
 TAG_RE = re.compile(r"[a-z0-9_]+")
 SEED_SUFFIX = re.compile(r"_s\d+$")
 STEP_PRESETS = [1_000_000, 2_000_000, 3_000_000, 5_000_000]
@@ -65,7 +65,7 @@ def _canon_feature(f: Mapping[str, Any]) -> dict[str, Any]:
         if k == "rays":
             out[k] = [{"angle_deg": float(r["angle_deg"]), "range_m": float(r["range_m"])} for r in v]
         elif isinstance(v, list):
-            out[k] = [float(x) for x in v]
+            out[k] = [float(x) if isinstance(x, (int, float)) else x for x in v]    # names (history.of) stay text
         elif isinstance(v, (int, float)) and not isinstance(v, bool):
             out[k] = float(v)
         else:

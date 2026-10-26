@@ -82,6 +82,7 @@ class Car:
         self.sliding = False
         self.yaw_rate = 0.0
         self.grip_scale = 1.0     # friction-circle scale of the last step (1 = within grip)
+        self.grip_use = 0.0       # tyre force demanded ÷ grip available in the last step (a reading, not physics)
         self.a_long = 0.0         # last acceleration in the car frame (m/s²)
         self.a_lat = 0.0
         self.throttle = 0.0
@@ -218,6 +219,7 @@ class Car:
         self.a_lat = -ax * s2 + ay * c2
         self.yaw_rate = yaw_rate
         self.grip_scale = scale
+        self.grip_use = demand / f_max if f_max > 0.0 else 0.0
         self.throttle, self.brake = throttle, brake
         self.mu_eff = mu
 

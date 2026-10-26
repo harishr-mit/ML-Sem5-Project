@@ -1,0 +1,8 @@
+# Everything the car can feel about itself: heading, forward and sideways speed, spin, wheels on road and its last pedal moves. What the PPO models R015 and later use.
+features:
+  - {feature: heading_sincos}
+  - {feature: v_long, scale: 70.0}
+  - {feature: v_lat, scale: 10.0}
+  - {feature: yaw_rate, scale: 3.0}
+  - {feature: onroad_frac}
+  - {feature: prev_action}

@@ -1,0 +1,9 @@
+# Seven rays tuned for the genetic algorithm: 0, 5.5, 17 and 55 degrees. The 0-degree ray is long enough to brake for the tightest corner.
+rays:
+  - {angle_deg: -55.0, range_m: 60.0}
+  - {angle_deg: -17.0, range_m: 120.0}
+  - {angle_deg: -5.5, range_m: 200.0}
+  - {angle_deg: 0.0, range_m: 200.0}
+  - {angle_deg: 5.5, range_m: 200.0}
+  - {angle_deg: 17.0, range_m: 120.0}
+  - {angle_deg: 55.0, range_m: 60.0}

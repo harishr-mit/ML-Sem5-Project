@@ -1,0 +1,5 @@
+# Heading, forward speed and the last pedal moves. Remembering the last action helps the car steer smoothly.
+features:
+  - {feature: heading_sincos}
+  - {feature: v_long, scale: 70.0}
+  - {feature: prev_action}

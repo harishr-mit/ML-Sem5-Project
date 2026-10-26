@@ -1,0 +1,4 @@
+# SAC that learns twice per step (gradient_steps 2). More learning from the same driving, at a higher cost per step.
+algorithm: sac
+sac:
+  gradient_steps: 2

@@ -74,18 +74,18 @@ def _build_ga(train_cfg, venv, tb_dir, seed, device="cpu"):
 ALGORITHMS: dict[str, Algorithm] = {
     "ppo": Algorithm(
         "ppo", "PPO",
-        "Proximal Policy Optimisation: on-policy; collects a batch of fresh driving, then improves the policy "
-        "in small, clipped steps. Stable and works well with many parallel envs.",
+        "PPO: the car drives, then learns from that driving in small, safe steps and drives again. "
+        "Reliable and our best results.",
         _build_ppo, lambda cfg: int(cfg["ppo"]["n_steps"]) * int(cfg["n_envs"])),
     "sac": Algorithm(
         "sac", "SAC",
-        "Soft Actor-Critic: off-policy; learns from a replay buffer of all past driving and rewards keeping "
-        "the policy random (entropy). Usually more sample-efficient, slower per step (E7).",
+        "SAC: keeps a memory of all its past driving and learns from it again and again, and likes to stay a "
+        "little random. Uses less driving but is slower per step.",
         _build_sac, lambda cfg: int(cfg["sac"]["train_freq"]) * int(cfg["n_envs"])),
     "ga": Algorithm(
         "ga", "PPO",
-        "Neuroevolution (genetic algorithm, D26): no gradients. A population of cars drives the same lap; "
-        "the best (the elite share) go on unchanged and every other car is a mutated copy of one of them (E10).",
+        "GA (evolution): no learning rounds. 50 cars drive the same lap; the best survive and the rest are "
+        "randomly mutated copies of them. Needs many more steps (E10).",
         _build_ga, None),
 }
 

@@ -200,7 +200,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T154: Build & Queue polish (owner 2026-10-26, D30): guided steps + pinned summary; real quick-pick presets (`configs/network|learning|budget|rays|readings`); auto-suggested tag/why; form state kept when leaving the page; beginner-friendly '?' texts for everything on the page. Branch `feat/build-polish`.
   * [x] T154a–f (PROJECT_CONTEXT D30, preset files + Presets page, `racer/sandbox/picks.py`, build.py rewrite, plain-language glossary and registry texts, tests, README/docs). Extra owner requests the same day: decimal inputs; previous states as inputs (`history`); new inputs `accel_g`, `grip_use`, `wheel_surface`, `road_position`; new layouts `steer_rate`, `steer_throttle_brake_abs`. Deferred: handbrake layout (needs a physics version), see REVIEW_LATER §9.
 
-* [ ] T155: queue R025 repeat with patience 4000 (owner 2026-10-28): `configs/queue/ga_r6_patience4000.yaml`, dry-run OK; waits for the owner's approval to start. Sandbox part: none (existing Build & Queue / Explorer show the run).
+* [x] T155: queue R025 repeat with patience 4000 (owner 2026-10-28): `configs/queue/ga_r6_patience4000.yaml`, dry-run OK; waits for the owner's approval to start. Sandbox part: none (existing Build & Queue / Explorer show the run).
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
@@ -217,6 +217,11 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-28 — Claude (Sonnet 5.5) — T155: R026 finished
+* **Task:** T155 (done)
+* **Details:** R026 (seed 2, patience 4000, 4 workers) ran all 4000 generations in 159.8 min. Best validation 1.2955 (peak 1.298 at gen 1519), i.e. no rise after the plateau, same level as R025 (1.295). Best checkpoint `R026_GA_ga_r6_256x256_4000g_p4000_s2@62770k`. Backup: 800 files (70.3 MB), 200 new model folders, no CONFLICT lines seen.
+* **Files:** edited `log.md`; registry CSVs and `outputs/eval/R026*` changed by the run (uncommitted).
 
 ### 2026-10-28 — Claude (Sonnet 5.5) — T155: patience-4000 GA queue prepared
 * **Task:** T155 (status: prepared, not started)

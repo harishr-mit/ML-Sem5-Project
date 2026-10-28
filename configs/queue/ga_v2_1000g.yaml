@@ -1,0 +1,33 @@
+# First run with GA fitness v2 (D31): R026's setup (6 rays, 256x256, train7, seed 2, 20 % elites, 4 workers),
+# 1000 generations, patience = the cap so it cannot stop on a plateau.
+# Run: .venv\Scripts\python scripts\queue_overnight.py configs\queue\ga_v2_1000g.yaml
+parallel: 1
+runs:
+- name: ga_v2_6r_1000g_s2
+  args:
+  - --tag
+  - ga_v2_6r_1000g_s2
+  - --trackset
+  - train7
+  - --env
+  - sb_ga_r6_256x256_4000g
+  - --train
+  - ga_v2
+  - --physics
+  - default
+  - --reward
+  - progress
+  - --generations
+  - '1000'
+  - --seed
+  - '2'
+  - --set
+  - ga.elite_frac=0.2
+  - --set
+  - ga.workers=4
+  - --set
+  - ga.validation.patience=1000
+  - --curriculum
+  - AI Sandbox
+  - --notes
+  - 'First GA run with fitness v2 (D31): R026 setup (6 rays, 256x256, train7, seed 2) with the lap-time score, sigma 0.02 to 0.005, 8 smoothed validation tracks; 1000 generations, no plateau stop. Compare with R025/R026 (best validation 1.30 under fitness v1; scores are not comparable, so compare protocol-v2 evaluations).'

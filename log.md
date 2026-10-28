@@ -209,6 +209,8 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T156d: preset `ga_v2`, glossary, Explorer text; sandbox Build & Queue quick pick + headless test (D27)
   * [x] T156e: full suite, ~50-generation scratch run, README/docs
 
+* [~] T157: first GA fitness v2 run (owner 2026-10-28): `configs/queue/ga_v2_1000g.yaml`, R026 setup, seed 2, 1000 generations, patience 1000, 4 workers. Sandbox part: none new (T156).
+
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
 

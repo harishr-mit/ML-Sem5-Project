@@ -8,13 +8,16 @@ ga:
   sigma: 0.02               # mutation size (σ test: 0.02 beat 0.05)
   start: line              # every try starts on the start/finish line, centred and standing (random = anywhere)
   speed_scale: 70.0         # m/s; finished-lap fitness = 1 + mean speed / speed_scale (fitness 1)
-  fitness: 1                # D31: 1 = the score above; 2 = lap-time score (preset ga_v2). Snapshots without it mean 1
+  fitness: 1                # D31/D32: 1 = the score above; 2 = lap-time score (preset ga_v2); 3 = v1 then v2 (preset ga_staged). Snapshots without it mean 1
   ref_speed: 25.0           # fitness 2: baseline pace in m/s (BASE_pid's mean speed 24.95)
   fail_speed_frac: 0.3      # fitness 2: a failed try is charged its unfinished distance at this x ref_speed
   speed_k: 2.0              # fitness 2: steepness of the convex speed bonus
   finish_bonus: 0.5         # fitness 2: added for finishing the lap
   sigma_floor: null         # D31: set = sigma shrinks with the generation down to this; null = constant
   sigma_g0: 100.0           # generations before the shrinking gets going
+  stage_window: 100         # fitness 3: the switch to stage 2 needs ...
+  stage_min_finishers: 5    # ... at least this many finishers ...
+  stage_share: 0.9          # ... in this share of the last stage_window generations
   workers: 5                # processes; can change on resume, never changes results
   max_generations: null     # budget (--generations); null = run until the validation plateau or a pause
   state_every: 10           # generations between pause-state saves

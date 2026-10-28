@@ -1,0 +1,9 @@
+# Staged fitness (D32): lap fraction until the cars finish laps consistently, then a convex lap-time score.
+algorithm: ga
+ga:
+  fitness: 3
+  fail_speed_frac: 0.1
+  sigma_floor: 0.005
+  validation:
+    tracks: 8
+    smooth: 3

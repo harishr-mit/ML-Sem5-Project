@@ -97,3 +97,6 @@ R025:
 R026:
   why: 'R025 repeated with seed 2, patience 4000 (= the generation cap) and 4 workers, to see whether the GA improves after a long plateau.'
   outcome: 'Ran all 4000 generations (160 min, 4 workers). Best validation 1.2955 (peak 1.298 at generation 1519), no rise after the plateau. Best checkpoint @62770k (v2): seen 36 %, test maps 0 %, held-out 70 %, unseen 44 %, lap ratio 1.20. Led to GA fitness v2 (D31).'
+R027:
+  why: 'First GA run with fitness v2 (D31): the R026 setup (6 rays, 256x256, train7, seed 2) with the lap-time score, sigma 0.02 to 0.005 and 8 smoothed validation tracks, 1000 generations.'
+  outcome: 'Failed: no car finished a lap at generation 345 and validation stayed 0.25-0.37 (best 0.564). Best checkpoint @390k (v2): seen 43 %, test maps 33 %, held-out 60 %, unseen 50 %, lap ratio 2.89. Cause (analysis, not tested): a failed car is charged the unfinished lap at 0.3 x ref_speed = 7.5 m/s, so driving only pays above 7.5 m/s and early slow cars get no gradient. Led to the staged fitness (D32).'

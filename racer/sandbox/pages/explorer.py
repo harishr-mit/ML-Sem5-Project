@@ -553,7 +553,10 @@ def _evolution(s, run_id: str, snap) -> None:
     df = pd.DataFrame(rows).set_index("generation")
     status = "finished" if is_finished(run_dir) else "paused or still running"
     ga = snap["train"]["ga"]
-    fitness = (f"lap-time score (fitness 2): convex in lap speed ÷ {ga['ref_speed']:g} m/s, crashes charged the rest of the lap "
+    staged = ga.get("fitness", 1) == 3
+    fitness = ("lap fraction / 1 + speed (fitness 1) until the cars complete laps consistently, then the lap-time score "
+               "(fitness 2, stage 2)" if staged else
+               f"lap-time score (fitness 2): convex in lap speed ÷ {ga['ref_speed']:g} m/s, crashes charged the rest of the lap "
                f"at {ga['fail_speed_frac']:g} × that, +{ga['finish_bonus']:g} for finishing" if ga.get("fitness", 1) == 2 else
                f"lap fraction (0–1) if the car failed, 1 + mean speed / {ga['speed_scale']:g} m/s if it finished the lap")
     st.caption(f"{len(df)} generations ({status}). Fitness: {fitness}. Validation: the best elite's mean "

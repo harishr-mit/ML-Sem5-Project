@@ -491,14 +491,17 @@ def test_older_snapshots_keep_their_meaning():
     from racer.agents.evolve import GAParams
     from racer.config import from_dict
     old = load_preset("train", "ga_default")["ga"]       # a snapshot made before D31 lacks the new keys
-    for k in ("fitness", "ref_speed", "fail_speed_frac", "speed_k", "finish_bonus", "sigma_floor", "sigma_g0"):
+    for k in ("fitness", "ref_speed", "fail_speed_frac", "speed_k", "finish_bonus", "sigma_floor", "sigma_g0",
+              "stage_window", "stage_min_finishers", "stage_share"):
         old.pop(k)
     old["validation"].pop("smooth")
     p = from_dict(GAParams, old, where="train.ga")
     assert p.fitness == 1 and p.sigma_floor is None and p.sigma_at(5000) == old["sigma"]
-    assert p.fit == {"version": 1, "speed_scale": old["speed_scale"]}
+    assert p.fit_for(1) == p.fit_for(2) == {"version": 1, "speed_scale": old["speed_scale"]}
     assert load_preset("train", "ga_default")["ga"]["fitness"] == 1
     assert load_preset("train", "ga_v2")["ga"]["fitness"] == 2
+    staged = load_preset("train", "ga_staged")["ga"]
+    assert staged["fitness"] == 3 and staged["fail_speed_frac"] == 0.1 and staged["sigma_floor"] == 0.005
 
 
 def test_a_state_saved_without_the_smoothing_window_still_loads(tmp_path):
@@ -510,3 +513,56 @@ def test_a_state_saved_without_the_smoothing_window_still_loads(tmp_path):
     meta.pop("recent")
     np.savez(tmp_path / "state.npz", meta=json.dumps(meta), **arrays)
     assert State.load(tmp_path / "state.npz").recent == []
+
+
+# ----------------------------------------------------------------- D32: staged fitness
+def small_staged(workers=1):
+    env_config, train = small_v2(workers)
+    train["ga"].update(fitness=3, stage_window=3, stage_min_finishers=0, stage_share=1.0)   # switches after generation 2
+    return env_config, train
+
+
+def test_staged_run_switches_once_and_restarts_the_validation_baseline(tmp_path):
+    env_config, train = small_staged()
+    evolution(tmp_path, env_config, train).run(pause_after=2)
+    assert State.load(tmp_path / "state.npz").stage == 1
+    evolution(tmp_path, env_config, train).run(pause_after=6)
+    st = State.load(tmp_path / "state.npz")
+    assert st.stage == 2 and st.generation == 6
+    _, gens, _ = lineage_rows(tmp_path)
+    val = {g[0]: g[-1] for g in gens if g[-1] is not None}       # validated at generations 2 and 5
+    assert set(val) == {2, 5} and st.last_gain >= 3 and st.recent == [val[5]]    # window restarted after the switch
+
+
+def test_staged_run_paused_across_the_switch_equals_an_uninterrupted_run(tmp_path):
+    env_config, train = small_staged(workers=2)
+    evolution(tmp_path / "a", env_config, train).run(pause_after=7)
+    env1, train1 = small_staged(workers=1)
+    evolution(tmp_path / "b", env1, train1).run(pause_after=1)
+    evolution(tmp_path / "b", env1, train1).run(pause_after=4)      # crosses the switch (after generation 2)
+    evolution(tmp_path / "b", env_config, train).run(pause_after=7)
+    a, b = State.load(tmp_path / "a" / "state.npz"), State.load(tmp_path / "b" / "state.npz")
+    assert a.stage == b.stage == 2 and np.array_equal(a.weights, b.weights) and a.recent == b.recent
+    assert lineage_rows(tmp_path / "a") == lineage_rows(tmp_path / "b")
+
+
+def test_a_staged_run_restored_from_its_lineage_is_in_the_same_stage(tmp_path):
+    env_config, train = small_staged()
+    evolution(tmp_path, env_config, train).run(pause_after=7)
+    live = State.load(tmp_path / "state.npz")
+    (tmp_path / "state.npz").unlink()
+    (tmp_path / "finished.json").write_text("{}", encoding="utf-8")
+    restored = evolution(tmp_path, env_config, train, extend=True).restore_state()
+    assert restored.stage == live.stage == 2 and restored.last_gain == live.last_gain
+    assert restored.recent == live.recent and restored.best_validation == live.best_validation
+
+
+def test_a_state_saved_before_stages_loads_as_stage_one(tmp_path):
+    env_config, train = small_run()
+    evolution(tmp_path, env_config, train).run(pause_after=4)
+    with np.load(tmp_path / "state.npz") as z:
+        meta = json.loads(str(z["meta"]))
+        arrays = {k: z[k] for k in ("weights", "parents", "seeds")}
+    meta.pop("stage", None)
+    np.savez(tmp_path / "state.npz", meta=json.dumps(meta), **arrays)
+    assert State.load(tmp_path / "state.npz").stage == 1

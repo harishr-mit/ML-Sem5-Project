@@ -6,6 +6,7 @@ Short log of decisions taken in sessions. The full design record is PROJECT_CONT
 
 | Decision | Why | Where |
 |---|---|---|
+| **Staged GA fitness** (D32): fitness v1 until 5 of 50 cars finish in 90 % of the last 100 generations, then fitness v2 with `fail_speed_frac` 0.1; the validation baseline restarts at the switch | R027 (v2 from the start) never finished a lap: failures were charged at 7.5 m/s, so slow early cars had no gradient | PROJECT_CONTEXT §8, §16; `docs/GA_FITNESS_V2_PLAN.md` |
 | **GA fitness v2** (D31): continuous virtual lap time (failures charged the unfinished lap at a slow speed), convex speed bonus, finish bonus; σ shrinks with the generation; validation on 8 tracks, plateau on the mean of the last 3 | Owner: R025/R026 plateaued; reward faster driving more and more | PROJECT_CONTEXT §8, §16; `docs/GA_FITNESS_V2_PLAN.md` |
 | Fixed `ref_speed` (24.95 m/s) instead of a per-track baseline lap time | Same ranking within a map; avoids driving the baseline on every generated track | `racer/agents/neuroevolution.py` |
 | No separate re-check of top checkpoints | The post-run protocol-v2 evaluation of the 10 best-validated already is one | PROJECT_CONTEXT §8 |

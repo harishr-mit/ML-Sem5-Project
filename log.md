@@ -211,6 +211,13 @@ Shared context for every agent working in this directory. Read this file **befor
 
 * [~] T157: first GA fitness v2 run (owner 2026-10-28): `configs/queue/ga_v2_1000g.yaml`, R026 setup, seed 2, 1000 generations, patience 1000, 4 workers. Sandbox part: none new (T156).
 
+* [x] T158: staged GA fitness (owner 2026-10-28, D32; `docs/GA_FITNESS_V2_PLAN.md`), branch `feat/ga-staged-fitness`
+  * [x] T158a: docs first (PROJECT_CONTEXT §8/§16, DECISIONS.md, REVIEW_LATER.md, plan); R027 notes; R027 backed up (330 files, 19.2 MB, no CONFLICT lines in the tail)
+  * [x] T158b: `stage_ready` + tests
+  * [x] T158c: evolve.py wiring + resume/restore tests
+  * [x] T158d: preset `ga_staged`, learning pick, glossary, Explorer text (D27)
+  * [x] T158e: full suite, queue file for 1000 generations (R026 setup), dry-run, report to owner
+
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
 
@@ -226,6 +233,12 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-28 — Claude (Sonnet 5.5) — T158: staged GA fitness (D32)
+* **Task:** T158 (done on branch `feat/ga-staged-fitness`, queue prepared, not started)
+* **Files:** edited `racer/agents/neuroevolution.py` (`stage_ready`), `racer/agents/evolve.py` (`fitness: 3`, `State.stage`, per-stage fit, switch and baseline restart, restore from the lineage), `racer/sandbox/pages/explorer.py`, `racer/sandbox/glossary.yaml`, `configs/train/ga_default.yaml` (new keys, old-meaning values), `PROJECT_CONTEXT.md`, `DECISIONS.md`, `REVIEW_LATER.md`, `docs/GA_FITNESS_V2_PLAN.md`, `registry/*` (R027), tests; created `configs/train/ga_staged.yaml`, `configs/learning/ga_staged.yaml`, `configs/queue/ga_staged_1000g.yaml`.
+* **Details:** R027 failed (no finishers, lap ratio 2.89) and was backed up. Full suite passes. The switch is tested with window 3 and zero required finishers; the real thresholds (5 of 50 in 90 % of 100 generations) were not exercised.
+* **Notes / Errors:** `fail_speed_frac` 0.1 is untested (REVIEW_LATER.md item 0).
 
 ### 2026-10-28 — Claude (Sonnet 5.5) — T156: GA fitness v2 (D31)
 * **Task:** T156 (done, on branch `feat/ga-fitness-v2`, not merged)

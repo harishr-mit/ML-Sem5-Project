@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from multiprocessing import TimeoutError as PoolTimeout
 from multiprocessing import get_context
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 import gymnasium as gym
 import numpy as np
@@ -60,6 +60,9 @@ class GAParams:
     finish_bonus: float = 0.5
     sigma_floor: float | None = None
     sigma_g0: float = 100.0
+    stage_window: int = 100            # fitness 3 (D32): see ne.stage_ready
+    stage_min_finishers: int = 5
+    stage_share: float = 0.9
 
     @property
     def n_elite(self) -> int:
@@ -69,15 +72,19 @@ class GAParams:
         """Mutation size of the children born in ``generation`` (D31)."""
         return ne.sigma_at(generation, self.sigma, self.sigma_floor, self.sigma_g0)
 
-    @property
-    def fit(self) -> dict[str, Any]:
-        """The fitness settings a worker needs."""
-        if self.fitness == 1:
+    def fit_for(self, stage: int) -> dict[str, Any]:
+        """The fitness settings a worker needs; fitness 3 is v1 in stage 1 and v2 in stage 2 (D32)."""
+        version = {1: 1, 2: 2, 3: 1 if stage == 1 else 2}.get(self.fitness)
+        if version == 1:
             return {"version": 1, "speed_scale": self.speed_scale}
-        if self.fitness == 2:
+        if version == 2:
             return {"version": 2, "ref_speed": self.ref_speed, "fail_speed_frac": self.fail_speed_frac,
                     "speed_k": self.speed_k, "finish_bonus": self.finish_bonus}
-        raise ValueError(f"train.ga.fitness must be 1 or 2, not {self.fitness!r}")
+        raise ValueError(f"train.ga.fitness must be 1, 2 or 3, not {self.fitness!r}")
+
+    def stage_ready(self, finished: Sequence[int]) -> bool:
+        return self.fitness == 3 and ne.stage_ready(finished, self.stage_window, self.stage_min_finishers,
+                                                    self.stage_share)
 
 
 def meta_sigma(meta: Mapping[str, Any]) -> Callable[[int], float]:
@@ -183,6 +190,11 @@ class Lineage:
                         ":finished, :env_steps, :validation)", {"generation": generation, **gen_row})
         self.db.commit()
 
+    def finished_counts(self, upto: int) -> list[int]:
+        """Cars that finished a lap in each generation 0..``upto`` (D32 stage switch)."""
+        return [int(r[0]) for r in self.db.execute(
+            "SELECT finished FROM generations WHERE generation <= ? ORDER BY generation", (upto,))]
+
     def origin(self, generation: int, car: int) -> tuple[int, int]:
         row = self.db.execute("SELECT parent, seed FROM cars WHERE generation = ? AND car = ?",
                               (generation, car)).fetchone()
@@ -272,12 +284,13 @@ class State:
     best_validation: float | None = None
     last_gain: int = 0              # generation of the last validation gain
     recent: list = field(default_factory=list)   # the last validations (D31 smoothing); older states have none
+    stage: int = 1                  # D32: 2 once the cars complete laps consistently (fitness 3); older states are 1
     wall_s: float = 0.0
     settings: str = ""
 
     def save(self, path: Path) -> None:
         meta = {k: getattr(self, k) for k in ("generation", "env_steps", "best_validation", "last_gain",
-                                               "recent", "wall_s", "settings")}
+                                               "recent", "stage", "wall_s", "settings")}
         tmp = path.with_name(path.name + ".partial")
         with tmp.open("wb") as f:
             np.savez(f, weights=self.weights, parents=self.parents, seeds=self.seeds, meta=json.dumps(meta))
@@ -363,16 +376,20 @@ class Evolution:
             scores = np.array([r[0] for r in lin.db.execute(
                 "SELECT fitness FROM cars WHERE generation = ? ORDER BY car", (last,))])
             env_steps = lin.db.execute("SELECT env_steps FROM generations WHERE generation = ?", (last,)).fetchone()[0]
-            best, gain, recent = None, 0, []
-            for g, val in lin.db.execute("SELECT generation, validation FROM generations "
-                                         "WHERE validation IS NOT NULL ORDER BY generation"):
-                recent, best, gain = self._track_validation(recent, val, best, gain, g)
+            best, gain, recent, stage, fin = None, 0, [], 1, []
+            for g, val, n_fin in lin.db.execute("SELECT generation, validation, finished FROM generations "
+                                                "ORDER BY generation"):
+                fin.append(int(n_fin))
+                if val is not None:
+                    recent, best, gain = self._track_validation(recent, val, best, gain, g)
+                if stage == 1 and self.p.stage_ready(fin):         # as in the loop: after the validation
+                    stage, recent, best, gain = 2, [], None, g + 1
         finally:
             lin.close()
         done = self.run_dir / FINISHED
         wall_s = float(json.loads(done.read_text(encoding="utf-8")).get("wall_s", 0.0)) if done.is_file() else 0.0
         off = ne.next_generation(pop, scores, self.p.n_elite, self.p.sigma_at(last + 1), self._rng(last + 1, _BREED))
-        return State(last + 1, off.weights, off.parents, off.seeds, int(env_steps), best, gain, recent, wall_s,
+        return State(last + 1, off.weights, off.parents, off.seeds, int(env_steps), best, gain, recent, stage, wall_s,
                      settings_key(self.env_config, self.train_cfg))
 
     def _track_validation(self, recent, value, best, last_gain, generation):
@@ -413,17 +430,17 @@ class Evolution:
             except PoolTimeout:
                 continue
 
-    def _drive_all(self, pool, weights: np.ndarray, start: Mapping[str, Any]) -> list[tuple]:
+    def _drive_all(self, pool, weights: np.ndarray, start: Mapping[str, Any], stage: int) -> list[tuple]:
         n_chunks = min(len(weights), self.p.workers * 4)
         chunks = np.array_split(np.arange(len(weights)), n_chunks)
-        tasks = [(weights[c], self.sizes, start, self.p.fit, None) for c in chunks]
+        tasks = [(weights[c], self.sizes, start, self.p.fit_for(stage), None) for c in chunks]
         return [r for part in self._map(pool, tasks) for r in part]
 
-    def _validate(self, pool, cars: np.ndarray) -> np.ndarray:
+    def _validate(self, pool, cars: np.ndarray, stage: int) -> np.ndarray:
         """Each car's mean fitness over the validation tracks (standing start on the start line)."""
         start = {"start_s": 0.0, "lateral": 0.0, "heading_offset": 0.0, "speed": 0.0}
         n = int(self.p.validation["tracks"])
-        tasks = [(cars, self.sizes, start, self.p.fit, k) for k in range(n)]
+        tasks = [(cars, self.sizes, start, self.p.fit_for(stage), k) for k in range(n)]
         per_track = [[r[0] for r in part] for part in self._map(pool, tasks)]
         return np.mean(np.array(per_track), axis=0)
 
@@ -454,7 +471,7 @@ class Evolution:
                 while True:
                     g = st.generation
                     start = self._start(g)
-                    res = self._drive_all(pool, st.weights, start)
+                    res = self._drive_all(pool, st.weights, start, st.stage)
                     scores = np.array([r[0] for r in res])
                     st.env_steps += sum(r[3] for r in res)
                     over_budget = self.budget is not None and g + 1 >= int(self.budget)
@@ -464,7 +481,7 @@ class Evolution:
                     validation, val_scores, val_car = None, {}, None
                     if (g + 1) % int(v["every"]) == 0 or over_budget:
                         elites = ne.rank(scores)[:self.p.n_elite]
-                        means = self._validate(pool, st.weights[elites])
+                        means = self._validate(pool, st.weights[elites], st.stage)
                         val_scores = {int(c): float(m) for c, m in zip(elites, means)}
                         val_car = int(elites[int(np.argmax(means))])     # ties: the better-ranked elite
                         validation = val_scores[val_car]
@@ -478,6 +495,11 @@ class Evolution:
                                    "finished": sum(r[4] == "lap" for r in res), "env_steps": st.env_steps,
                                    "validation": validation}, val_scores)
                     self._log_generation(g, start["track"], res, scores, validation, st)
+                    if st.stage == 1 and self.p.fitness == 3 and self.p.stage_ready(lineage.finished_counts(g)):
+                        st.stage, st.recent, st.best_validation, st.last_gain = 2, [], None, g + 1
+                        lineage.set_meta(stage2_from=g + 1)
+                        self.log(f"[{self.run_dir.name}] cars complete laps consistently: fitness stage 2 "
+                                 f"(speed) from generation {g + 1}; the validation baseline restarts")
 
                     plateau = val_car is not None and g - st.last_gain >= int(v["patience"])
                     done = plateau or over_budget
@@ -489,7 +511,7 @@ class Evolution:
                         off = ne.next_generation(st.weights, scores, self.p.n_elite, self.p.sigma_at(g + 1),
                                                  self._rng(g + 1, _BREED))
                         kept = State(g + 1, off.weights, off.parents, off.seeds, st.env_steps, st.best_validation,
-                                     st.last_gain, st.recent, st.wall_s, st.settings)       # where an extension continues (D29)
+                                     st.last_gain, st.recent, st.stage, st.wall_s, st.settings)       # where an extension continues (D29)
                         reason = "validation plateau" if plateau else "generation budget"
                         self.log(f"[{self.run_dir.name}] finished after generation {g} ({reason}); "
                                  f"best validation {st.best_validation}")

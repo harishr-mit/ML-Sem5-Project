@@ -4,6 +4,12 @@ Decisions that are waiting on the owner. Each one says what it blocks and what w
 
 _Last updated: 2026-10-24 (after the demo merge)._
 
+## GA staged fitness (D32)
+
+### 0. Is `fail_speed_frac` 0.1 right for stage 2?
+- It was chosen without a test (owner: "let's try, put this in review later"). 0.3 (R027) made slow early cars score like instant crashes; 0.1 charges a crash's unfinished distance at 2.5 m/s, so creeping always pays.
+- **Decide after:** the first staged run (compare the stage-2 finisher share and lap ratio with 0.3 and 0.1), and the switch point (5 of 50 in 90 % of 100 generations) once you have seen when it fires.
+
 ## Waiting on the GA runs (T97)
 
 Start the queue first: `.venv\Scripts\python scripts\queue_overnight.py configs\queue\e10_ga.yaml` (control run: Training Ground, 300 generations; main run: 7 maps, until the validation plateau).

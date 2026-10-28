@@ -1,0 +1,7 @@
+# Staged neuroevolution fitness (D32): fitness v1 (lap fraction) until 5 of 50 cars finish in 90 % of the last
+# 100 generations, then fitness v2 (convex lap-time score). Also D31's shrinking mutation and smoothed validation.
+extends: ga_v2
+
+ga:
+  fitness: 3
+  fail_speed_frac: 0.1      # stage 2; 0.3 (R027) gave slow cars no gradient. To be reviewed (REVIEW_LATER.md)

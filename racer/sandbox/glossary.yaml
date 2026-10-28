@@ -365,7 +365,7 @@ training:
       affects: "Only the size of the score. Any car that finishes beats any car that crashed, and a faster lap beats a slower one."
       range: "70"
     train.ga.fitness:
-      short: "Which score ranks the cars: 1 = lap fraction if it failed, 1 + average speed ÷ speed_scale if it finished (older runs); 2 = a lap-time score (see ref_speed)."
+      short: "Which score ranks the cars: 1 = lap fraction if it failed, 1 + average speed ÷ speed_scale if it finished (older runs); 2 = a lap-time score (see ref_speed); 3 = both: 1 until the cars complete laps consistently, then 2."
       affects: "2 rewards speed more and more, and lets a fast crash late in the lap beat a slow finish. Selection only uses the order of the scores, so the shape matters, not the size."
       range: "2 (new runs), 1 (older runs)"
     train.ga.ref_speed:
@@ -396,6 +396,18 @@ training:
       short: "The 'no progress' test uses the average of the last this-many validations, not just the newest one."
       affects: "Higher: one lucky or unlucky validation can't reset or stop the run. 1 = the newest value alone (older runs)."
       range: "3 (1 for older runs)"
+    train.ga.stage_window:
+      short: "(Fitness 3) How many recent generations are checked when deciding whether the cars complete laps consistently."
+      affects: "Longer: the switch to the speed score comes later and more safely."
+      range: "100"
+    train.ga.stage_min_finishers:
+      short: "(Fitness 3) A generation counts as 'completing laps' when at least this many of its cars finish the lap."
+      affects: "Higher: the cars must be more reliable before the speed score starts."
+      range: "5"
+    train.ga.stage_share:
+      short: "(Fitness 3) The share of the last stage_window generations that must count as 'completing laps' before the speed score starts."
+      affects: "Lower: switches earlier, also when hard maps still have no finishers."
+      range: "0.9"
     train.ga.workers:
       short: "How many processor cores drive cars at the same time."
       affects: "More: faster generations but a busier PC. Fewer: calmer PC. Results are identical for any number."

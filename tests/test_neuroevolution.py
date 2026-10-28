@@ -184,3 +184,13 @@ def test_validation_smoothing_ignores_one_lucky_validation():
     for g, val in [(19, 1.0), (39, 1.0), (59, 1.0), (79, 1.3), (99, 1.0), (119, 1.0)]:
         recent, best, gain = ne.track_validation(recent, val, best, gain, g, 0.01, 3)
     assert gain == 79 and best == pytest.approx(1.1) and len(recent) == 3
+
+
+# ----------------------------------------------------------------- D32: staged fitness
+def test_stage_switch_needs_a_full_window_and_enough_generations_with_finishers():
+    ready = lambda c: ne.stage_ready(c, window=10, min_finishers=5, share=0.9)      # noqa: E731
+    assert not ready([9] * 9)                                  # window not complete yet
+    assert ready([5] * 10)
+    assert not ready([4] * 10)                                 # too few finishers in every generation
+    assert ready([0] + [7] * 9) and not ready([0, 0] + [7] * 8)    # 9 of 10 generations is enough, 8 is not
+    assert ready([0] * 20 + [6] * 10)                          # only the last window counts

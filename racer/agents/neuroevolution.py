@@ -113,6 +113,15 @@ def track_validation(recent: list, value: float, best: float | None, last_gain: 
     return recent, best, last_gain
 
 
+def stage_ready(finished: Sequence[int], window: int, min_finishers: int, share: float) -> bool:
+    """D32: have the cars completed laps consistently? ``finished`` = cars that finished a lap in each
+    generation so far; true when, in at least ``share`` of the last ``window`` generations, at least
+    ``min_finishers`` finished."""
+    if len(finished) < window:
+        return False
+    return sum(c >= min_finishers for c in finished[-window:]) >= share * window
+
+
 def rank(scores: np.ndarray) -> np.ndarray:
     """Car indices best first; ties keep the lower index (elites sit first, so they win ties)."""
     return np.argsort(-np.asarray(scores, dtype=np.float64), kind="stable")

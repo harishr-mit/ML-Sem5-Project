@@ -1,0 +1,33 @@
+# R025 repeat with patience = generation cap (4000), so the run cannot stop on a plateau.
+# Same as sandbox entry ga_r6_256x256_4000g_s1, except ga.workers=4 and patience 4000.
+# Run: .venv\Scripts\python scripts\queue_overnight.py configs\queue\ga_r6_patience4000.yaml
+parallel: 1
+runs:
+- name: ga_r6_256x256_4000g_p4000_s2
+  args:
+  - --tag
+  - ga_r6_256x256_4000g_p4000_s2
+  - --trackset
+  - train7
+  - --env
+  - sb_ga_r6_256x256_4000g
+  - --train
+  - ga_default
+  - --physics
+  - default
+  - --reward
+  - progress
+  - --generations
+  - '4000'
+  - --seed
+  - '2'
+  - --set
+  - ga.elite_frac=0.2
+  - --set
+  - ga.workers=4
+  - --set
+  - 'ga.validation={"every": 20,"tracks": 5,"stream": 2,"patience": 4000,"min_gain": 0.01}'
+  - --curriculum
+  - AI Sandbox
+  - --notes
+  - 'R025 setup (6 rays, 256x256, train7, seed 2) with patience 4000 = the generation cap, so it cannot stop on a plateau: tests whether a GA improves after a long plateau (R025 stopped at gen 1479, best validation 1.295 at gen 499).'

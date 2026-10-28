@@ -200,6 +200,8 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T154: Build & Queue polish (owner 2026-10-26, D30): guided steps + pinned summary; real quick-pick presets (`configs/network|learning|budget|rays|readings`); auto-suggested tag/why; form state kept when leaving the page; beginner-friendly '?' texts for everything on the page. Branch `feat/build-polish`.
   * [x] T154a–f (PROJECT_CONTEXT D30, preset files + Presets page, `racer/sandbox/picks.py`, build.py rewrite, plain-language glossary and registry texts, tests, README/docs). Extra owner requests the same day: decimal inputs; previous states as inputs (`history`); new inputs `accel_g`, `grip_use`, `wheel_surface`, `road_position`; new layouts `steer_rate`, `steer_throttle_brake_abs`. Deferred: handbrake layout (needs a physics version), see REVIEW_LATER §9.
 
+* [ ] T155: queue R025 repeat with patience 4000 (owner 2026-10-28): `configs/queue/ga_r6_patience4000.yaml`, dry-run OK; waits for the owner's approval to start. Sandbox part: none (existing Build & Queue / Explorer show the run).
+
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
 
@@ -215,6 +217,12 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-28 — Claude (Sonnet 5.5) — T155: patience-4000 GA queue prepared
+* **Task:** T155 (status: prepared, not started)
+* **Files:** created `configs/queue/ga_r6_patience4000.yaml`; edited `log.md`.
+* **Details:** R025 stopped on its plateau at gen 1479 (best validation 1.295 at gen 499). New queue entry: same settings, seed 2 (seed 1 would repeat R025 exactly until gen 1479), `ga.workers=4`, patience 4000. `--dry-run` OK.
+* **Notes / Errors:** git tree is dirty (registry CSVs, untracked env preset), so a real run needs a commit or `--allow-dirty` (D12). Seed 1 repeats R025 exactly until gen 1479.
 
 ### 2026-10-26 — Claude (Sonnet 5.5) — T154: Build & Queue polish (D30)
 

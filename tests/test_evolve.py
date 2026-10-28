@@ -1,5 +1,6 @@
 """Neuroevolution runs (D26): pause/resume determinism, stopping, lineage, and model folders."""
 import copy
+import json
 import sqlite3
 
 import numpy as np
@@ -439,3 +440,73 @@ def test_runs_without_a_start_setting_keep_random_starts(tmp_path):
     env_config, train = small_run()
     del train["ga"]["start"]
     assert evolution(tmp_path, env_config, train)._start(0)["start_s"] != 0.0
+
+
+# ----------------------------------------------------------------- D31: fitness v2, σ schedule, smoothing
+def small_v2(workers=1):
+    env_config = make_env_config(["training_ground"], env="rays7_lean")
+    train = load_preset("train", "ga_v2")
+    train["ga"].update(population=6, elite_frac=0.34, workers=workers, state_every=3, sigma_g0=2.0)
+    train["ga"]["validation"].update(every=3, tracks=1, patience=1000)
+    return env_config, train
+
+
+def test_v2_paused_and_resumed_equals_uninterrupted_and_cars_rebuild_exactly(tmp_path):
+    env_config, train = small_v2(workers=2)
+    assert evolution(tmp_path / "a", env_config, train).run(pause_after=7) == "paused"
+    env1, train1 = small_v2(workers=1)
+    assert evolution(tmp_path / "b", env1, train1).run(pause_after=3) == "paused"
+    assert evolution(tmp_path / "b", env_config, train).run(pause_after=7) == "paused"
+    a, b = State.load(tmp_path / "a" / "state.npz"), State.load(tmp_path / "b" / "state.npz")
+    assert np.array_equal(a.weights, b.weights) and a.recent == b.recent and len(a.recent) >= 1
+    assert lineage_rows(tmp_path / "a") == lineage_rows(tmp_path / "b")
+    from racer.agents.evolve import Lineage, meta_sigma
+    lin = Lineage(tmp_path / "a" / "lineage.sqlite")
+    try:
+        sizes, sig = ne.layer_sizes(10, [256, 256], 2), meta_sigma(lin.meta())
+
+        def origin(g, c):
+            return (int(a.parents[c]), int(a.seeds[c])) if g == 7 else lin.origin(g, c)
+
+        assert all(np.array_equal(ne.rebuild(origin, 7, car, sizes, sig), a.weights[car]) for car in range(6))
+        # the schedule is in effect: a constant sigma would rebuild a child differently
+        assert not all(np.array_equal(ne.rebuild(origin, 7, car, sizes, train["ga"]["sigma"]), a.weights[car])
+                       for car in range(6))
+    finally:
+        lin.close()
+
+
+def test_a_run_restored_from_its_lineage_keeps_the_smoothing_window(tmp_path):
+    env_config, train = small_v2()
+    evolution(tmp_path, env_config, train).run(pause_after=7)
+    live = State.load(tmp_path / "state.npz")
+    (tmp_path / "state.npz").unlink()
+    (tmp_path / "finished.json").write_text("{}", encoding="utf-8")
+    restored = evolution(tmp_path, env_config, train, extend=True).restore_state()
+    assert restored.recent == live.recent and restored.best_validation == live.best_validation
+    assert restored.last_gain == live.last_gain
+
+
+def test_older_snapshots_keep_their_meaning():
+    from racer.agents.evolve import GAParams
+    from racer.config import from_dict
+    old = load_preset("train", "ga_default")["ga"]       # a snapshot made before D31 lacks the new keys
+    for k in ("fitness", "ref_speed", "fail_speed_frac", "speed_k", "finish_bonus", "sigma_floor", "sigma_g0"):
+        old.pop(k)
+    old["validation"].pop("smooth")
+    p = from_dict(GAParams, old, where="train.ga")
+    assert p.fitness == 1 and p.sigma_floor is None and p.sigma_at(5000) == old["sigma"]
+    assert p.fit == {"version": 1, "speed_scale": old["speed_scale"]}
+    assert load_preset("train", "ga_default")["ga"]["fitness"] == 1
+    assert load_preset("train", "ga_v2")["ga"]["fitness"] == 2
+
+
+def test_a_state_saved_without_the_smoothing_window_still_loads(tmp_path):
+    env_config, train = small_run()
+    evolution(tmp_path, env_config, train).run(pause_after=4)
+    with np.load(tmp_path / "state.npz") as z:
+        meta = json.loads(str(z["meta"]))
+        arrays = {k: z[k] for k in ("weights", "parents", "seeds")}
+    meta.pop("recent")
+    np.savez(tmp_path / "state.npz", meta=json.dumps(meta), **arrays)
+    assert State.load(tmp_path / "state.npz").recent == []

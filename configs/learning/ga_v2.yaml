@@ -1,0 +1,8 @@
+# Fitness v2 (D31): lap-time score with a convex speed bonus, shrinking mutation, 8 smoothed validation tracks.
+algorithm: ga
+ga:
+  fitness: 2
+  sigma_floor: 0.005
+  validation:
+    tracks: 8
+    smooth: 3

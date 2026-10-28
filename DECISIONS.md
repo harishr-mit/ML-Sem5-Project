@@ -2,6 +2,14 @@
 
 Short log of decisions taken in sessions. The full design record is PROJECT_CONTEXT §16 (the master list, with the section each decision changed); this file is the quick view. Postponed decisions are in [REVIEW_LATER.md](REVIEW_LATER.md).
 
+## 2026-10-28
+
+| Decision | Why | Where |
+|---|---|---|
+| **GA fitness v2** (D31): continuous virtual lap time (failures charged the unfinished lap at a slow speed), convex speed bonus, finish bonus; σ shrinks with the generation; validation on 8 tracks, plateau on the mean of the last 3 | Owner: R025/R026 plateaued; reward faster driving more and more | PROJECT_CONTEXT §8, §16; `docs/GA_FITNESS_V2_PLAN.md` |
+| Fixed `ref_speed` (24.95 m/s) instead of a per-track baseline lap time | Same ranking within a map; avoids driving the baseline on every generated track | `racer/agents/neuroevolution.py` |
+| No separate re-check of top checkpoints | The post-run protocol-v2 evaluation of the 10 best-validated already is one | PROJECT_CONTEXT §8 |
+
 ## 2026-10-24 (later)
 
 | Decision | Why | Where |

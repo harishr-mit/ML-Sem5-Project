@@ -202,6 +202,13 @@ Shared context for every agent working in this directory. Read this file **befor
 
 * [x] T155: queue R025 repeat with patience 4000 (owner 2026-10-28): `configs/queue/ga_r6_patience4000.yaml`, dry-run OK; waits for the owner's approval to start. Sandbox part: none (existing Build & Queue / Explorer show the run).
 
+* [x] T156: GA fitness v2 (owner 2026-10-28, D31; `docs/GA_FITNESS_V2_PLAN.md`), branch `feat/ga-fitness-v2`
+  * [x] T156a: docs first (PROJECT_CONTEXT §8/§16, DECISIONS.md, plan)
+  * [x] T156b: pure functions + unit tests (fitness_v2, sigma_at, track_validation, rebuild per-generation σ)
+  * [x] T156c: evolve.py wiring (params defaults = v1, σ(g), smoothing in State, lineage meta), v1 settings_key unchanged, resume identical
+  * [x] T156d: preset `ga_v2`, glossary, Explorer text; sandbox Build & Queue quick pick + headless test (D27)
+  * [x] T156e: full suite, ~50-generation scratch run, README/docs
+
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 
 
@@ -217,6 +224,12 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-28 — Claude (Sonnet 5.5) — T156: GA fitness v2 (D31)
+* **Task:** T156 (done, on branch `feat/ga-fitness-v2`, not merged)
+* **Files:** edited `racer/agents/neuroevolution.py` (fitness_v2, sigma_at, track_validation, rebuild with σ per generation), `racer/agents/evolve.py` (params with old-behaviour defaults, σ(g) in breeding/restore/rebuild, smoothing window in State, schedule in lineage meta), `racer/sandbox/pages/explorer.py` (fitness text), `racer/sandbox/pages/build.py` (optional-number input), `racer/sandbox/glossary.yaml` (8 keys), `configs/train/ga_default.yaml` (new keys, old-meaning values), `README.md`, `PROJECT_CONTEXT.md`, `DECISIONS.md`, `registry/run_notes.yaml` (R025, R026), tests; created `configs/train/ga_v2.yaml`, `configs/learning/ga_v2.yaml`, `docs/GA_FITNESS_V2_PLAN.md`.
+* **Details:** full suite 465 passed after the fixes. Scratch run S009 (40 generations, ga_v2) ran end to end; no finishers that early, so the φ/finish-bonus balance is untested. Fixed a pre-existing failing integrity test by adding run notes for R025/R026.
+* **Notes / Errors:** `ref_speed` is one fixed number (25 m/s), not a per-track baseline lap time. Sandbox part: glossary, Explorer text, the `ga_v2` learning quick pick (covered by the existing pick and Build page tests); no new page.
 
 ### 2026-10-28 — Claude (Sonnet 5.5) — T155: R026 finished
 * **Task:** T155 (done)

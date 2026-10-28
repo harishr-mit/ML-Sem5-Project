@@ -361,9 +361,41 @@ training:
       affects: "line: every try is a full lap from a standing start, like the evaluation. random: the cars learn to recover from any position (older runs)."
       range: "line"
     train.ga.speed_scale:
-      short: "A scale (m/s) for the score of cars that finish a lap: score = 1 + average speed ÷ this."
+      short: "(Fitness 1) A scale (m/s) for the score of cars that finish a lap: score = 1 + average speed ÷ this."
       affects: "Only the size of the score. Any car that finishes beats any car that crashed, and a faster lap beats a slower one."
       range: "70"
+    train.ga.fitness:
+      short: "Which score ranks the cars: 1 = lap fraction if it failed, 1 + average speed ÷ speed_scale if it finished (older runs); 2 = a lap-time score (see ref_speed)."
+      affects: "2 rewards speed more and more, and lets a fast crash late in the lap beat a slow finish. Selection only uses the order of the scores, so the shape matters, not the size."
+      range: "2 (new runs), 1 (older runs)"
+    train.ga.ref_speed:
+      short: "(Fitness 2) The 'baseline pace' in m/s that lap speeds are compared with. Not the top speed."
+      affects: "Only shifts where the score curve starts to climb steeply; 25 is the hand-coded driver's average speed."
+      range: "25"
+    train.ga.fail_speed_frac:
+      short: "(Fitness 2) A car that crashes is charged the rest of the lap at this share of ref_speed, as if it had to crawl round."
+      affects: "Lower: crashing is punished more, cars stay careful. Higher: a fast crash costs little, cars take more risk."
+      range: "0.3"
+    train.ga.speed_k:
+      short: "(Fitness 2) How curved the speed bonus is: the score grows like e^(k × speed ÷ ref_speed)."
+      affects: "Higher: the last bit of speed is worth much more than the first. Lower: closer to a straight line."
+      range: "2"
+    train.ga.finish_bonus:
+      short: "(Fitness 2) A fixed amount added to every car that finishes the lap."
+      affects: "Higher: finishing matters more than a fast but crashed lap. Lower: speed counts more."
+      range: "0.5"
+    train.ga.sigma_floor:
+      short: "If set, the mutation size shrinks as generations pass (slowly, like a log curve) until it reaches this value. Empty = constant."
+      affects: "Late in a run smaller changes fine-tune the cars instead of breaking them. Too small: the search stops exploring."
+      range: "0.005 (empty = no shrinking)"
+    train.ga.sigma_g0:
+      short: "(With sigma_floor) How many generations the mutation size takes to start shrinking: σ = sigma ÷ (1 + ln(1 + generation ÷ this))."
+      affects: "Higher: shrinks later and slower."
+      range: "100"
+    train.ga.validation.smooth:
+      short: "The 'no progress' test uses the average of the last this-many validations, not just the newest one."
+      affects: "Higher: one lucky or unlucky validation can't reset or stop the run. 1 = the newest value alone (older runs)."
+      range: "3 (1 for older runs)"
     train.ga.workers:
       short: "How many processor cores drive cars at the same time."
       affects: "More: faster generations but a busier PC. Fewer: calmer PC. Results are identical for any number."
@@ -697,7 +729,7 @@ run:
       short: "(GA) When this car was rebuilt from the lineage and saved (scripts/export_ga.py or the Explorer's Evolution tab)."
       affects: "—"
     run.fitness:
-      short: "(GA) The car's fitness in its generation: lap fraction (0–1) if it failed, 1 + mean speed / speed_scale if it finished the lap."
+      short: "(GA) The car's fitness in its generation. Fitness 1: lap fraction (0–1) if it failed, 1 + mean speed / speed_scale if it finished. Fitness 2: a convex lap-time score, see train.ga.fitness."
       affects: "—"
     run.versions.*:
       short: "Library version used for training."

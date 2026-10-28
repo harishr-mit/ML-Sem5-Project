@@ -152,6 +152,7 @@ A model is built from five presets, each a YAML file in `configs/<kind>/`. A run
 | | `ppo_finetune` | PPO with a lower learning rate, for `--parent` fine-tuning |
 | | `sac_default` | SAC (E7), 256 × 256 ReLU network, 1M steps by default |
 | | `ga_default` | Neuroevolution (D26): 50 cars, top 12 kept, σ 0.02, budget in generations (`--generations`) |
+| | `ga_v2` | Neuroevolution with fitness v2 (D31): lap-time score with a convex speed bonus, σ shrinking 0.02 → 0.005, 8 validation tracks judged on the mean of the last 3. Also a *learning* quick pick in Build & Queue |
 | | `baseline` | Settings of the hand-coded PID driver (E8); not a training preset |
 | **Track sets** (`--trackset`) | `tg` | Training Ground only |
 | | `gen_wide` | Mostly wide generated tracks plus a little Training Ground |
@@ -285,7 +286,7 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | What | Command |
 |---|---|
 | Drive / watch (debug window) | `scripts\drive.py [--track technical] [--mode human\|baseline\|model] [--model models\<model_id>] [--sim-speed 4] [--trace out.csv]` |
-| Train | `scripts\train.py --tag … (--tracks … or --trackset maps7) [--parent <model_id>] [--train ppo_default\|ppo_finetune\|sac_default\|ga_default] [--physics …] [--env rays5\|rays7_narrow\|…] [--action-layout steer_gas\|steer_throttle_brake] [--reward …] [--steps N (PPO/SAC) \| --generations N (GA)] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval] [--protocol v2]` |
+| Train | `scripts\train.py --tag … (--tracks … or --trackset maps7) [--parent <model_id>] [--train ppo_default\|ppo_finetune\|sac_default\|ga_default\|ga_v2] [--physics …] [--env rays5\|rays7_narrow\|…] [--action-layout steer_gas\|steer_throttle_brake] [--reward …] [--steps N (PPO/SAC) \| --generations N (GA)] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval] [--protocol v2]` |
 | Export a neuroevolution car | `scripts\export_ga.py --run R020 --list` · `--generation 750 [--car 3] [--evaluate]` (rebuilt from the lineage) |
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |

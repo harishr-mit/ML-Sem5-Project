@@ -91,3 +91,9 @@ R023:
 R024:
   why: 'Neuroevolution with rays6_narrow: the 0 degree ray replaced by narrow +-1 degree rays (60 m / 200 m ranges as listed in configs/env/sb_rays6_narrow.yaml) and the previous steering and gas as inputs. Does the model sense a curve far ahead with narrow front rays, and do the previous inputs smooth the output?'
   outcome: 'Best of 19 evaluated checkpoints @11999k (v2): seen 86 %, test maps 50 %, held-out 70 %, unseen 62.5 %, lap ratio 1.41, after 36.5M env steps (43 min). Below the E10 GA runs on the same protocol (R021/R022: unseen 75 / 94 %, lap ratio 1.05 / 1.07) and clearly slower. One seed, so a pointer rather than a result.'
+R025:
+  why: 'Neuroevolution (GA) with 6 rays and the 256x256 network on the 7 training maps (train7), up to 4000 generations, 20 % elites: how far does a bigger search go than R024?'
+  outcome: 'Stopped on the validation plateau at generation 1479 (best validation 1.295, first reached around generation 500). Best checkpoint @16640k (v2): seen 50 %, test maps 17 %, held-out 100 %, unseen 69 %, lap ratio 1.24. Plateau patience 500.'
+R026:
+  why: 'R025 repeated with seed 2, patience 4000 (= the generation cap) and 4 workers, to see whether the GA improves after a long plateau.'
+  outcome: 'Ran all 4000 generations (160 min, 4 workers). Best validation 1.2955 (peak 1.298 at generation 1519), no rise after the plateau. Best checkpoint @62770k (v2): seen 36 %, test maps 0 %, held-out 70 %, unseen 44 %, lap ratio 1.20. Led to GA fitness v2 (D31).'

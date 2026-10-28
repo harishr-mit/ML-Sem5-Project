@@ -20,7 +20,7 @@ import shutil
 import signal
 import sqlite3
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from multiprocessing import TimeoutError as PoolTimeout
 from multiprocessing import get_context
 from pathlib import Path
@@ -52,10 +52,37 @@ class GAParams:
     validation: dict
     evaluate: dict
     start: str = "random"         # "line": every try on the start line, standing; older snapshots lack it
+    # D31: the defaults are the old behaviour (fitness v1, constant sigma), so older snapshots load unchanged
+    fitness: int = 1
+    ref_speed: float = 25.0
+    fail_speed_frac: float = 0.3
+    speed_k: float = 2.0
+    finish_bonus: float = 0.5
+    sigma_floor: float | None = None
+    sigma_g0: float = 100.0
 
     @property
     def n_elite(self) -> int:
         return max(1, int(self.population * self.elite_frac))
+
+    def sigma_at(self, generation: int) -> float:
+        """Mutation size of the children born in ``generation`` (D31)."""
+        return ne.sigma_at(generation, self.sigma, self.sigma_floor, self.sigma_g0)
+
+    @property
+    def fit(self) -> dict[str, Any]:
+        """The fitness settings a worker needs."""
+        if self.fitness == 1:
+            return {"version": 1, "speed_scale": self.speed_scale}
+        if self.fitness == 2:
+            return {"version": 2, "ref_speed": self.ref_speed, "fail_speed_frac": self.fail_speed_frac,
+                    "speed_k": self.speed_k, "finish_bonus": self.finish_bonus}
+        raise ValueError(f"train.ga.fitness must be 1 or 2, not {self.fitness!r}")
+
+
+def meta_sigma(meta: Mapping[str, Any]) -> Callable[[int], float]:
+    """The mutation size per generation of a recorded run (older lineages have a constant one)."""
+    return lambda g: ne.sigma_at(g, meta["sigma"], meta.get("sigma_floor"), meta.get("sigma_g0", 100.0))
 
 
 def training_maps(env_config: Mapping[str, Any]) -> list[str]:
@@ -172,7 +199,7 @@ def rebuild_car(run_dir: Path, generation: int, car: int) -> np.ndarray:
     lin = Lineage(run_dir / "lineage.sqlite")
     try:
         m = lin.meta()
-        return ne.rebuild(lin.origin, generation, car, m["sizes"], m["sigma"])
+        return ne.rebuild(lin.origin, generation, car, m["sizes"], meta_sigma(m))
     finally:
         lin.close()
 
@@ -204,7 +231,7 @@ def _validation_track(k: int):
     return _W["val"][k]
 
 
-def drive(env, layers, start: Mapping[str, Any], speed_scale: float) -> tuple:
+def drive(env, layers, start: Mapping[str, Any], fit: Mapping[str, Any]) -> tuple:
     """One try from a fully specified start: until one lap, a failure, or the env's step limit.
 
     Returns (fitness, progress_m, time_s, steps, ending), ending = "lap", "time" or the
@@ -218,16 +245,20 @@ def drive(env, layers, start: Mapping[str, Any], speed_scale: float) -> tuple:
         if finished or term or trunc:
             break
     ending = "lap" if finished else (info["termination"] or "time")
-    fit = ne.fitness(info["progress"], length_m=length, finished=finished, time_s=env.time,
-                     speed_scale=speed_scale)
-    return fit, float(info["progress"]), float(env.time), int(env.steps), ending
+    if fit["version"] == 1:
+        score = ne.fitness(info["progress"], length_m=length, finished=finished, time_s=env.time,
+                           speed_scale=fit["speed_scale"])
+    else:
+        score = ne.fitness_v2(info["progress"], length_m=length, finished=finished, time_s=env.time,
+                              **{k: v for k, v in fit.items() if k != "version"})
+    return score, float(info["progress"]), float(env.time), int(env.steps), ending
 
 
 def _drive_task(task: tuple) -> list[tuple]:
-    weights, sizes, start, speed_scale, val_index = task
+    weights, sizes, start, fit, val_index = task
     if val_index is not None:
         start = dict(start, track=_validation_track(val_index))
-    return [drive(_W["env"], ne.unflatten(w, sizes), start, speed_scale) for w in weights]
+    return [drive(_W["env"], ne.unflatten(w, sizes), start, fit) for w in weights]
 
 
 # --------------------------------------------------------------------- run
@@ -240,12 +271,13 @@ class State:
     env_steps: int = 0
     best_validation: float | None = None
     last_gain: int = 0              # generation of the last validation gain
+    recent: list = field(default_factory=list)   # the last validations (D31 smoothing); older states have none
     wall_s: float = 0.0
     settings: str = ""
 
     def save(self, path: Path) -> None:
         meta = {k: getattr(self, k) for k in ("generation", "env_steps", "best_validation", "last_gain",
-                                               "wall_s", "settings")}
+                                               "recent", "wall_s", "settings")}
         tmp = path.with_name(path.name + ".partial")
         with tmp.open("wb") as f:
             np.savez(f, weights=self.weights, parents=self.parents, seeds=self.seeds, meta=json.dumps(meta))
@@ -326,23 +358,27 @@ class Evolution:
                 if g == 0:
                     pop = np.stack([ne.init_weights(self.sizes, int(s)) for _, s in rows])
                 else:
-                    pop = np.stack([pop[p] if s == ne.NO_NOISE else ne.mutate(pop[p], self.p.sigma, int(s))
+                    pop = np.stack([pop[p] if s == ne.NO_NOISE else ne.mutate(pop[p], self.p.sigma_at(g), int(s))
                                     for p, s in rows])
             scores = np.array([r[0] for r in lin.db.execute(
                 "SELECT fitness FROM cars WHERE generation = ? ORDER BY car", (last,))])
             env_steps = lin.db.execute("SELECT env_steps FROM generations WHERE generation = ?", (last,)).fetchone()[0]
-            best, gain = None, 0
+            best, gain, recent = None, 0, []
             for g, val in lin.db.execute("SELECT generation, validation FROM generations "
                                          "WHERE validation IS NOT NULL ORDER BY generation"):
-                if best is None or val > best * (1 + float(self.p.validation["min_gain"])):
-                    best, gain = val, g
+                recent, best, gain = self._track_validation(recent, val, best, gain, g)
         finally:
             lin.close()
         done = self.run_dir / FINISHED
         wall_s = float(json.loads(done.read_text(encoding="utf-8")).get("wall_s", 0.0)) if done.is_file() else 0.0
-        off = ne.next_generation(pop, scores, self.p.n_elite, self.p.sigma, self._rng(last + 1, _BREED))
-        return State(last + 1, off.weights, off.parents, off.seeds, int(env_steps), best, gain, wall_s,
+        off = ne.next_generation(pop, scores, self.p.n_elite, self.p.sigma_at(last + 1), self._rng(last + 1, _BREED))
+        return State(last + 1, off.weights, off.parents, off.seeds, int(env_steps), best, gain, recent, wall_s,
                      settings_key(self.env_config, self.train_cfg))
+
+    def _track_validation(self, recent, value, best, last_gain, generation):
+        v = self.p.validation
+        return ne.track_validation(recent, value, best, last_gain, generation, float(v["min_gain"]),
+                                   int(v.get("smooth", 1)))
 
     def _start(self, generation: int) -> dict[str, Any]:
         """Map and start of a generation, the same for every car."""
@@ -380,14 +416,14 @@ class Evolution:
     def _drive_all(self, pool, weights: np.ndarray, start: Mapping[str, Any]) -> list[tuple]:
         n_chunks = min(len(weights), self.p.workers * 4)
         chunks = np.array_split(np.arange(len(weights)), n_chunks)
-        tasks = [(weights[c], self.sizes, start, self.p.speed_scale, None) for c in chunks]
+        tasks = [(weights[c], self.sizes, start, self.p.fit, None) for c in chunks]
         return [r for part in self._map(pool, tasks) for r in part]
 
     def _validate(self, pool, cars: np.ndarray) -> np.ndarray:
         """Each car's mean fitness over the validation tracks (standing start on the start line)."""
         start = {"start_s": 0.0, "lateral": 0.0, "heading_offset": 0.0, "speed": 0.0}
         n = int(self.p.validation["tracks"])
-        tasks = [(cars, self.sizes, start, self.p.speed_scale, k) for k in range(n)]
+        tasks = [(cars, self.sizes, start, self.p.fit, k) for k in range(n)]
         per_track = [[r[0] for r in part] for part in self._map(pool, tasks)]
         return np.mean(np.array(per_track), axis=0)
 
@@ -406,7 +442,8 @@ class Evolution:
             (self.run_dir / FINISHED).unlink()      # running again: a crash from now on resumes it as an unfinished run
         kept: State | None = None
         lineage = Lineage(self.run_dir / "lineage.sqlite")
-        lineage.set_meta(sizes=self.sizes, sigma=self.p.sigma, seed=self.seed, population=self.p.population)
+        lineage.set_meta(sizes=self.sizes, sigma=self.p.sigma, sigma_floor=self.p.sigma_floor, sigma_g0=self.p.sigma_g0,
+                         seed=self.seed, population=self.p.population)
         old_handler = signal.signal(signal.SIGINT, self._on_sigint)
         v = self.p.validation
         ctx = get_context("spawn")
@@ -431,8 +468,8 @@ class Evolution:
                         val_scores = {int(c): float(m) for c, m in zip(elites, means)}
                         val_car = int(elites[int(np.argmax(means))])     # ties: the better-ranked elite
                         validation = val_scores[val_car]
-                        if st.best_validation is None or validation > st.best_validation * (1 + float(v["min_gain"])):
-                            st.best_validation, st.last_gain = validation, g
+                        st.recent, st.best_validation, st.last_gain = self._track_validation(
+                            st.recent, validation, st.best_validation, st.last_gain, g)
                     lineage.write(g, [(g, k, int(st.parents[k]), int(st.seeds[k]), *res[k]) for k in range(len(res))],
                                   {"map": start["track"], **{k: start[k] for k in ("start_s", "lateral",
                                                                                    "heading_offset", "speed")},
@@ -449,16 +486,16 @@ class Evolution:
                                         validation)
                     if done:
                         outcome = "finished"
-                        off = ne.next_generation(st.weights, scores, self.p.n_elite, self.p.sigma,
+                        off = ne.next_generation(st.weights, scores, self.p.n_elite, self.p.sigma_at(g + 1),
                                                  self._rng(g + 1, _BREED))
                         kept = State(g + 1, off.weights, off.parents, off.seeds, st.env_steps, st.best_validation,
-                                     st.last_gain, st.wall_s, st.settings)       # where an extension continues (D29)
+                                     st.last_gain, st.recent, st.wall_s, st.settings)       # where an extension continues (D29)
                         reason = "validation plateau" if plateau else "generation budget"
                         self.log(f"[{self.run_dir.name}] finished after generation {g} ({reason}); "
                                  f"best validation {st.best_validation}")
                         break
 
-                    off = ne.next_generation(st.weights, scores, self.p.n_elite, self.p.sigma, self._rng(g + 1, _BREED))
+                    off = ne.next_generation(st.weights, scores, self.p.n_elite, self.p.sigma_at(g + 1), self._rng(g + 1, _BREED))
                     st.generation, st.weights, st.parents, st.seeds = g + 1, off.weights, off.parents, off.seeds
                     stop_file = self.stop_path.is_file()
                     pause = (self.pause_requested or stop_file
@@ -631,7 +668,7 @@ def export_car(run_dir: Path, generation: int, car: int | None = None, out_dir: 
         if g_row is None or c_row is None:
             raise KeyError(f"no car {car} in generation {generation} of {run_dir.name}")
         meta = lin.meta()
-        flat = ne.rebuild(lin.origin, generation, car, meta["sizes"], meta["sigma"])
+        flat = ne.rebuild(lin.origin, generation, car, meta["sizes"], meta_sigma(meta))
     finally:
         lin.close()
     scratch = run_dir.name.startswith("S")

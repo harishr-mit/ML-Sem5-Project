@@ -1,0 +1,10 @@
+# Neuroevolution with fitness v2 (D31, docs/GA_FITNESS_V2_PLAN.md): lap-time score with a convex speed bonus,
+# shrinking mutation (0.02 -> 0.005), validation on 8 tracks judged on the mean of the last 3.
+extends: ga_default
+
+ga:
+  fitness: 2
+  sigma_floor: 0.005
+  validation:
+    tracks: 8
+    smooth: 3

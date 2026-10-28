@@ -372,6 +372,9 @@ def _hp_input(col, algo: str, k: str, d: Any, val: Any, v: int, errors: list[str
             out = float(out)
         except ValueError:
             pass
+    elif d is None:                         # optional number (GA sigma_floor): empty = off
+        txt = col.text_input(k, "" if val is None else f"{val:g}", key=key, help=tip).strip()
+        out = float(txt) if txt else None
     else:                                   # floats: a decimal box whose step follows the value's size
         out = float(col.number_input(k, value=float(val), min_value=0.0, step=_step_for(float(d)), format="%g",
                                      key=key, help=tip))

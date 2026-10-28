@@ -218,7 +218,7 @@ Shared context for every agent working in this directory. Read this file **befor
   * [x] T158d: preset `ga_staged`, learning pick, glossary, Explorer text (D27)
   * [x] T158e: full suite, queue file for 1000 generations (R026 setup), dry-run, report to owner
 
-* [~] T159: run the staged GA fitness queue (owner 2026-10-28): `configs/queue/ga_staged_1000g.yaml`, 1000 generations, 4 workers. After it: backup, evaluation numbers, notes in `registry/run_notes.yaml`.
+* [x] T159: run the staged GA fitness queue (owner 2026-10-28): `configs/queue/ga_staged_1000g.yaml`, 1000 generations, 4 workers. After it: backup, evaluation numbers, notes in `registry/run_notes.yaml`.
 
 *Split milestones into smaller tasks as you start them. Add new tasks at the bottom with the next free ID. Never reuse or renumber IDs.*
 

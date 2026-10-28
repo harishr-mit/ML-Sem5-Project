@@ -100,3 +100,6 @@ R026:
 R027:
   why: 'First GA run with fitness v2 (D31): the R026 setup (6 rays, 256x256, train7, seed 2) with the lap-time score, sigma 0.02 to 0.005 and 8 smoothed validation tracks, 1000 generations.'
   outcome: 'Failed: no car finished a lap at generation 345 and validation stayed 0.25-0.37 (best 0.564). Best checkpoint @390k (v2): seen 43 %, test maps 33 %, held-out 60 %, unseen 50 %, lap ratio 2.89. Cause (analysis, not tested): a failed car is charged the unfinished lap at 0.3 x ref_speed = 7.5 m/s, so driving only pays above 7.5 m/s and early slow cars get no gradient. Led to the staged fitness (D32).'
+R028:
+  why: 'Staged GA fitness (D32): the R027 setup (6 rays, 256x256, train7, seed 2) with lap fraction until 5 of 50 cars finish in 90 % of the last 100 generations, then the lap-time score (fail_speed_frac 0.1), 1000 generations.'
+  outcome: 'Switched to the lap-time score at generation 425; best validation 0.9725 (stage-2 scale, not comparable with R025-R027). Best checkpoint @7345k (v2): seen 79 %, unseen 100 %, lap ratio 1.60 (fastest evaluated checkpoint 1.12). Completes far more laps than R025/R026 in a quarter of the generations, but lap times are no better. One seed.'

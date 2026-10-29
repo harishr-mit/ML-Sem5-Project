@@ -194,7 +194,7 @@ Shared context for every agent working in this directory. Read this file **befor
 * [x] T148: Housekeeping: tick T08 and T97 (their work is done, see D28 and T121), rewrite the stale "Current Status" block. Done when: the status block matches the newest Change Log entry.
 * [x] T161 (queue prepared, not started): PPO counterpart of R029 (sb_ga_sym6r, train7, seed 2, 7.5M steps): queue `configs/queue/ppo_sym6r_7_5m.yaml`. Done when: queue dry-run passes and the owner starts it (real runs need a clean tree, D12).
 * [x] T162 (queue prepared, waiting for the owner to start): GA run with R029's parameters (staged fitness, 20 % elites, 4 workers, train7, seed 2, 256x256), 1000 generations, minimal inputs (6 symmetric rays + heading + speed = 9, no previous inputs): `configs/env/sb_ga_min9.yaml`, `configs/queue/ga_staged_min9_1000g.yaml`.
-* [~] T163: Extend R031 (minimal-input staged GA) from generation 1000 to 2000 with 6 workers (`configs/queue/ga_staged_min9_extend_2000g.yaml`). R031 finished: best `@34627k` seen 100 %, unseen 94 %, lap ratio 0.964; backed up (23 folders). Done when: the extension finishes, is evaluated and backed up.
+* [x] T163: Extend R031 (minimal-input staged GA) from generation 1000 to 2000 with 6 workers (`configs/queue/ga_staged_min9_extend_2000g.yaml`). R031 finished: best `@34627k` seen 100 %, unseen 94 %, lap ratio 0.964; backed up (23 folders). Done when: the extension finishes, is evaluated and backed up.
 * [ ] T149: Second PPO seed of R023 (the cheapest test of whether PPO's 100 % is luck, PROJECT_CONTEXT §11); queue file via the sandbox, evaluate, back up, record. Done when: R0xx is registered and its result is in §11 and `registry/run_notes.yaml`.
 * [ ] T150: Extend R021 for real with `train.py --extend` (D29; needs a clean tree, D12). Done when: the extended run is evaluated, backed up as `.v2`, and the result is recorded.
 * [ ] T151 (optional, Could): E7 PPO vs SAC run; E6 curvature look-ahead run; E9 downforce on vs off. Each: queue entry, evaluate, back up, record in §11. Done when: each result is in §11, or the owner drops it.
@@ -239,6 +239,9 @@ Shared context for every agent working in this directory. Read this file **befor
 * **Details:** key decisions, measurements
 * **Notes / Errors:** anything the next agent needs to know
 -->
+
+### 2026-10-29 — Claude (Sonnet 5.5) — T163: R031 extension finished
+* **Result:** R031 ran to generation 2000 (~102M steps); 10 new checkpoints evaluated; none beat the generation-1000 best `@34627k` (seen 100 %, unseen 94 %, overall 97 %, lap ratio 0.964). Backup run; registry rows and evals committed.
 
 ### 2026-10-29 — Claude (Sonnet 5.5) — T163: R031 finished, extension to 2000 generations started
 * **Files:** Created `configs/queue/ga_staged_min9_extend_2000g.yaml` (`--extend`, 6 workers, patience 2000); R031 registry rows and eval copies; backup run (196 files, 23 new folders, 4 lineage files, no conflicts).

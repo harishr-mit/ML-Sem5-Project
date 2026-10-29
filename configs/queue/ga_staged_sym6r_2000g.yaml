@@ -1,0 +1,33 @@
+# Staged GA fitness (D32) with symmetric 6 rays (+-25 deg 60 m, +-7 deg 80 m, +-1 deg 200 m), 256x256, train7, seed 2, 20 % elites,
+# 4 workers, 2000 generations, patience = the cap. fail_speed_frac stays 0.1 (preset).
+# Run: .venv\Scripts\python scripts\queue_overnight.py configs\queue\ga_staged_sym6r_2000g.yaml
+parallel: 1
+runs:
+- name: ga_staged_sym6r_2000g_s2
+  args:
+  - --tag
+  - ga_staged_sym6r_2000g_s2
+  - --trackset
+  - train7
+  - --env
+  - sb_ga_sym6r
+  - --train
+  - ga_staged
+  - --physics
+  - default
+  - --reward
+  - progress
+  - --generations
+  - '2000'
+  - --seed
+  - '2'
+  - --set
+  - ga.elite_frac=0.2
+  - --set
+  - ga.workers=4
+  - --set
+  - ga.validation.patience=2000
+  - --curriculum
+  - AI Sandbox
+  - --notes
+  - 'Staged GA fitness (D32), symmetric 6 rays (+-25 deg 60 m, +-7 deg 80 m, +-1 deg 200 m), 256x256, train7, seed 2, 2000 generations, patience 2000 (cannot stop on a plateau). Compare with R028 (asymmetric rays).'

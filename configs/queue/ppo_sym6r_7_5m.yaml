@@ -1,0 +1,10 @@
+# PPO counterpart of R029 (staged GA, symmetric 6 rays): same env (sb_ga_sym6r), train7, physics, reward, 256x256, seed 2.
+# 7.5M steps (R023 used 5M; the GA's 113M steps are not comparable).
+# Run: .venv\Scripts\python scripts\queue_overnight.py configs\queue\ppo_sym6r_7_5m.yaml
+parallel: 1
+runs:
+- name: ppo_sym6r_7_5m_s2
+  args: >-
+    --tag ppo_sym6r_7_5m_s2 --train ppo_default --trackset train7 --env sb_ga_sym6r --physics default --reward progress
+    --seed 2 --steps 7500000 --curriculum "AI Sandbox"
+    --notes "PPO counterpart of R029 (staged GA, symmetric 6 rays): same inputs (sb_ga_sym6r), train7, 256x256, seed 2, 7.5M steps."

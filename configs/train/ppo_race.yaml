@@ -1,0 +1,8 @@
+# PPO for race pace (T164): ppo_default with more exploration noise kept (ent_coef 0.002 -> 0.005; R019's policy std
+# collapsed to 0.04 and never recovered) and 6M steps (R023's best checkpoint came at 1.7M, so 6M is generous).
+extends: ppo_default
+
+total_steps: 6000000
+
+ppo:
+  ent_coef: 0.005

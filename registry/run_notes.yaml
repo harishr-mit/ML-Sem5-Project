@@ -103,3 +103,12 @@ R027:
 R028:
   why: 'Staged GA fitness (D32): the R027 setup (6 rays, 256x256, train7, seed 2) with lap fraction until 5 of 50 cars finish in 90 % of the last 100 generations, then the lap-time score (fail_speed_frac 0.1), 1000 generations.'
   outcome: 'Switched to the lap-time score at generation 425; best validation 0.9725 (stage-2 scale, not comparable with R025-R027). Best checkpoint @7345k (v2): seen 79 %, unseen 100 %, lap ratio 1.60 (fastest evaluated checkpoint 1.12). Completes far more laps than R025/R026 in a quarter of the generations, but lap times are no better. One seed.'
+R029:
+  why: 'Staged GA fitness (D32) with symmetric 6 rays (+-25 deg 60 m, +-7 deg 80 m, +-1 deg 200 m) plus on-road fraction, acceleration and a 5-step history (42 inputs), 2000 generations: R028 with symmetric rays.'
+  outcome: 'Best checkpoint @15697k (v2): seen 86 %, unseen 75 %, lap ratio 1.59. Slow: the 42-input network with history never drove near the baseline pace.'
+R030:
+  why: 'PPO counterpart of R029: the same 42 inputs (sb_ga_sym6r), train7, seed 2, 7.5M steps.'
+  outcome: 'Failed to learn: best checkpoint @1400k (v2) seen 14 %, unseen 0 %, overall 7 %.'
+R031:
+  why: 'R029 parameters with minimal inputs: 6 symmetric rays, heading sin/cos and forward speed (9), no previous inputs. 1000 generations, then extended to 2000 (D29).'
+  outcome: 'Best checkpoint @34627k (generation 1000, v2): seen 100 %, unseen 94 %, overall 97 %, lap ratio 0.964, the best GA model; the extension to 2000 generations found nothing better. One seed.'

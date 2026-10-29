@@ -1,0 +1,47 @@
+# Environment preset "rays7_look" (T164): rays7_lean + what a racing driver also knows: how the car is sliding (v_lat),
+# how much grip it is using, where it is across the road, and how sharply the track bends 20-220 m ahead (E6 look-ahead;
+# the bend is measured relative to the car, so it works on any drawn track). No previous inputs.
+obs_spec:
+  version: 2
+  name: rays7_look
+  features:
+    - feature: rays
+      rays:
+        - {angle_deg: -55.0, range_m: 60.0}
+        - {angle_deg: -17.0, range_m: 120.0}
+        - {angle_deg: -5.5, range_m: 200.0}
+        - {angle_deg: 0.0, range_m: 200.0}
+        - {angle_deg: 5.5, range_m: 200.0}
+        - {angle_deg: 17.0, range_m: 120.0}
+        - {angle_deg: 55.0, range_m: 60.0}
+    - {feature: heading_sincos}
+    - {feature: v_long, scale: 70.0}
+    - {feature: v_lat, scale: 10.0}
+    - {feature: grip_use}
+    - {feature: road_position}
+    - {feature: curvature_ahead, distances_m: [20.0, 40.0, 70.0, 110.0, 160.0, 220.0]}
+
+action_spec:
+  layout: steer_gas
+
+raycast:
+  hit_eps_m: 0.02
+  min_step_m: 0.25
+  min_step_growth: 0.02
+  max_iters: 128
+  bisect_iters: 8
+
+episode:
+  agent_hz: 20
+  start_lateral_max_m: 2.0
+  start_heading_max_deg: 10.0
+  start_speed_min: 0.0
+  start_speed_max: 15.0
+  offroad_limit_s: 1.0
+  noprogress_window_s: 3.0
+  noprogress_min_m: 2.0
+  wrongway_deg: 110.0
+  wrongway_limit_s: 1.0
+  max_laps: 2
+  max_steps: 4000
+  track_limits: true

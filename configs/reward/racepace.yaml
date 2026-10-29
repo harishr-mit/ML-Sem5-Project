@@ -1,0 +1,9 @@
+# Race-pace reward (T164): same terms as 'progress', but time is worth 1.0 per second instead of 0.05, so a faster lap
+# is worth real reward (a 60 s lap at 5 % faster = +3, was +0.15) and a crash (20) is no longer the only thing that matters.
+type: progress
+progress: 1.0
+time: 1.0               # per second (progress: 0.05)
+steer_change: 0.1
+offroad: 0.5
+lap_bonus: 5.0
+crash: 20.0

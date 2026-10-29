@@ -1,0 +1,18 @@
+# Race-pace PPO runs (T164, docs/PPO_RACEPACE_PLAN.md). 2 at a time (measured best, T62).
+#  A: rays7_lean (R023's inputs) + racepace reward        -> does the reward alone make it faster?
+#  B: rays7_look (+ look-ahead, slip, grip, road position) + racepace reward, seeds 1 and 2
+# Run: .venv\Scripts\python scripts\queue_overnight.py configs\queue\ppo_racepace.yaml
+parallel: 2
+runs:
+- name: racepace_A_lean_s1
+  args: >-
+    --tag racepace_A_lean_s1 --train ppo_race --trackset train7 --env rays7_lean --reward racepace --seed 1
+    --curriculum "Race pace" --notes "A: R023's inputs (rays7_lean) with the race-pace reward (time 1.0/s instead of 0.05) and ent_coef 0.005. Tests whether the reward alone makes laps faster than the baseline."
+- name: racepace_B_look_s1
+  args: >-
+    --tag racepace_B_look_s1 --train ppo_race --trackset train7 --env rays7_look --reward racepace --seed 1
+    --curriculum "Race pace" --notes "B: rays7_look (rays7_lean + v_lat, grip use, road position, curvature 20-220 m ahead) with the race-pace reward. Tests whether look-ahead lets the car brake later and carry more speed."
+- name: racepace_B_look_s2
+  args: >-
+    --tag racepace_B_look_s2 --train ppo_race --trackset train7 --env rays7_look --reward racepace --seed 2
+    --curriculum "Race pace" --notes "B seed 2: PPO results vary strongly between seeds (R015, R018, R019), so B is run twice."

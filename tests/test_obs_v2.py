@@ -95,3 +95,19 @@ def test_v2_preset_loads():
     env = RacingEnv(make_env_config(["technical"], env="rays7_narrow"))
     assert env.observer.version == 2 and env.observer.n_rays == 7
     check_env(env, skip_render_check=True)
+
+
+def test_rays2_has_two_values_per_ray_and_its_first_crossing_is_the_plain_ray():
+    """D33: rays2 = rays that go on through the road edge; its first value per ray is what `rays` gives."""
+    rays = [{"angle_deg": a, "range_m": 200.0} for a in (-55.0, -17.0, 0.0, 17.0, 55.0)]
+    e1 = RacingEnv(v2_config([{"feature": "rays", "rays": rays}]))
+    e2 = RacingEnv(v2_config([{"feature": "rays2", "rays": rays}]))
+    opts = {"track": "technical", "start_s": 200.0, "lateral": 0.0, "speed": 10.0}
+    o1, _ = e1.reset(seed=3, options=opts)
+    o2, _ = e2.reset(seed=3, options=opts)
+    assert len(o2) == 10 and len(o1) == 5
+    assert np.allclose(o2[0::2], o1)                               # first crossings agree
+    assert np.all(o2[1::2] >= o2[0::2] - 1e-9) and np.all(o2 <= 1.0)  # the second is never before the first
+    assert e2.observer.labels[:4] == ["ray-55", "ray-55#2", "ray-17", "ray-17#2"]
+    assert (e2.observer.n_rays, e2.observer.ray_dist.shape) == (5, (5,))
+    assert np.any(o2[1::2] < 1.0)                                  # on the Technical track some ray sees the road again

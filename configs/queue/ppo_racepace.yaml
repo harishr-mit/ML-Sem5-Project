@@ -1,18 +1,27 @@
-# Race-pace PPO runs (T164, docs/PPO_RACEPACE_PLAN.md). 2 at a time (measured best, T62).
-#  A: rays7_lean (R023's inputs) + racepace reward        -> does the reward alone make it faster?
-#  B: rays7_look (+ look-ahead, slip, grip, road position) + racepace reward, seeds 1 and 2
+# Race-pace experiments (T164/T165, docs/PPO_RACEPACE_PLAN.md). 2 entries at a time (measured best, T62) = about 90 % CPU.
+#  C1, C2: PPO, rays7_pen (rays that pass through the road edge, D33) + racepace reward, seeds 1 and 2
+#  A:      PPO, rays7_lean (R023's inputs) + racepace reward -> does the reward alone make it faster?
+#  GA:     the same inputs as C (rays7_pen, track limits, train7, 256x256) with frozen input normalisation (D33),
+#          staged fitness as R031 -> the neuroevolution twin of C.
+# Order: C1 + C2 first (the main question), then A + GA.
 # Run: .venv\Scripts\python scripts\queue_overnight.py configs\queue\ppo_racepace.yaml
 parallel: 2
 runs:
+- name: racepace_C_pen_s1
+  args: >-
+    --tag racepace_C_pen_s1 --train ppo_race --trackset train7 --env rays7_pen --reward racepace --seed 1
+    --curriculum "Race pace" --notes "C: rays7_pen (7 rays of 200 m that pass through the road edge: first and second crossing, 17 inputs) with the race-pace reward (time 1.0/s) and ent_coef 0.005. Tests whether seeing the road beyond the first edge lets the car brake later and carry more speed."
+- name: racepace_C_pen_s2
+  args: >-
+    --tag racepace_C_pen_s2 --train ppo_race --trackset train7 --env rays7_pen --reward racepace --seed 2
+    --curriculum "Race pace" --notes "C seed 2: PPO results vary strongly between seeds (R015, R018, R019), so C is run twice."
 - name: racepace_A_lean_s1
   args: >-
     --tag racepace_A_lean_s1 --train ppo_race --trackset train7 --env rays7_lean --reward racepace --seed 1
-    --curriculum "Race pace" --notes "A: R023's inputs (rays7_lean) with the race-pace reward (time 1.0/s instead of 0.05) and ent_coef 0.005. Tests whether the reward alone makes laps faster than the baseline."
-- name: racepace_B_look_s1
+    --curriculum "Race pace" --notes "A: R023 inputs (rays7_lean, 10) with the race-pace reward and ent_coef 0.005. Separates the reward from the new inputs: compare with C and with R023."
+- name: racepace_GA_pen_s1
   args: >-
-    --tag racepace_B_look_s1 --train ppo_race --trackset train7 --env rays7_look --reward racepace --seed 1
-    --curriculum "Race pace" --notes "B: rays7_look (rays7_lean + v_lat, grip use, road position, curvature 20-220 m ahead) with the race-pace reward. Tests whether look-ahead lets the car brake later and carry more speed."
-- name: racepace_B_look_s2
-  args: >-
-    --tag racepace_B_look_s2 --train ppo_race --trackset train7 --env rays7_look --reward racepace --seed 2
-    --curriculum "Race pace" --notes "B seed 2: PPO results vary strongly between seeds (R015, R018, R019), so B is run twice."
+    --tag racepace_GA_pen_s1 --train ga_staged --trackset train7 --env rays7_pen --physics default --reward progress
+    --generations 1500 --seed 1 --set ga.normalise=true --set ga.elite_frac=0.2 --set ga.workers=4
+    --set ga.validation.patience=1500
+    --curriculum "Race pace" --notes "Neuroevolution twin of C: the same inputs (rays7_pen), track limits, train7 and 256x256 network, staged fitness as R031, 20 percent elites, inputs standardised with frozen statistics measured from the baseline (D33), 1500 generations."

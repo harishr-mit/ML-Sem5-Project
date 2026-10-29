@@ -31,6 +31,7 @@ import numpy as np
 import yaml
 
 from racer.agents import neuroevolution as ne
+from racer.agents.obsnorm import standardise
 from racer.config import PROJECT_ROOT, from_dict
 
 EVOLVE_DIR = PROJECT_ROOT / "outputs" / "evolve"
@@ -63,6 +64,11 @@ class GAParams:
     stage_window: int = 100            # fitness 3 (D32): see ne.stage_ready
     stage_min_finishers: int = 5
     stage_share: float = 0.9
+    # D33: input normalisation; the defaults mean none, so older snapshots load unchanged
+    normalise: bool = False
+    norm_min_std: float = 0.05         # floor on each input's spread when measured (see racer/agents/obsnorm.py)
+    norm_clip: float = 10.0
+    obs_norm: dict | None = None       # the measured mean/var, written into the snapshot at the start of the run
 
     @property
     def n_elite(self) -> int:
@@ -226,11 +232,13 @@ def _below_normal_priority() -> None:
     p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS if os.name == "nt" else 10)
 
 
-def _init_worker(env_config: Mapping[str, Any], val_cfg: Mapping[str, Any]) -> None:
+def _init_worker(env_config: Mapping[str, Any], val_cfg: Mapping[str, Any],
+                 obs_norm: Mapping[str, Any] | None = None) -> None:
     signal.signal(signal.SIGINT, signal.SIG_IGN)      # Ctrl+C pauses the run in the main process only
     _below_normal_priority()
     from racer.env.racing_env import RacingEnv
     _W["env"] = RacingEnv(env_config)
+    _W["norm"] = obs_norm
     _W["val_cfg"] = (int(val_cfg["stream"]), env_config["track"])
     _W["val"] = {}
 
@@ -243,7 +251,7 @@ def _validation_track(k: int):
     return _W["val"][k]
 
 
-def drive(env, layers, start: Mapping[str, Any], fit: Mapping[str, Any]) -> tuple:
+def drive(env, layers, start: Mapping[str, Any], fit: Mapping[str, Any], norm: Mapping[str, Any] | None = None) -> tuple:
     """One try from a fully specified start: until one lap, a failure, or the env's step limit.
 
     Returns (fitness, progress_m, time_s, steps, ending), ending = "lap", "time" or the
@@ -252,7 +260,7 @@ def drive(env, layers, start: Mapping[str, Any], fit: Mapping[str, Any]) -> tupl
     obs, _ = env.reset(options=dict(start))
     length = env.track.length
     while True:
-        obs, _, term, trunc, info = env.step(ne.forward(layers, obs))
+        obs, _, term, trunc, info = env.step(ne.forward(layers, obs if norm is None else standardise(obs, norm)))
         finished = info["progress"] >= length and info["termination"] is None
         if finished or term or trunc:
             break
@@ -270,7 +278,7 @@ def _drive_task(task: tuple) -> list[tuple]:
     weights, sizes, start, fit, val_index = task
     if val_index is not None:
         start = dict(start, track=_validation_track(val_index))
-    return [drive(_W["env"], ne.unflatten(w, sizes), start, fit) for w in weights]
+    return [drive(_W["env"], ne.unflatten(w, sizes), start, fit, _W["norm"]) for w in weights]
 
 
 # --------------------------------------------------------------------- run
@@ -467,7 +475,7 @@ class Evolution:
         t_start = time.perf_counter()
         outcome = "paused"
         try:
-            with ctx.Pool(self.p.workers, initializer=_init_worker, initargs=(self.env_config, v)) as pool:
+            with ctx.Pool(self.p.workers, initializer=_init_worker, initargs=(self.env_config, v, self.p.obs_norm)) as pool:
                 while True:
                     g = st.generation
                     start = self._start(g)
@@ -578,7 +586,8 @@ class _Spaces(gym.Env):
 
 def export_model(folder: Path, flat: np.ndarray, train_cfg: Mapping[str, Any],
                  observation_space: gym.Space, action_space: gym.Space) -> None:
-    """Write ``model.zip`` (the weights in an SB3 PPO actor) and an identity ``vecnormalize.pkl``.
+    """Write ``model.zip`` (the weights in an SB3 PPO actor) and ``vecnormalize.pkl`` (identity, or the run's
+    frozen standardiser with ``ga.normalise``, D33).
 
     ``config.yaml`` is the caller's: it holds the run's snapshot, as for every model (§9).
     """
@@ -598,7 +607,12 @@ def export_model(folder: Path, flat: np.ndarray, train_cfg: Mapping[str, Any],
             lin.weight.copy_(torch.as_tensor(w))
             lin.bias.copy_(torch.as_tensor(b))
     policy.save(folder / "model.zip")
-    VecNormalize(venv, training=False, norm_obs=False, norm_reward=False).save(str(folder / "vecnormalize.pkl"))
+    stats = train_cfg["ga"].get("obs_norm")        # D33: the run's frozen input standardiser; none = identity
+    vn = VecNormalize(venv, training=False, norm_obs=stats is not None, norm_reward=False,
+                      clip_obs=stats["clip"] if stats else 10.0)
+    if stats:
+        vn.obs_rms.mean, vn.obs_rms.var = np.array(stats["mean"]), np.array(stats["var"])
+    vn.save(str(folder / "vecnormalize.pkl"))
 
 
 def write_model_folder(folder: Path, flat: np.ndarray, snapshot: Mapping[str, Any],

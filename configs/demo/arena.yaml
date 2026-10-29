@@ -36,6 +36,7 @@ palette:
 
 label_font_size: 14
 label_offset_m: 4.0           # car label drawn this far above the car
+beyond_ray_colour: [95, 95, 105]   # D33: a rays2 ray past its first road edge (P), faint so it does not clutter
 leaderboard_width: 460
 trail_length: 240             # substeps of trail per car (4 s)
 selected_trail_length: 900    # longer trail for the followed car

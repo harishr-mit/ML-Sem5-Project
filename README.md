@@ -143,12 +143,16 @@ A model is built from five presets, each a YAML file in `configs/<kind>/`. A run
 | | `rays9` | E4: 9 rays (±10°, ±30°, ±60°, ±90°, 0°), 17 inputs |
 | | `rays7_narrow` | 7 rays with shallow angles (±7°, ±20°, ±60°, 0°) that see bends early, 15 inputs (R015, the best PPO model) |
 | | `rays7_lean` | Neuroevolution: 7 rays (0°, ±5.5°, ±17°, ±55°), heading, forward speed (10 inputs); track limits on |
+| | `rays7_pen` | D33: `rays7_lean`'s angles, all 200 m, and each ray passes through the road edge: a first and a second crossing per ray (17 inputs); press `P` in the game to draw the part beyond the first edge |
+| | `rays7_look` | T164: `rays7_lean` plus sideways speed, grip use, road position and curvature 20–220 m ahead (21 inputs; map knowledge, superseded by `rays7_pen`) |
 | **Car** (`--physics`) | `default` | The car: 1000 kg, 150 kW, grip-limited tyres, road / kerb / grass surfaces |
 | | `no_grip_limit` | E2: unlimited grip on the road, so there is no reason to brake or take a racing line |
 | | `downforce` | E9: grip grows with speed², so fast corners hold more than slow ones |
 | **Reward** (`--reward`, PPO/SAC only) | `progress` | Default: metres of progress, minus a time cost, steering changes and grass; lap bonus, crash penalty |
+| | `racepace` | T164: as `progress` with time worth 1.0 per second (0.05), so a faster lap is worth real reward |
 | | `speed_naive` | E3: rewards speed in any direction, only to show reward hacking (circling pays too) |
 | **Algorithm and network** (`--train`) | `ppo_default` | PPO, 256 × 256 tanh network, 2M steps by default (`--steps`) |
+| | `ppo_race` | T164: `ppo_default` with `ent_coef` 0.005 and 6M steps |
 | | `ppo_finetune` | PPO with a lower learning rate, for `--parent` fine-tuning |
 | | `sac_default` | SAC (E7), 256 × 256 ReLU network, 1M steps by default |
 | | `ga_default` | Neuroevolution (D26): 50 cars, top 12 kept, σ 0.02, budget in generations (`--generations`) |
@@ -286,7 +290,7 @@ Run everything with the project interpreter, `.venv\Scripts\python`.
 | What | Command |
 |---|---|
 | Drive / watch (debug window) | `scripts\drive.py [--track technical] [--mode human\|baseline\|model] [--model models\<model_id>] [--sim-speed 4] [--trace out.csv]` |
-| Train | `scripts\train.py --tag … (--tracks … or --trackset maps7) [--parent <model_id>] [--train ppo_default\|ppo_finetune\|sac_default\|ga_default\|ga_v2] [--physics …] [--env rays5\|rays7_narrow\|…] [--action-layout steer_gas\|steer_throttle_brake] [--reward …] [--steps N (PPO/SAC) \| --generations N (GA)] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval] [--protocol v2]` |
+| Train | `scripts\train.py --tag … (--tracks … or --trackset maps7) [--parent <model_id>] [--train ppo_default\|ppo_finetune\|sac_default\|ga_default\|ga_v2\|ga_staged\|ppo_race] [--physics …] [--env rays5\|rays7_narrow\|…] [--action-layout steer_gas\|steer_throttle_brake] [--reward …] [--steps N (PPO/SAC) \| --generations N (GA)] [--seed N] [--set ppo.ent_coef=0.01] [--scratch] [--no-eval] [--protocol v2]` |
 | Export a neuroevolution car | `scripts\export_ga.py --run R020 --list` · `--generation 750 [--car 3] [--evaluate]` (rebuilt from the lineage) |
 | Evaluate (protocol v2) | `scripts\evaluate.py --model <id> …` · `--run R002` (all checkpoints, marks the best) · `--baseline` · `[--protocol v1]` |
 | Registry | `scripts\registry.py list [--run R002] [--best]` · `backfill` · `export` (regenerate the xlsx) · `describe` (inputs, outputs, parameters per run; models the engine can't run) |
@@ -327,3 +331,6 @@ In human mode (`1`) the walls are solid and nothing resets the car; baseline and
 ## Credits
 
 Engine sound: "Delorean DMC-12 V6 PRV engine" by skyernaklea ([freesound.org/s/623436](https://freesound.org/s/623436/)), CC BY 4.0, edited. Tyre sound by johnnydekk (CC0). Sprites by Kenney (CC0). Textures by ambientCG (CC0). Fonts: Rajdhani, Share Tech Mono, Orbitron (SIL OFL 1.1).
+
+- **GA input normalisation (D33):** `--set ga.normalise=true` standardises the inputs like PPO's VecNormalize. The statistics are measured once at the start from the baseline driving the training maps, frozen in the run's snapshot, and carried by every exported car.
+- **Race-pace experiments (T164/T165):** `configs\queue\ppo_racepace.yaml`, plan in `docs/PPO_RACEPACE_PLAN.md`.

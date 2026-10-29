@@ -35,17 +35,21 @@ def _sdf(dist, idx, geom, x, y):
 @njit(cache=True)
 def cast_ray(dist, idx, geom, ox, oy, dx, dy, max_range, params):
     """Distance from (ox, oy) along unit (dx, dy) to the first road-edge crossing (≤ max_range)."""
-    eps = params[0]
+    s0 = _sdf(dist, idx, geom, ox, oy)
+    if abs(s0) < params[0]:
+        return 0.0
+    return _march(dist, idx, geom, ox, oy, dx, dy, max_range, params, s0 >= 0.0)
+
+
+@njit(cache=True)
+def _march(dist, idx, geom, ox, oy, dx, dy, max_range, params, inside):
+    """Distance to the first change of side from ``inside`` (True = on the road) along the ray."""
     min_step = params[1]
     growth = params[2]
     max_iters = int(params[3])
     bisect = int(params[4])
     # In unknown (FAR) territory the road is at least `runoff` away, so cap steps there.
     cap = geom[4]
-    s0 = _sdf(dist, idx, geom, ox, oy)
-    inside = s0 >= 0.0
-    if abs(s0) < eps:
-        return 0.0
     t = 0.0
     t_prev = 0.0
     for _ in range(max_iters):
@@ -80,3 +84,37 @@ def cast_rays(dist, idx, geom, x, y, theta, angles, ranges, params, out):
     for k in range(angles.shape[0]):
         a = theta + angles[k]
         out[k] = cast_ray(dist, idx, geom, x, y, math.cos(a), math.sin(a), ranges[k], params)
+
+
+# How far past a crossing the next search starts (m): clear of the ``hit_eps_m`` band around the edge.
+STEP_PAST = 0.1
+
+
+@njit(cache=True)
+def cast_rays_multi(dist, idx, geom, x, y, theta, angles, ranges, params, n_cross, out):
+    """Like :func:`cast_rays`, but each ray goes on past its crossings (D33, ``rays2``).
+
+    ``out[k, j]`` is the distance along ray ``k`` to its (j+1)-th road-edge crossing, or the ray's
+    range when there is none within it. A ray from the road first leaves it, then re-enters it, and so on.
+    """
+    for k in range(angles.shape[0]):
+        a = theta + angles[k]
+        dx = math.cos(a)
+        dy = math.sin(a)
+        reach = ranges[k]
+        t = 0.0                       # distance from the car to the start of the current search
+        # The side the search starts on follows from the crossings so far; asking the field again just past
+        # a crossing would see a shallow ray still inside the ``hit_eps_m`` band and report a false hit.
+        inside = _sdf(dist, idx, geom, x, y) >= 0.0
+        for j in range(n_cross):
+            if t >= reach:
+                out[k, j] = reach
+                continue
+            d = _march(dist, idx, geom, x + dx * t, y + dy * t, dx, dy, reach - t, params, inside)
+            inside = not inside
+            if t + d >= reach:
+                out[k, j] = reach
+                t = reach
+            else:
+                out[k, j] = t + d
+                t = t + d + STEP_PAST

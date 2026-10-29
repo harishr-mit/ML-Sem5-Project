@@ -206,6 +206,13 @@ def train_ga(args, train_cfg: dict[str, Any], env_config: dict[str, Any], manife
         run_id = reserve_run_id(prefix, out_dir, out_dir, RUNS_DIR if not args.scratch else SCRATCH_DIR, evolve_root)
         run_dir = evolve_root / f"{run_id}_GA_{args.tag}"
         run_dir.mkdir(parents=True)
+        ga_cfg = train_cfg["ga"]
+        if ga_cfg.get("normalise") and not ga_cfg.get("obs_norm"):      # D33: measured once, frozen in the snapshot
+            from racer.agents.evolve import training_maps
+            from racer.agents.obsnorm import calibrate_obs
+            print(f"[{run_id}] measuring the input statistics (baseline laps on the training maps)...", flush=True)
+            ga_cfg["obs_norm"] = calibrate_obs(env_config, training_maps(env_config), int(train_cfg["seed"]),
+                                               ga_cfg.get("norm_min_std", 0.05), ga_cfg.get("norm_clip", 10.0))
         base_snapshot = base_snapshot_of(run_id, args, "ga", train_cfg, env_config, manifest, None)
         with (run_dir / "snapshot.yaml").open("w", encoding="utf-8") as f:
             yaml.safe_dump(base_snapshot, f, sort_keys=False, allow_unicode=True)

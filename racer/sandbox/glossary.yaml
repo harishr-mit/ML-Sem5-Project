@@ -408,6 +408,33 @@ training:
       short: "(Fitness 3) The share of the last stage_window generations that must count as 'completing laps' before the speed score starts."
       affects: "Lower: switches earlier, also when hard maps still have no finishers."
       range: "0.9"
+    train.ga.normalise:
+      short: "Standardise the inputs before the network sees them, as PPO does (D33). The statistics are measured once at the start from the hand-coded driver on the training maps, then frozen."
+      affects: "Inputs of very different size (a near edge at 7 m of 200, a speed) all arrive as numbers of similar size, so no input drowns the others. Frozen, because moving statistics would change every car under the population and break rebuilding cars from the lineage."
+      range: "false (off) / true"
+    train.ga.norm_min_std:
+      short: "(With normalise) The smallest spread an input may be given when standardising."
+      affects: "Without it an input that hardly moves for the driver (e.g. 'no second crossing') would turn into a huge number the moment a car makes it move."
+      range: "0.05"
+    train.ga.norm_clip:
+      short: "(With normalise) After standardising, inputs are cut off at plus or minus this."
+      affects: "Same role as PPO's clip_obs. Lower: extreme inputs count for less."
+      range: "10.0"
+    train.ga.obs_norm:
+      short: "The measured mean and variance of every input (written by the run itself when it starts; not a setting)."
+      affects: "The numbers every car of this run, and every model exported from it, standardises its inputs with."
+    train.ga.obs_norm.mean:
+      short: "The average of each input over the baseline's driving (measured once at the start of the run)."
+      affects: "Subtracted from every input before the network sees it."
+    train.ga.obs_norm.var:
+      short: "The variance of each input over the baseline's driving, with the floor norm_min_std applied."
+      affects: "Every input is divided by its square root: inputs that vary a lot are scaled down, quiet ones up."
+    train.ga.obs_norm.clip:
+      short: "The cut-off applied after standardising (copied from norm_clip)."
+      affects: "Keeps one extreme input from dominating the network."
+    train.ga.obs_norm.count:
+      short: "How many observations the statistics were measured from."
+      affects: "Only for the record: more observations, steadier statistics."
     train.ga.workers:
       short: "How many processor cores drive cars at the same time."
       affects: "More: faster generations but a busier PC. Fewer: calmer PC. Results are identical for any number."

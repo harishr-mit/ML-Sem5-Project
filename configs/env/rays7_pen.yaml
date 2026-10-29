@@ -1,0 +1,46 @@
+# Environment preset "rays7_pen" (D33): rays7_lean's angles, but every ray 200 m long and passing through the road edge
+# (feature rays2): each ray reports where it first meets the edge and where it meets an edge again. 7 x 2 + 3 = 17 inputs.
+# Same episode rules as rays7_lean (track limits on).
+
+obs_spec:
+  version: 2
+  name: rays7_pen
+  features:
+    - feature: rays2
+      penetrations: 1
+      rays:
+        - {angle_deg: -55.0, range_m: 200.0}
+        - {angle_deg: -17.0, range_m: 200.0}
+        - {angle_deg: -5.5, range_m: 200.0}
+        - {angle_deg: 0.0, range_m: 200.0}
+        - {angle_deg: 5.5, range_m: 200.0}
+        - {angle_deg: 17.0, range_m: 200.0}
+        - {angle_deg: 55.0, range_m: 200.0}
+    - {feature: heading_sincos}
+    - {feature: v_long, scale: 70.0}        # m/s
+
+action_spec:
+  layout: steer_gas
+
+# Ray marching (implementation detail; does not change what a ray measures).
+raycast:
+  hit_eps_m: 0.02
+  min_step_m: 0.25
+  min_step_growth: 0.02
+  max_iters: 128
+  bisect_iters: 8
+
+episode:
+  agent_hz: 20
+  start_lateral_max_m: 2.0
+  start_heading_max_deg: 10.0
+  start_speed_min: 0.0
+  start_speed_max: 15.0
+  offroad_limit_s: 1.0
+  noprogress_window_s: 3.0
+  noprogress_min_m: 2.0
+  wrongway_deg: 110.0
+  wrongway_limit_s: 1.0
+  max_laps: 2
+  max_steps: 4000
+  track_limits: true

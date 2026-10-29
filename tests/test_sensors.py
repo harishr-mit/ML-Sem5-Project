@@ -90,3 +90,50 @@ def test_ray_speed(setup):
         cast_rays(f.dist, f.idx, f.geom, x, y, th, angles, ranges, params, out)
     us = (time.perf_counter() - t0) / n * 1e6
     assert us < 15.0, f"{us:.1f} µs for 5 rays"
+
+
+def exact_crossings(ox, oy, dx, dy, hw):
+    """Every positive distance at which the ray meets the annulus boundary (radii R ± hw), sorted."""
+    ts = []
+    for rho in (R - hw, R + hw):
+        b = ox * dx + oy * dy
+        disc = b * b - (ox * ox + oy * oy - rho * rho)
+        if disc >= 0:
+            ts += [t for t in (-b - math.sqrt(disc), -b + math.sqrt(disc)) if t > 1e-9]
+    return sorted(ts)
+
+
+def test_rays_through_the_edge_match_exact(setup):
+    """Rays that continue past the road edge find the 2nd (and 3rd) crossing as well (D33)."""
+    from racer.env.sensors import cast_rays_multi
+    track, params = setup
+    f = track.field
+    hw = track.half_width
+    rng = np.random.default_rng(1)
+    rmax, n_cross = 200.0, 3
+    out = np.empty((1, n_cross))
+    errs, seconds = [], 0
+    for _ in range(1500):
+        r = R + rng.uniform(-hw + 0.3, hw - 0.3)
+        a = rng.uniform(0, 2 * np.pi)
+        ox, oy = r * math.cos(a), r * math.sin(a)
+        th = rng.uniform(0, 2 * np.pi)
+        ts = exact_crossings(ox, oy, math.cos(th), math.sin(th), hw)
+        if len(ts) < n_cross or ts[n_cross - 1] > rmax or min(np.diff(ts)) < 0.5:
+            continue          # grazing edges, or crossings beyond the range, are not what this tests
+        cast_rays_multi(f.dist, f.idx, f.geom, ox, oy, 0.0, np.array([th]), np.array([rmax]), params, n_cross, out)
+        errs.append(np.abs(out[0] - np.array(ts[:n_cross])))
+        seconds += 1
+    assert seconds > 100
+    assert np.max(errs) < 0.2, f"max error {np.max(errs):.3f} m"
+
+
+def test_rays_through_the_edge_report_range_when_nothing_is_there(setup):
+    from racer.env.sensors import cast_rays_multi
+    track, params = setup
+    f = track.field
+    out = np.empty((1, 2))
+    x, y, th = track.pose_at(10.0, 0.0)
+    # to the left (into the infield): leaves the road once, and the far side is out of range
+    cast_rays_multi(f.dist, f.idx, f.geom, x, y, 0.0, np.array([th + math.pi / 2]), np.array([60.0]), params, 2, out)
+    assert 5.0 < out[0, 0] < 7.0 and out[0, 1] == 60.0

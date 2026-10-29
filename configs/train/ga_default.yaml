@@ -18,6 +18,9 @@ ga:
   stage_window: 100         # fitness 3: the switch to stage 2 needs ...
   stage_min_finishers: 5    # ... at least this many finishers ...
   stage_share: 0.9          # ... in this share of the last stage_window generations
+  normalise: false          # D33: standardise the inputs like PPO's VecNormalize (stats measured from the baseline, frozen); snapshots without it mean false
+  norm_min_std: 0.05        # normalise: floor on each input's measured spread
+  norm_clip: 10.0           # normalise: inputs are clipped to +-this after standardising (VecNormalize's clip_obs)
   workers: 5                # processes; can change on resume, never changes results
   max_generations: null     # budget (--generations); null = run until the validation plateau or a pause
   state_every: 10           # generations between pause-state saves

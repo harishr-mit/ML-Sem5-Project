@@ -20,7 +20,7 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from racer.env.sensors import cast_rays
+from racer.env.sensors import cast_rays, cast_rays_multi
 
 REQUIRED = object()
 
@@ -83,6 +83,35 @@ class Rays(Feature):
         c = st.car
         cast_rays(f.dist, f.idx, f.geom, c.x, c.y, c.theta, self.angles, self.ranges, self.raycast_params, self.dist)
         out[k:k + self.dim] = np.minimum(self.dist / self.ranges, 1.0)
+
+
+class Rays2(Rays):
+    name = "rays2"
+    description = ("Rays that see through the road edge (D33). Each ray reports where it first meets the road edge "
+                   "and where it meets an edge again (an exit, then the way back onto the road across the infield: "
+                   "the shape of the bend ahead), each as a share of the ray's range (1 = none within reach). "
+                   "'penetrations' is how many edges beyond the first a ray passes through.")
+    params = {"rays": REQUIRED, "penetrations": 1}
+
+    def setup(self, ctx):
+        super().setup(ctx)
+        self.n_cross = int(self.cfg["penetrations"]) + 1
+        if self.n_cross < 2:
+            raise ValueError("feature rays2: penetrations must be at least 1 (use 'rays' for a single crossing)")
+        n = len(self.angles)
+        self.cross = np.empty((n, self.n_cross))
+        self.dist = self.cross[:, 0]                      # the first crossing: what renderers draw as the ray
+        self.dim = n * self.n_cross
+        self.labels = [f"{base}{'' if j == 0 else f'#{j + 1}'}"
+                       for base in (f"ray{math.degrees(a):+g}" for a in self.angles) for j in range(self.n_cross)]
+        self.low = np.zeros(self.dim)
+
+    def write(self, st, out, k):
+        f = st.track.field
+        c = st.car
+        cast_rays_multi(f.dist, f.idx, f.geom, c.x, c.y, c.theta, self.angles, self.ranges, self.raycast_params,
+                        self.n_cross, self.cross)
+        out[k:k + self.dim] = np.minimum(self.cross / self.ranges[:, None], 1.0).ravel()
 
 
 class HeadingSinCos(Feature):
@@ -295,7 +324,7 @@ class History(Feature):
 
 
 FEATURES: dict[str, type[Feature]] = {cls.name: cls for cls in (
-    Rays, HeadingSinCos, VLong, VLat, YawRate, SteerAngle, OnroadFrac, PrevAction, CurvatureAhead, AccelG, GripUse, WheelSurface, RoadPosition, History)}
+    Rays, Rays2, HeadingSinCos, VLong, VLat, YawRate, SteerAngle, OnroadFrac, PrevAction, CurvatureAhead, AccelG, GripUse, WheelSurface, RoadPosition, History)}
 
 
 def build_feature(cfg: Mapping[str, Any], ctx: Mapping[str, Any]) -> Feature:

@@ -27,15 +27,16 @@ Goal (owner): the fastest car around any map, on a proper racing line.
 ## What we change (config only, no engine code)
 1. Reward `racepace`: time 1.0/s (was 0.05). A 5 % faster 60 s lap is worth 3; a crash still costs 20, so a 15 % higher crash risk
    cancels that gain. Everything else as `progress`.
-2. Inputs `rays7_look` (21): rays7_lean (7 rays, heading, speed) + v_lat, grip_use, road_position (3) + curvature_ahead at
-   20/40/70/110/160/220 m (6). Curvature is relative to the car, so it works on any drawn track. **This departs from the
-   "no map knowledge" rule (D3 in section 3 of PROJECT_CONTEXT); it needs the owner's OK before it is written down as a decision (D33).**
+2. Inputs `rays7_pen` (17, D33, owner idea): rays7_lean's seven angles, all 200 m, each ray passing through the road edge (feature `rays2`): the
+   first crossing and the second (the way back onto the road). A real driver sees the exit of a bend across the infield; a ray that
+   stops at the first edge is tunnel vision. Geometry along the car's own rays only, so it needs no track look-up and works on a drawn
+   track. (The curvature look-ahead `rays7_look` was dropped: the owner found it unfair to a real driver.) Display: `P` in the game draws the part beyond the first edge faintly; it doesn't change what the model sees.
 3. Training `ppo_race`: ent_coef 0.005, 6M steps (R023's best checkpoint was at 1.7M).
-4. Runs (queue `ppo_racepace.yaml`, 2 at a time): A = lean inputs + racepace (reward alone), B = rays7_look + racepace seeds 1 and 2.
+4. Runs (queue `ppo_racepace.yaml`, 2 at a time, about 90 % CPU): C1, C2 = rays7_pen + racepace (PPO, seeds 1 and 2); A = rays7_lean + racepace (reward alone); GA = the neuroevolution twin of C (same inputs, rules and network; staged fitness as R031; `ga.normalise` = frozen input standardiser measured from the baseline, D33).
 
 ## Success
-Unseen completion >= 90 % AND lap ratio < 0.90 (R023: 100 % / 0.975), with mean lateral g above 0.8. Compare A against B to
-see which change did it; B seeds 1 and 2 to see the variance.
+Unseen completion >= 90 % AND lap ratio < 0.90 (R023: 100 % / 0.975), with mean lateral g above 0.8. Compare A against C to
+see which change did it; C seeds 1 and 2 to see the variance; GA against C for the method.
 
 ## Not tried yet (next, if these fail)
 Speed-scaled crash penalty and a tyre-slip term (needs a new reward type and a `sliding` argument); a minimum-curvature

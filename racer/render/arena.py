@@ -1,6 +1,6 @@
 """Model Arena (PROJECT_CONTEXT §10.1, D14): the model picker and the multi-car race window.
 
-Race keys: Tab / Shift+Tab or click a leaderboard row: follow a car · F overview · R rays ·
+Race keys: Tab / Shift+Tab or click a leaderboard row: follow a car · F overview · R rays · P rays beyond the first edge ·
 T trails of all cars · L labels · Space pause · +/− sim speed ×0.25–×4 · mouse wheel zoom ·
 H key list · Esc back to the picker (or quit).
 
@@ -89,6 +89,7 @@ def arena_keys(quit_on_esc: bool, human: bool = False) -> list[tuple[str, str]]:
         ("click a row", "follow that car"),
         ("F", "overview / follow"),
         ("R", "rays of the followed car"),
+        ("P", "rays beyond the first road edge (faint)"),
         ("B", "brain panel (network activity)"),
         ("T", "trails of all cars"),
         ("E", "tyre smoke, skid marks, sparks"),
@@ -120,7 +121,7 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
     from racer.agents.baseline import BaselineController
     from racer.env.race import Entry, Race
     from racer.env.racing_env import make_env_config
-    from racer.env.sensors import cast_rays
+    from racer.env.sensors import cast_rays, cast_rays_multi
     from racer.render.camera import Camera
     from racer.render.cars import CarSprites
     from racer.render.debug_view import speed_colours
@@ -191,6 +192,7 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
     speed_i = speeds.index(ctx.sim_speed) if ctx.sim_speed in speeds else speeds.index(1.0)
     selected = 0
     show_rays, all_trails, show_labels, paused = True, False, True, False
+    show_beyond = False            # D33: the part of a rays2 ray past its first crossing; display only, the model sees it either way
     if sel.swarm:
         cam.overview, show_rays, show_labels = True, False, False      # the chaos shot: the whole track, no clutter
     brain = BrainPanel(ctx.fonts, colours, (int(acfg["brain"]["width"]), int(acfg["brain"]["height"])),
@@ -242,6 +244,8 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
                     cam.overview = not cam.overview
                 elif k == pygame.K_r:
                     show_rays = not show_rays
+                elif k == pygame.K_p:
+                    show_beyond = not show_beyond
                 elif k == pygame.K_t:
                     all_trails = not all_trails
                 elif k == pygame.K_b:
@@ -331,6 +335,15 @@ def _run_race_once(ctx: Context, sel: Selection) -> str:
                 col = (min(255, int(510 * (1 - frac))), min(255, int(510 * frac)), 60)
                 hpt = cam.to_screen(x + dist * np.cos(th + a), y + dist * np.sin(th + a))
                 pygame.draw.line(screen, col, o, hpt, 1)
+            n_cross = getattr(getattr(ob, "rays", None), "n_cross", 1)
+            if show_beyond and n_cross > 1:
+                cross = np.empty((ob.n_rays, n_cross))
+                cast_rays_multi(f.dist, f.idx, f.geom, x, y, th, ob.angles, ob.ranges, ob.raycast_params, n_cross, cross)
+                faint = tuple(acfg["beyond_ray_colour"])
+                for a, row in zip(ob.angles, cross):
+                    p0 = cam.to_screen(x + row[0] * np.cos(th + a), y + row[0] * np.sin(th + a))
+                    p1 = cam.to_screen(x + row[-1] * np.cos(th + a), y + row[-1] * np.sin(th + a))
+                    pygame.draw.line(screen, faint, p0, p1, 1)
         for car in sorted(race.cars, key=lambda c: c.index == selected):    # followed car on top
             px, py, pth = car.pose
             sprites.draw(screen, cam, car.index, px, py, pth, braking=car.env.car.brake > 0.05,

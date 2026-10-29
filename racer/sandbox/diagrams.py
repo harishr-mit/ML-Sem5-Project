@@ -40,9 +40,10 @@ def png(fig, dpi: int = 110) -> bytes:
 def rays_of(inputs: Sequence[Mapping[str, Any]]) -> list[dict[str, float]]:
     """The ray list of a model's inputs (``manifest['inputs']``); [] if it has no rays."""
     for f in inputs or []:
-        if f.get("feature") == "rays":
+        if f.get("feature") in ("rays", "rays2"):
             params = f.get("params") or {}
-            return [{"angle_deg": float(r["angle_deg"]), "range_m": float(r["range_m"])}
+            extra = {"penetrations": int(params.get("penetrations", f.get("penetrations", 1)))}                 if f["feature"] == "rays2" else {}                  # D33: rays that go on through the road edge
+            return [{"angle_deg": float(r["angle_deg"]), "range_m": float(r["range_m"]), **extra}
                     for r in params.get("rays") or f.get("rays") or []]
     return []
 
@@ -160,6 +161,20 @@ def cast_on_track(name: str, s: float, lateral: float, rays: Sequence[Mapping[st
     return tr, x, y, th, out
 
 
+def beyond_edge(tr, x: float, y: float, th: float, rays: Sequence[Mapping[str, float]],
+                raycast_cfg: Mapping[str, Any]) -> np.ndarray | None:
+    """(rays, crossings) for rays that pass through the road edge (D33), else None."""
+    from racer.env.sensors import cast_rays_multi, pack_raycast_params
+    n_cross = 1 + max((int(r.get("penetrations", 0)) for r in rays), default=0)
+    if n_cross < 2:
+        return None
+    f = tr.field
+    out = np.empty((len(rays), n_cross))
+    cast_rays_multi(f.dist, f.idx, f.geom, x, y, th, np.radians([float(r["angle_deg"]) for r in rays]),
+                    np.array([float(r["range_m"]) for r in rays]), pack_raycast_params(raycast_cfg), n_cross, out)
+    return out
+
+
 def _road(ax, tr) -> None:
     """Grass, the road between its edges, the dashed centreline and the start line (black square)."""
     ax.set_facecolor(GRASS)
@@ -220,6 +235,15 @@ def ray_diagram_map(name: str, s: float, lateral: float,
             hit = d < float(r["range_m"]) - 1e-6
             ax.plot([x1], [y1], "o" if hit else ">", color=col, ms=4, zorder=4)
             ax.text(x1, y1, f" {d:.0f}", color=col, fontsize=8, zorder=4)
+        cross = beyond_edge(casts[k][2][0], cx, cy, cth, rays, models[k][2])
+        if cross is not None:                 # the faint part: from the first crossing on to the last
+            for r, row in zip(rays, cross):
+                a = cth + math.radians(float(r["angle_deg"]))
+                ax.plot([cx + row[0] * math.cos(a), cx + row[-1] * math.cos(a)],
+                        [cy + row[0] * math.sin(a), cy + row[-1] * math.sin(a)], color=col, lw=1.0, alpha=0.35,
+                        ls=(0, (4, 3)), zorder=3)
+                ax.plot([cx + row[-1] * math.cos(a)], [cy + row[-1] * math.sin(a)], "o", mfc="none", mec=col,
+                        ms=4, alpha=0.5, zorder=4)
         ax.plot([], [], color=col, lw=2, label=label)
     _car(ax, x, y, th, scale=max(1.0, half / 60))
     if len(casts) > 1 or casts[0][0]:
@@ -230,7 +254,7 @@ def ray_diagram_map(name: str, s: float, lateral: float,
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title(f"{name}: {s:.0f} m into the lap (black square = start line); "
-                 "dots = road edge, arrows = nothing within range", fontsize=9)
+                 "dots = road edge, arrows = nothing within range; faint = beyond the first edge", fontsize=9)
     return fig
 
 

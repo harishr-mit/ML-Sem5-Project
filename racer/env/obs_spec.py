@@ -136,9 +136,9 @@ class ObserverV2:
         if [f.name for f in self.features].count("history") > 1 or (
                 "history" in [f.name for f in self.features] and self.features[-1].name != "history"):
             raise ValueError("obs_spec v2: 'history' may appear once, as the last feature")
-        rays = [f for f in self.features if f.name == "rays"]
+        rays = [f for f in self.features if f.name in ("rays", "rays2")]
         if len(rays) > 1:
-            raise ValueError("obs_spec v2: at most one 'rays' feature (list every ray in it)")
+            raise ValueError("obs_spec v2: at most one 'rays' or 'rays2' feature (list every ray in it)")
         # Ray geometry for renderers (same attributes as v1); empty when the spec has no rays.
         self.rays = rays[0] if rays else None
         self.angles = self.rays.angles if rays else np.zeros(0)

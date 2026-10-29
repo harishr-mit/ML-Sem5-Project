@@ -396,6 +396,19 @@ def test_diagrams_render():
     assert D.rays_of([{"feature": "v_long", "params": {}}]) == []
 
 
+def test_ray_diagrams_show_rays_that_pass_through_the_road_edge():
+    """D33: rays2 models appear in the explorer diagrams, with the part past the first edge drawn faint."""
+    from racer.sandbox import diagrams as D
+    inputs = [{"feature": "rays2", "dims": 4, "params": {"penetrations": 1, "rays": [
+        {"angle_deg": 17.0, "range_m": 200.0}, {"angle_deg": -17.0, "range_m": 200.0}]}}]
+    rays = D.rays_of(inputs)
+    assert [r["penetrations"] for r in rays] == [1, 1]
+    fig = D.ray_diagram_map("technical", 300.0, 0.0, [("pen", rays, _raycast())])
+    assert D.png(fig)[:4] == b"\x89PNG"
+    assert any(line.get_alpha() == 0.35 for line in fig.axes[0].lines)          # the faint continuation
+    assert D.png(D.ray_diagram_straight([("pen", rays)], offset_m=0.0))[:4] == b"\x89PNG"
+
+
 def _raycast() -> dict:
     from racer.config import load_preset
     return load_preset("env", "rays5")["raycast"]

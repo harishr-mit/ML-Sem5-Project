@@ -1,0 +1,502 @@
+{
+ "model_id": "R031_GA_ga_staged_min9_1000g_s2@17846k",
+ "protocol": "v2",
+ "protocol_version": 2,
+ "evaluated_at": "2026-10-29T12:27:00",
+ "metrics": {
+  "completion_rate": 0.2857,
+  "test_completion": 0.5,
+  "heldout_completion": 0.9,
+  "unseen_completion": 0.75,
+  "overall_completion": 0.5333,
+  "crash_rate": 0.4667,
+  "mean_speed": 23.9884,
+  "offroad_pct": 2.3476,
+  "mean_lat_g": 0.5039,
+  "best_lap_training_ground": 45.25,
+  "mean_lap_training_ground": 45.25,
+  "best_lap_technical": null,
+  "mean_lap_technical": null,
+  "best_lap_fast_flow": 73.65,
+  "mean_lap_fast_flow": 73.675,
+  "best_lap_hairpin_valley": null,
+  "mean_lap_hairpin_valley": null,
+  "best_lap_esses": null,
+  "mean_lap_esses": null,
+  "best_lap_oval_infield": null,
+  "mean_lap_oval_infield": null,
+  "best_lap_city_blocks": null,
+  "mean_lap_city_blocks": null,
+  "best_lap_alpine": 74.6,
+  "mean_lap_alpine": 74.717,
+  "best_lap_coastline": null,
+  "mean_lap_coastline": null,
+  "lap_ratio": 0.987,
+  "score": 0.5333
+ },
+ "baseline_laps": {
+  "training_ground": 46.6,
+  "technical": 81.55,
+  "fast_flow": 70.4,
+  "hairpin_valley": 63.15,
+  "esses": 70.35,
+  "oval_infield": 74.2,
+  "city_blocks": 69.05,
+  "alpine": 78.95,
+  "coastline": 61.8
+ },
+ "episodes": [
+  {
+   "track": "training_ground",
+   "start_s": 0.0,
+   "return": 2855.336885538298,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    45.249999999997435
+   ],
+   "mean_speed": 29.778997839632524,
+   "offroad_pct": 0.0,
+   "mean_lat_g": 0.5326197618727145,
+   "steps": 1889,
+   "completed": true,
+   "group": "train"
+  },
+  {
+   "track": "training_ground",
+   "start_s": 713.3291966453013,
+   "return": 2855.2232101198997,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    45.249999999997826
+   ],
+   "mean_speed": 30.080696714146022,
+   "offroad_pct": 0.0,
+   "mean_lat_g": 0.5343001585206211,
+   "steps": 1870,
+   "completed": true,
+   "group": "train"
+  },
+  {
+   "track": "technical",
+   "start_s": 0.0,
+   "return": 2259.2269963363237,
+   "laps": 1,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 22.527639390868075,
+   "offroad_pct": 3.924971079160469,
+   "mean_lat_g": 0.5459995694919537,
+   "steps": 2017,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "technical",
+   "start_s": 963.4546451021639,
+   "return": 1298.1764021866616,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 24.354136630914958,
+   "offroad_pct": 4.770698676515852,
+   "mean_lat_g": 0.5934669597591427,
+   "steps": 1083,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "fast_flow",
+   "start_s": 0.0,
+   "return": 4375.188776910657,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    73.70000000000252
+   ],
+   "mean_speed": 28.610168408217223,
+   "offroad_pct": 1.0330805583031102,
+   "mean_lat_g": 0.5590417340879861,
+   "steps": 3033,
+   "completed": true,
+   "group": "train"
+  },
+  {
+   "track": "fast_flow",
+   "start_s": 1099.7541927053924,
+   "return": 4377.518932078674,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    73.64999999999583
+   ],
+   "mean_speed": 28.895750101535597,
+   "offroad_pct": 1.0402796271637815,
+   "mean_lat_g": 0.5456928672072272,
+   "steps": 3004,
+   "completed": true,
+   "group": "train"
+  },
+  {
+   "track": "hairpin_valley",
+   "start_s": 0.0,
+   "return": 535.10021731895,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 24.30409439363957,
+   "offroad_pct": 5.3127221037668795,
+   "mean_lat_g": 0.5526709444562073,
+   "steps": 469,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "hairpin_valley",
+   "start_s": 728.8349600281636,
+   "return": 1257.0017153940494,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 23.901118725575195,
+   "offroad_pct": 2.479147358665431,
+   "mean_lat_g": 0.6033081000630016,
+   "steps": 1079,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "esses",
+   "start_s": 0.0,
+   "return": 1753.3162679404336,
+   "laps": 1,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 20.54022665199302,
+   "offroad_pct": 5.65749235474006,
+   "mean_lat_g": 0.4804239212196889,
+   "steps": 1744,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "esses",
+   "start_s": 759.746496148512,
+   "return": 1013.1641193411388,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 20.74113756956658,
+   "offroad_pct": 6.770319183942087,
+   "mean_lat_g": 0.46633649064339744,
+   "steps": 1013,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "oval_infield",
+   "start_s": 0.0,
+   "return": 2274.172117430897,
+   "laps": 1,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 28.218247559300583,
+   "offroad_pct": 1.4917695473251031,
+   "mean_lat_g": 0.5050366135154093,
+   "steps": 1620,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "oval_infield",
+   "start_s": 957.281150125971,
+   "return": 1320.599612458776,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 28.957612482159295,
+   "offroad_pct": 2.6727861771058317,
+   "mean_lat_g": 0.4793673616389429,
+   "steps": 926,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "city_blocks",
+   "start_s": 0.0,
+   "return": 1599.3285980729197,
+   "laps": 1,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 21.49959967839373,
+   "offroad_pct": 1.9562841530054647,
+   "mean_lat_g": 0.5658147060110733,
+   "steps": 1525,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "city_blocks",
+   "start_s": 705.4180249538933,
+   "return": 900.490524453404,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 21.6905661659156,
+   "offroad_pct": 2.671682098765432,
+   "mean_lat_g": 0.5427257053587081,
+   "steps": 864,
+   "completed": false,
+   "group": "train"
+  },
+  {
+   "track": "alpine",
+   "start_s": 0.0,
+   "return": 3435.130060058084,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    74.650000000003
+   ],
+   "mean_speed": 22.177270231783215,
+   "offroad_pct": 0.7923586236839248,
+   "mean_lat_g": 0.5875034613542601,
+   "steps": 3071,
+   "completed": true,
+   "group": "test"
+  },
+  {
+   "track": "alpine",
+   "start_s": 579.1531365259948,
+   "return": 3433.8565545098013,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    74.59999999999576
+   ],
+   "mean_speed": 22.473376439908964,
+   "offroad_pct": 1.594633234356098,
+   "mean_lat_g": 0.576258742880575,
+   "steps": 3031,
+   "completed": true,
+   "group": "test"
+  },
+  {
+   "track": "alpine",
+   "start_s": 1158.3062730519896,
+   "return": 3435.1244829325315,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    74.89999999999603
+   ],
+   "mean_speed": 22.41582552207609,
+   "offroad_pct": 0.8176928986938864,
+   "mean_lat_g": 0.5735712302904177,
+   "steps": 3037,
+   "completed": true,
+   "group": "test"
+  },
+  {
+   "track": "coastline",
+   "start_s": 0.0,
+   "return": 387.5774808515464,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 26.904808744594202,
+   "offroad_pct": 7.772435897435898,
+   "mean_lat_g": 0.3553711963017371,
+   "steps": 312,
+   "completed": false,
+   "group": "test"
+  },
+  {
+   "track": "coastline",
+   "start_s": 584.4961192995729,
+   "return": 696.7889242285629,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 25.579566058710746,
+   "offroad_pct": 3.927536231884058,
+   "mean_lat_g": 0.528252260757655,
+   "steps": 575,
+   "completed": false,
+   "group": "test"
+  },
+  {
+   "track": "coastline",
+   "start_s": 1168.9922385991458,
+   "return": 257.7409843632139,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 17.688501322548692,
+   "offroad_pct": 8.93042575285566,
+   "mean_lat_g": 0.43545181865574323,
+   "steps": 321,
+   "completed": false,
+   "group": "test"
+  },
+  {
+   "track": "heldout_00",
+   "start_s": 0.0,
+   "return": 2076.1666076875476,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    48.29999999999726
+   ],
+   "mean_speed": 21.058161195402015,
+   "offroad_pct": 1.119844489519946,
+   "mean_lat_g": 0.3404654305009312,
+   "steps": 1972,
+   "completed": true,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_01",
+   "start_s": 0.0,
+   "return": 2381.0179098049275,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    54.24999999999692
+   ],
+   "mean_speed": 21.52871938898802,
+   "offroad_pct": 0.0,
+   "mean_lat_g": 0.47640095011956324,
+   "steps": 2224,
+   "completed": true,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_02",
+   "start_s": 0.0,
+   "return": 2842.308384421779,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    49.04999999999722
+   ],
+   "mean_speed": 27.868238608686468,
+   "offroad_pct": 0.5440158259149358,
+   "mean_lat_g": 0.5923890204308079,
+   "steps": 2022,
+   "completed": true,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_03",
+   "start_s": 0.0,
+   "return": 2592.7628148166746,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    63.34999999999684
+   ],
+   "mean_speed": 20.160028751758073,
+   "offroad_pct": 0.585133744855967,
+   "mean_lat_g": 0.3819959163563662,
+   "steps": 2592,
+   "completed": true,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_04",
+   "start_s": 0.0,
+   "return": 2892.4060925529757,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    63.649999999996695
+   ],
+   "mean_speed": 22.554755166743863,
+   "offroad_pct": 0.00322622273841786,
+   "mean_lat_g": 0.38735820462913667,
+   "steps": 2583,
+   "completed": true,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_05",
+   "start_s": 0.0,
+   "return": 1618.3173375503795,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    40.34999999999771
+   ],
+   "mean_speed": 19.818180287462027,
+   "offroad_pct": 0.519257914902198,
+   "mean_lat_g": 0.4584061414609068,
+   "steps": 1653,
+   "completed": true,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_06",
+   "start_s": 0.0,
+   "return": 3064.032975687839,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    51.29999999999709
+   ],
+   "mean_speed": 28.575060900948237,
+   "offroad_pct": 0.0,
+   "mean_lat_g": 0.5412018706516171,
+   "steps": 2121,
+   "completed": true,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_07",
+   "start_s": 0.0,
+   "return": 751.0618159679283,
+   "laps": 0,
+   "termination": "offroad",
+   "lap_times": [],
+   "mean_speed": 20.955679037587593,
+   "offroad_pct": 3.6395916555703502,
+   "mean_lat_g": 0.4730723717843369,
+   "steps": 751,
+   "completed": false,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_08",
+   "start_s": 0.0,
+   "return": 2570.5735845252816,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    47.14999999999733
+   ],
+   "mean_speed": 26.24518189327167,
+   "offroad_pct": 0.2983912817851583,
+   "mean_lat_g": 0.5103626959130262,
+   "steps": 1927,
+   "completed": true,
+   "group": "heldout"
+  },
+  {
+   "track": "heldout_09",
+   "start_s": 0.0,
+   "return": 1802.6543649986354,
+   "laps": 2,
+   "termination": null,
+   "lap_times": [
+    45.799999999997404
+   ],
+   "mean_speed": 19.54959846439329,
+   "offroad_pct": 0.10315751704341587,
+   "mean_lat_g": 0.39276300273471076,
+   "steps": 1858,
+   "completed": true,
+   "group": "heldout"
+  }
+ ]
+}

@@ -1,0 +1,31 @@
+# Continue R031 (staged GA fitness, D32, minimal inputs) from generation 1000 to 2000 (D29 --extend). Same tag as the original run.
+# Run: .venv\Scripts\python scripts\queue_overnight.py configs\queue\ga_staged_min9_extend_2000g.yaml
+parallel: 1
+runs:
+- name: ga_staged_min9_1000g_s2_extend
+  args:
+  - --extend
+  - --tag
+  - ga_staged_min9_1000g_s2
+  - --trackset
+  - train7
+  - --env
+  - sb_ga_min9
+  - --train
+  - ga_staged
+  - --physics
+  - default
+  - --reward
+  - progress
+  - --generations
+  - '2000'
+  - --seed
+  - '2'
+  - --set
+  - ga.elite_frac=0.2
+  - --set
+  - ga.workers=6
+  - --set
+  - ga.validation.patience=2000
+  - --curriculum
+  - AI Sandbox
